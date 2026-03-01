@@ -1,0 +1,114 @@
+# ==========================================
+# APPBOGADO — .gitignore OFICIAL
+# ==========================================
+
+# =========================
+# Node
+# =========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json.bak
+
+# =========================
+# Electron Build Artifacts
+# =========================
+dist/
+build/
+out/
+release/
+win-unpacked/
+*.exe
+*.blockmap
+latest.yml
+builder-debug.yml
+builder-effective-config.yaml
+
+# =========================
+# Runtime Data (MUY IMPORTANTE)
+# =========================
+datos/
+*.enc
+.secret
+
+# Backups locales
+backup/
+*.json.bak
+
+# =========================
+# Logs
+# =========================
+*.log
+logs/
+*.tmp
+
+# =========================
+# OS Files
+# =========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =========================
+# Environment files
+# =========================
+.env
+.env.local
+.env.development
+.env.production
+
+# =========================
+# IDE / Editor
+# =========================
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# =========================
+# Coverage / Testing
+# =========================
+coverage/
+.nyc_output/
+
+# =========================
+# Temporary / Cache
+# =========================
+*.cache
+.cache/
+.tmp/
+temp/
+
+# =========================
+# Electron Secrets (futuro)
+# =========================
+*.key
+*.pem
+*.p12
+
+# =========================
+# WhatsApp Client Data
+# =========================
+.wwebjs_cache/
+.wa-session/
+# =========================
+# SQLite (Futuro)
+# =========================
+*.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+
+# =========================
+# Puppeteer / Chromium
+# =========================
+.puppeteer/
+.chromium/
+
+# =========================
+# Profiling
+# =========================
+*.cpuprofile
+*.heapdump

@@ -1,0 +1,2557 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LEXIUM | Gestión Legal Inteligente</title>
+    <link rel="stylesheet" href="assets/fonts/fonts.css">
+    <link rel="stylesheet" href="assets/fa/css/all.min.css">
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/rediseno.css">
+    <link rel="stylesheet" href="css/fixes.css">
+
+</head>
+
+<body>
+
+    <!-- ████████████████████████████████████████████████████████████
+         HTML — BLOQUE 1: SIDEBAR (menú lateral de navegación)
+    ████████████████████████████████████████████████████████████ -->
+    <aside id="side">
+        <div class="logo">
+            <img src="assets/logo-lexium.png" alt="LEXIUM" style="width:48px; height:48px; border-radius:12px;">
+            <div class="logo-brand">
+                <div class="logo-name">LEXIUM</div>
+                <div class="logo-tag">Legal Intelligence</div>
+            </div>
+            <span id="backup-badge" style="display:none;"></span>
+        </div>
+        <!-- Usuario activo -->
+        <div class="sidebar-user" id="sidebar-user-info">
+            <div class="sidebar-user-avatar" id="su-avatar">A</div>
+            <div class="sidebar-user-info">
+                <div class="sidebar-user-name" id="su-nombre">Administrador</div>
+                <div class="sidebar-user-role" id="su-rol">Admin</div>
+            </div>
+        </div>
+        <nav>
+            <!-- 📊 HUB 1: PANEL -->
+            <button class="act" onclick="tab('panel',this)"><i class="fas fa-chart-line"></i> Dashboard</button>
+
+            <!-- 📁 HUB 2: EXPEDIENTES -->
+            <button class="nav-group-header"
+                onclick="this.classList.toggle('open'); document.getElementById('nav-items-expedientes').classList.toggle('open')"><i
+                    class="fas fa-folder grp-icon"></i> <span>Expedientes</span> <i
+                    class="fas fa-chevron-right nav-group-chevron"></i></button>
+            <div class="nav-group-items" id="nav-items-expedientes">
+                <button onclick="tab('causas',this)"><i class="fas fa-gavel"></i> Gestión de Causas</button>
+                <button onclick="tab('causas-pro',this)"><i class="fas fa-sitemap"></i> Causas Pro</button>
+            </div>
+
+            <!-- 🧠 HUB 3: INTELIGENCIA -->
+            <button class="nav-group-header"
+                onclick="this.classList.toggle('open'); document.getElementById('nav-items-inteligencia').classList.toggle('open')"><i
+                    class="fas fa-brain grp-icon"></i> <span>Inteligencia</span> <i
+                    class="fas fa-chevron-right nav-group-chevron"></i></button>
+            <div class="nav-group-items" id="nav-items-inteligencia">
+                <button onclick="tab('estrategia',this)"><i class="fas fa-brain"></i> Estrategia & Riesgo</button>
+                <button onclick="tab('calculadora',this)"><i class="fas fa-calendar-alt"></i> Calculadora
+                    Plazos</button>
+                <button onclick="tab('calculadora-pro',this)"><i class="fas fa-calculator"></i> Calculadora Pro</button>
+                <button onclick="tab('doctrina',this)"><i class="fas fa-graduation-cap"></i> Doctrina</button>
+            </div>
+
+            <!-- ✍️ HUB 4: PRODUCCIÓN -->
+            <button class="nav-group-header"
+                onclick="this.classList.toggle('open'); document.getElementById('nav-items-produccion').classList.toggle('open')"><i
+                    class="fas fa-pen-nib grp-icon"></i> <span>Producción</span> <i
+                    class="fas fa-chevron-right nav-group-chevron"></i></button>
+            <div class="nav-group-items" id="nav-items-produccion">
+                <button onclick="tab('escritos',this)"><i class="fas fa-pen-nib"></i> Generador Escritos</button>
+                <button onclick="tab('plantillas-escritos',this)"><i class="fas fa-layer-group"></i> Plantillas</button>
+                <button onclick="tab('timesheet',this)"><i class="fas fa-stopwatch"></i> Timesheet</button>
+            </div>
+
+            <!-- 💼 HUB 5: NEGOCIO -->
+            <button class="nav-group-header"
+                onclick="this.classList.toggle('open'); document.getElementById('nav-items-negocio').classList.toggle('open')"><i
+                    class="fas fa-briefcase grp-icon"></i> <span>Negocio</span> <i
+                    class="fas fa-chevron-right nav-group-chevron"></i></button>
+            <div class="nav-group-items" id="nav-items-negocio">
+                <button onclick="tab('clientes',this)"><i class="fas fa-users"></i> Clientes</button>
+                <button onclick="tab('honorarios',this)"><i class="fas fa-wallet"></i> Honorarios</button>
+                <button onclick="tab('prospectos',this)"><i class="fas fa-funnel-dollar"></i> Prospectos CRM</button>
+            </div>
+
+            <!-- 🛠️ HUB 6: SISTEMA -->
+            <button class="nav-group-header"
+                onclick="this.classList.toggle('open'); document.getElementById('nav-items-sistema').classList.toggle('open')"><i
+                    class="fas fa-tools grp-icon"></i> <span>Sistema</span> <i
+                    class="fas fa-chevron-right nav-group-chevron"></i></button>
+            <div class="nav-group-items" id="nav-items-sistema">
+                <button onclick="tab('calendario',this)"><i class="fas fa-calendar-week"></i> Agenda & Alertas</button>
+                <button onclick="tab('admin-usuarios',this)"><i class="fas fa-users-cog"></i> Usuarios</button>
+                <button onclick="tab('config-ia',this)"><i class="fas fa-robot"></i> Config. IA</button>
+                <button onclick="tab('bitacora',this)"><i class="fas fa-shield-alt"></i> Bitácora</button>
+                <button onclick="tab('seccion-whatsapp', this)"><i class="fab fa-whatsapp"></i> WhatsApp</button>
+            </div>
+
+            <div class="nav-divider"></div>
+            <button onclick="importarBackup()" class="nav-bottom-btn"><i class="fas fa-upload"></i> Importar
+                Backup</button>
+            <button onclick="BackupDisco.hacerAhora('manual')" class="nav-bottom-btn nav-bottom-btn--highlight"
+                title="Guardar backup ahora">
+                <i class="fas fa-download"></i> Backup ahora
+            </button>
+            <div id="backup-disco-estado" class="sb-status">Cargando...</div>
+            <div class="nav-divider"></div>
+            <button onclick="DocFisico.elegirCarpeta()" class="nav-bottom-btn"
+                title="Establece la carpeta raiz donde se organizan documentos, backups y exportaciones">
+                <i class="fas fa-folder"></i> Carpeta de la app
+            </button>
+            <button onclick="DocFisico.sincronizarTodo()" class="nav-bottom-btn nav-bottom-btn--small"
+                title="Copia todos los adjuntos existentes a la carpeta de documentos">
+                <i class="fas fa-sync"></i> Sincronizar docs a disco
+            </button>
+            <div id="docfisico-estado" class="sb-status">Sin carpeta de docs</div>
+            <button onclick="logout()" class="nav-bottom-btn nav-logout-btn"><i class="fas fa-sign-out-alt"></i> Cerrar
+                Sesión</button>
+        </nav>
+    </aside>
+
+    <main id="main">
+        <div id="hub-nav-container" class="container" style="display:none;"></div>
+        <!-- LOGIN SPLIT SCREEN -->
+        <div id="login-screen">
+            <!-- Left panel: dark brand -->
+            <div class="login-left">
+                <!-- Canvas: partículas + mesh + balanza wireframe -->
+                <canvas id="login-canvas" aria-hidden="true"></canvas>
+
+                <!-- Bloque institucional central -->
+                <div class="login-left-hero" aria-hidden="true">
+                    <span class="login-left-hero-eyebrow">Plataforma LegalTech</span>
+                    <div class="login-left-hero-divider"></div>
+                    <h2 class="login-left-hero-title">
+                        Tecnología que potencia<br>el ejercicio del <em>Derecho.</em>
+                    </h2>
+                    <p class="login-left-hero-sub">
+                        Gestión jurídica moderna, segura y eficiente<br>para profesionales del derecho.
+                    </p>
+                    <div class="login-left-pillars">
+                        <span class="login-left-pillar"><i class="fas fa-lock"></i>Cifrado extremo a extremo</span>
+                        <span class="login-left-pillar"><i class="fas fa-shield-alt"></i>Privacidad garantizada</span>
+                        <span class="login-left-pillar"><i class="fas fa-server"></i>Datos locales</span>
+                    </div>
+                </div>
+
+                <div class="login-left-logo">
+                    <img src="assets/logo-lexium.png" alt="LEXIUM" style="width:48px; height:48px; border-radius:12px;">
+                    <span class="login-left-logo-name">LEXIUM</span>
+                </div>
+                <div class="login-left-content">
+                    <h1 class="login-left-headline">Gestión legal<br>inteligente y moderna</h1>
+                    <p class="login-left-desc">Administra tus casos, documentos, plazos y finanzas en una sola
+                        plataforma diseñada para profesionales del derecho.</p>
+                </div>
+                <div class="login-left-footer">© 2026 LEXIUM. Todos los derechos reservados.</div>
+            </div>
+            <!-- Right panel: form -->
+            <div class="login-right">
+                <div class="login-form-wrap">
+                    <h2 class="login-title">Iniciar sesión</h2>
+                    <p class="login-subtitle">Selecciona tu usuario para acceder</p>
+                    <div id="login-user-list" class="login-user-list">
+                        <div style="text-align:center;color:var(--text-3);font-size:13px;padding:12px;">Cargando
+                            usuarios...</div>
+                    </div>
+                    <div id="login-pw-block" class="login-pw-block">
+                        <button class="login-back-btn" onclick="loginVolver()">← Cambiar usuario</button>
+                        <div style="margin-bottom:6px;">
+                            <label id="login-pw-label" style="margin-top:0;">Contraseña</label>
+                            <input type="password" id="pw" placeholder="Ingresa tu contraseña"
+                                onkeydown="if(event.key==='Enter') auth()" style="font-size:14px;">
+                        </div>
+                        <button onclick="auth()" class="btn btn-p btn-full"
+                            style="height:44px;font-size:15px;border-radius:8px;"><i class="fas fa-unlock-alt"></i>
+                            Ingresar</button>
+                    </div>
+                    <p id="err" style="color:var(--danger);font-size:13px;margin-top:10px;text-align:center;"></p>
+                    <p style="text-align:center;margin-top:10px;">
+                        <button id="btn-reset-bloqueo" onclick="resetBloqueo()"
+                            style="display:none;background:none;border:none;color:var(--text-3);font-size:12px;cursor:pointer;text-decoration:underline;">
+                            ¿Sistema bloqueado? Clic aquí
+                        </button>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- TOAST NOTIFICATIONS -->
+        <div id="toast-container"></div>
+
+        <!-- ████████████████████████████████████████████████████████████
+             HTML — BLOQUE 2: APP PRINCIPAL (topbar + todas las secciones)
+        ████████████████████████████████████████████████████████████ -->
+        <!-- APP -->
+        <div id="app" style="display:none;">
+            <!-- TOPBAR -->
+            <div id="topbar">
+                <button class="topbar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="topbar-search">
+                    <i class="fas fa-search topbar-search-icon"></i>
+                    <input type="text" class="topbar-search-input" placeholder="Buscar causas, clientes, documento..."
+                        id="topbar-search-input" oninput="if(typeof busquedaGlobal==='function')tab('busqueda',null)">
+                </div>
+                <div class="topbar-spacer"></div>
+                <button id="btn-guardar-global" onclick="guardarCambiosGlobal()" title="Guardar cambios">
+                    <i class="fas fa-save"></i> <span>Guardar</span>
+                </button>
+                <span id="storage-usage-badge" class="topbar-storage-badge" title="Uso de almacenamiento local">
+                    <i class="fas fa-database" style="font-size:10px;"></i> <span id="storage-text">Local</span>
+                </span>
+                <button class="topbar-bell" onclick="toggleTheme()" title="Cambiar Tema (Claro/Oscuro)">
+                    <i class="fas fa-moon" id="theme-icon"></i>
+                </button>
+                <button class="topbar-bell" title="Notificaciones"
+                    onclick="if(typeof notifTogglePanel==='function')notifTogglePanel()">
+                    <i class="fas fa-bell"></i>
+                    <span class="topbar-bell-dot"></span>
+                </button>
+                <div class="topbar-user">
+                    <div class="topbar-avatar" id="topbar-avatar">A</div>
+                    <div class="topbar-info">
+                        <div class="topbar-name" id="topbar-name">Administrador</div>
+                        <div class="topbar-email" id="topbar-email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="7c1d181115123c1d0c0c1e131b1d1813521f1311">[email&#160;protected]</a></div>
+                        <div class="topbar-phone" id="topbar-phone"
+                            style="font-size:11px;color:var(--text-3);display:none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- ─────────────────────────────────────────────────────────────
+             SECCIONES DE CONTENIDO — dentro de #app para que hereden
+             display:none en login y display:block tras autenticación
+        ───────────────────────────────────────────────────────────────── -->
+
+        <!-- PROSPECTOS CRM -->
+        <section id="prospectos" class="tabs" style="display:none;"></section>
+
+        <!-- PANEL -->
+        <section id="panel" class="tabs active">
+
+            <!-- ── DASHBOARD HEADER ── -->
+            <div class="db-header">
+                <div class="db-header-left">
+                    <h2 class="db-title"><i class="fas fa-chart-line" style="color:var(--cyan);margin-right:8px;"></i>
+                        Dashboard Judicial</h2>
+                    <p class="db-subtitle">Vista general de tu operación legal</p>
+                </div>
+                <div class="db-header-right">
+                    <div class="modo-toggle">
+                        <button class="modo-btn activo" id="modo-personal-btn"
+                            onclick="setModo('personal')">Personal</button>
+                        <button class="modo-btn" id="modo-estudio-btn" onclick="setModo('estudio')">Estudio</button>
+                    </div>
+                    <button class="db-export-btn" onclick="exportarPDFEconomico()">
+                        <i class="fas fa-download"></i> PDF
+                    </button>
+                </div>
+            </div>
+
+            <!-- ── FILTROS ── -->
+            <div class="db-filtros" id="db-filtros">
+                <span class="db-filtro-icon"><i class="fas fa-filter"></i></span>
+                <div class="db-filtro-group">
+                    <label>Rama</label>
+                    <select id="flt-rama" onchange="renderDashboardPanel()">
+                        <option value="">Todas las Ramas</option>
+                        <option>Civil</option>
+                        <option>Laboral</option>
+                        <option>Familia</option>
+                        <option>Penal</option>
+                        <option>Comercial</option>
+                    </select>
+                </div>
+                <div class="db-filtro-group">
+                    <label>Estado</label>
+                    <select id="flt-estado" onchange="renderDashboardPanel()">
+                        <option value="">Todos los Estados</option>
+                        <option>En tramitación</option>
+                        <option>Finalizada</option>
+                        <option>Suspendida</option>
+                    </select>
+                </div>
+                <div class="db-filtro-group">
+                    <label>Instancia</label>
+                    <select id="flt-instancia" onchange="renderDashboardPanel()">
+                        <option value="">Todas las Instancias</option>
+                        <option>Primera</option>
+                        <option>Segunda</option>
+                        <option>Casación</option>
+                    </select>
+                </div>
+                <button class="db-clear-btn" onclick="limpiarFiltrosPanel()"><i class="fas fa-times"></i>
+                    Limpiar</button>
+            </div>
+
+            <!-- ── KPI ROW ── -->
+            <div class="db-kpi-row" id="db-kpi-row">
+                <div class="db-kpi db-kpi-blue">
+                    <div class="db-kpi-icon"><i class="fas fa-gavel"></i></div>
+                    <div class="db-kpi-data">
+                        <span class="db-kpi-val" id="kpi-causas">0</span>
+                        <span class="db-kpi-label">Causas Activas</span>
+                    </div>
+                    <div class="db-kpi-trend" id="kpi-causas-trend"></div>
+                </div>
+                <div class="db-kpi db-kpi-red">
+                    <div class="db-kpi-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                    <div class="db-kpi-data">
+                        <span class="db-kpi-val" id="kpi-alertas">0</span>
+                        <span class="db-kpi-label">Alertas Críticas</span>
+                    </div>
+                    <div class="db-kpi-trend" id="kpi-alertas-trend"></div>
+                </div>
+                <div class="db-kpi db-kpi-slate">
+                    <div class="db-kpi-icon"><i class="fas fa-users"></i></div>
+                    <div class="db-kpi-data">
+                        <span class="db-kpi-val" id="kpi-clientes">0</span>
+                        <span class="db-kpi-label">Clientes</span>
+                    </div>
+                </div>
+                <div class="db-kpi db-kpi-slate">
+                    <div class="db-kpi-icon"><i class="fas fa-chart-line"></i></div>
+                    <div class="db-kpi-data">
+                        <span class="db-kpi-val" id="kpi-avance">0%</span>
+                        <span class="db-kpi-label">Avance Promedio</span>
+                    </div>
+                </div>
+                <div class="db-kpi db-kpi-green">
+                    <div class="db-kpi-icon"><i class="fas fa-dollar-sign"></i></div>
+                    <div class="db-kpi-data">
+                        <span class="db-kpi-val" id="kpi-facturado" style="font-size:1.1rem;">$0</span>
+                        <span class="db-kpi-label">Total Facturado</span>
+                    </div>
+                </div>
+                <div class="db-kpi db-kpi-orange">
+                    <div class="db-kpi-icon"><i class="fas fa-hourglass-half"></i></div>
+                    <div class="db-kpi-data">
+                        <span class="db-kpi-val" id="kpi-pendiente" style="font-size:1.1rem;">$0</span>
+                        <span class="db-kpi-label">Pendiente Cobro</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── CHARTS ROW 1: Donuts ── -->
+            <div class="db-charts-row">
+                <div class="db-chart-card">
+                    <div class="db-chart-header">
+                        <h3><i class="fas fa-circle-notch"></i> Causas por Estado</h3>
+                    </div>
+                    <div class="db-donut-wrap">
+                        <svg id="donut-estado" viewBox="0 0 160 160" width="160" height="160"></svg>
+                        <div class="db-donut-legend" id="legend-estado"></div>
+                    </div>
+                </div>
+                <div class="db-chart-card">
+                    <div class="db-chart-header">
+                        <h3><i class="fas fa-circle-notch"></i> Causas por Instancia</h3>
+                    </div>
+                    <div class="db-donut-wrap">
+                        <svg id="donut-instancia" viewBox="0 0 160 160" width="160" height="160"></svg>
+                        <div class="db-donut-legend" id="legend-instancia"></div>
+                    </div>
+                </div>
+                <div class="db-chart-card">
+                    <div class="db-chart-header">
+                        <h3><i class="fas fa-circle-notch"></i> Alertas por Prioridad</h3>
+                    </div>
+                    <div class="db-donut-wrap">
+                        <svg id="donut-alertas" viewBox="0 0 160 160" width="160" height="160"></svg>
+                        <div class="db-donut-legend" id="legend-alertas"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── CHARTS ROW 2: Barras ── -->
+            <div class="db-charts-row db-charts-row-2">
+                <div class="db-chart-card db-chart-wide">
+                    <div class="db-chart-header">
+                        <h3><i class="fas fa-chart-bar"></i> Causas por Rama</h3>
+                        <div class="db-legend-pills">
+                            <span class="db-pill db-pill-blue">Activas</span>
+                            <span class="db-pill db-pill-red">Finalizadas</span>
+                        </div>
+                    </div>
+                    <div id="bar-rama" class="db-bars-container"></div>
+                </div>
+                <div class="db-chart-card">
+                    <div class="db-chart-header">
+                        <h3><i class="fas fa-coins"></i> Cuantía por Estado</h3>
+                    </div>
+                    <div id="bar-cuantia" class="db-bars-container db-bars-horizontal"></div>
+                </div>
+            </div>
+
+            <!-- ── ROW 3: Semáforo + Alertas + Dormidas ── -->
+            <div class="db-bottom-row">
+                <div class="db-chart-card db-semaforo-card">
+                    <div class="db-chart-header">
+                        <h3><i class="fas fa-traffic-light"></i> Semáforo de Plazos</h3>
+                    </div>
+                    <div id="semaforo-plazos" class="semaforo-wrap" style="margin-top:4px;"></div>
+                </div>
+                <div class="db-chart-card db-alertas-card">
+                    <div class="db-chart-header">
+                        <h3><i class="fas fa-bell"></i> Monitor de Alertas</h3>
+                    </div>
+                    <div id="alert-container"></div>
+                </div>
+            </div>
+
+            <!-- IDs legacy que otros módulos usan — ocultos -->
+            <span id="st-ca" style="display:none">0</span>
+            <span id="st-pr" style="display:none">0</span>
+            <span id="st-al" style="display:none">0</span>
+            <span id="st-ju" style="display:none">0</span>
+            <span id="st-do" style="display:none">0</span>
+            <div id="panelEjecutivo" style="display:none;"></div>
+            <div id="salud-widget" style="display:none;"></div>
+            <div id="semaforo-global-bar" style="display:none;">
+                <div id="sg-verde"></div>
+                <div id="sg-amarillo"></div>
+                <div id="sg-rojo"></div>
+                <div id="sg-texto"></div>
+                <div id="sg-cuenta"></div>
+            </div>
+            <div id="causas-dormidas-card" style="display:none;">
+                <div id="causas-dormidas-lista"></div><small id="dormidas-count"></small>
+            </div>
+        </section>
+
+        <!-- TRÁMITES ADMINISTRATIVOS -->
+        <section id="tramites" class="tabs">
+            <div id="tramites-main" style="padding: 0 0 40px 0;"></div>
+        </section>
+
+        <!-- CLIENTES -->
+        <section id="clientes" class="tabs">
+            <div class="hub-nav">
+                <button class="hub-tab active" id="hub-tab-clientes"
+                    onclick="mostrarPanelClientes('clientes-panel', this)">
+                    <i class="fas fa-users"></i> Clientes</button>
+                <button class="hub-tab" id="hub-tab-financiero"
+                    onclick="mostrarPanelClientes('financiero-panel', this)">
+                    <i class="fas fa-wallet"></i> Control Financiero</button>
+            </div>
+
+            <!-- Panel: Clientes -->
+            <div id="clientes-panel" class="hub-panel">
+                <div class="grid">
+                    <div class="card">
+                        <h3><i class="fas fa-user-plus"></i> Nuevo Prospecto / Cliente</h3>
+                        <label>Nombre Completo</label>
+                        <input id="cl-nom" placeholder="Ej: Juan Pérez González" oninput="uiVerificarConflicto()">
+                        <label>RUT</label>
+                        <input id="cl-rut" placeholder="Ej: 12.345.678-9"
+                            oninput="onRutInput(this); uiVerificarConflicto()">
+                        <div id="conflicto-resultado" style="margin-top:6px;"></div>
+                        <label>Relato de Hechos</label>
+                        <textarea id="cl-rel"
+                            placeholder="Descripción de los hechos para análisis de estrategia..."></textarea>
+                        <button class="btn btn-s btn-full" onclick="addClient()">
+                            <i class="fas fa-save"></i> Guardar Prospecto</button>
+                    </div>
+                    <div id="client-list">
+                        <div class="empty-state"><i class="fas fa-users"></i>
+                            <p>Sin clientes registrados</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel: Control Financiero (antes sección independiente) -->
+            <div id="financiero-panel" class="hub-panel" style="display:none;">
+                <div class="grid">
+                    <div class="card">
+                        <h3><i class="fas fa-file-invoice-dollar"></i> Asignar Honorarios a Causa</h3>
+                        <label>Causa</label>
+                        <select id="hr-causa-sel"></select>
+                        <label>Monto Base ($)</label>
+                        <input type="number" id="hr-monto" placeholder="Ej: 5000000">
+                        <button class="btn btn-s btn-full" onclick="uiAsignarHonorarios()">
+                            <i class="fas fa-save"></i> Asignar</button>
+                        <hr style="margin:18px 0; border:none; border-top:1px solid var(--border);">
+                        <h3><i class="fas fa-money-bill-wave"></i> Registrar Pago</h3>
+                        <label>Causa</label>
+                        <select id="hr-pago-causa-sel"></select>
+                        <label>Monto del Pago ($)</label>
+                        <input type="number" id="hr-pago-monto" placeholder="Ej: 1000000">
+                        <button class="btn btn-p btn-full" onclick="uiRegistrarPago()">
+                            <i class="fas fa-check"></i> Registrar Pago</button>
+                    </div>
+                    <div class="card">
+                        <h3><i class="fas fa-chart-bar"></i> Estado de Honorarios por Causa</h3>
+                        <div id="hr-resumen"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CAUSAS -->
+        <section id="causas" class="tabs">
+            <div class="hub-nav">
+                <button class="hub-tab active" onclick="tab('causas', this)"><i class="fas fa-gavel"></i>
+                    Causas</button>
+                <button class="hub-tab" onclick="tab('archivos', this)"><i class="fas fa-folder-open"></i>
+                    Documentos</button>
+                <button class="hub-tab" onclick="tab('tramites', this)"><i class="fas fa-building"></i>
+                    Trámites</button>
+            </div>
+            <div id="causa-list" class="grid">
+                <div class="empty-state" style="grid-column:1/-1;"><i class="fas fa-gavel"></i>
+                    <p>Sin causas activas. Convierta un prospecto en causa desde la sección Clientes.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ESTRATEGIA -->
+        <section id="estrategia" class="tabs">
+            <div class="hub-nav">
+                <button class="hub-tab active" onclick="tab('estrategia', this)"><i class="fas fa-chart-pie"></i>
+                    Estrategia & Riesgo</button>
+                <button class="hub-tab" onclick="tab('juris', this)"><i class="fas fa-book"></i> Jurisprudencia &
+                    Doctrina</button>
+            </div>
+            <div class="grid">
+                <div class="card">
+                    <h3><i class="fas fa-chart-pie"></i> Análisis de Riesgo Multidimensional</h3>
+                    <label>Seleccionar Causa</label>
+                    <select id="risk-select" onchange="renderRisk()">
+                        <option value="">-- Seleccione una causa --</option>
+                    </select>
+                    <div id="risk-chart" style="margin-top:16px;"></div>
+                </div>
+                <div class="card">
+                    <h3><i class="fas fa-lightbulb"></i> Teoría del Caso Sugerida</h3>
+                    <div id="strategy-hint">Seleccione una causa para generar sugerencias estratégicas.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CALCULADORA -->
+        <section id="calculadora" class="tabs">
+            <div class="card" style="max-width:580px;">
+                <h3><i class="fas fa-calendar-alt"></i> Calculadora de Plazos Procesales</h3>
+                <label>Materia</label>
+                <select id="calc-materia" onchange="updateCalcHitos()">
+                    <option value="civil">Civil — CPC (Días Hábiles L-S)</option>
+                    <option value="laboral">Laboral — CT (Días Hábiles L-S)</option>
+                </select>
+                <label>Hito Procesal</label>
+                <select id="calc-hito"></select>
+                <label>Fecha de Notificación / Inicio</label>
+                <input type="date" id="calc-date">
+                <button class="btn btn-p btn-full" onclick="runCalc()"><i class="fas fa-calculator"></i> Calcular
+                    Vencimiento</button>
+                <div id="calc-res"></div>
+            </div>
+        </section>
+
+        <!-- GESTOR DE ARCHIVOS -->
+        <section id="archivos" class="tabs">
+            <div class="hub-nav">
+                <button class="hub-tab" onclick="tab('causas', this)"><i class="fas fa-gavel"></i> Causas</button>
+                <button class="hub-tab active" onclick="tab('archivos', this)"><i class="fas fa-folder-open"></i>
+                    Documentos</button>
+                <button class="hub-tab" onclick="tab('tramites', this)"><i class="fas fa-building"></i>
+                    Trámites</button>
+            </div>
+
+            <!-- Selector de causa + stat rápido -->
+            <div class="ga-header">
+                <div class="ga-select-wrap">
+                    <label>Causa</label>
+                    <select id="ga-causa-sel" onchange="gaSelectCausa()">
+                        <option value="">-- Seleccione una causa --</option>
+                    </select>
+                </div>
+                <button class="btn btn-p" onclick="document.getElementById('file-input').click()" id="ga-upload-btn"
+                    disabled>
+                    <i class="fas fa-upload"></i> Subir Documento
+                </button>
+                <button class="btn" style="background:var(--bg-2,var(--bg));" onclick="gaToggleView()" id="ga-view-btn"
+                    title="Cambiar vista">
+                    <i class="fas fa-stream"></i>
+                </button>
+            </div>
+
+            <div id="ga-no-causa" class="empty-state card">
+                <i class="fas fa-folder-open"></i>
+                <p>Seleccione una causa para acceder al gestor documental.</p>
+            </div>
+
+            <!-- Layout principal -->
+            <div id="ga-main" style="display:none;">
+
+                <!-- Upload zone + form -->
+                <div class="upload-zone card" id="ga-drop-zone" onclick="document.getElementById('file-input').click()">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <p>Arrastre archivos aquí o haga clic para seleccionar</p>
+                    <small>PDF · Word · Imágenes · Múltiples archivos</small>
+                </div>
+                <input type="file" id="file-input" multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg">
+
+                <!-- Formulario de metadatos -->
+                <div class="upload-form" id="ga-form">
+                    <h4><i class="fas fa-tags" style="color:var(--a)"></i> Clasificación del Documento</h4>
+                    <div id="ga-staged-files" style="margin-bottom:12px; font-size:0.82rem; color:var(--t2);"></div>
+                    <div class="form-row">
+                        <div>
+                            <label>Tipo / Naturaleza</label>
+                            <select id="ga-tipo">
+                                <option value="Resolución">Resolución</option>
+                                <option value="Escrito Propio">Escrito Propio</option>
+                                <option value="Escrito Contraparte">Escrito Contraparte</option>
+                                <option value="Prueba Documental">Prueba Documental</option>
+                                <option value="Prueba Testimonial">Prueba Testimonial</option>
+                                <option value="Prueba Pericial">Prueba Pericial</option>
+                                <option value="Sentencia">Sentencia</option>
+                                <option value="Recurso">Recurso</option>
+                                <option value="Notificación">Notificación</option>
+                                <option value="Otro">Otro</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>Subtipo</label>
+                            <select id="ga-subtipo">
+                                <option value="Traslado">Traslado</option>
+                                <option value="Auto">Auto</option>
+                                <option value="Interlocutoria">Interlocutoria</option>
+                                <option value="Definitiva">Definitiva</option>
+                                <option value="Oficio">Oficio</option>
+                                <option value="Mandamiento">Mandamiento</option>
+                                <option value="N/A">N/A</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div>
+                            <label>Etapa Procesal</label>
+                            <select id="ga-etapa">
+                                <option value="01_Demanda">01 · Demanda</option>
+                                <option value="02_Resoluciones">02 · Resoluciones</option>
+                                <option value="03_Notificaciones">03 · Notificaciones</option>
+                                <option value="04.1_Prueba_Documental">04.1 · Prueba Documental</option>
+                                <option value="04.2_Prueba_Testimonial">04.2 · Prueba Testimonial</option>
+                                <option value="04.3_Prueba_Pericial">04.3 · Prueba Pericial</option>
+                                <option value="05_Escritos_Propios">05 · Escritos Propios</option>
+                                <option value="06_Escritos_Contraparte">06 · Escritos Contraparte</option>
+                                <option value="07_Recursos">07 · Recursos</option>
+                                <option value="08_Sentencia">08 · Sentencia</option>
+                                <option value="09_Ejecucion">09 · Ejecución</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>Fecha del Documento</label>
+                            <input type="date" id="ga-fecha-doc">
+                        </div>
+                    </div>
+                    <label>Descripción Breve</label>
+                    <input id="ga-desc" placeholder="Ej: Resolución que recibe causa a prueba">
+
+                    <label>Impacto</label>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:4px;">
+                        <label class="cb-row"><input type="checkbox" id="ga-imp-prob"> Impacto Probatorio</label>
+                        <label class="cb-row"><input type="checkbox" id="ga-imp-strat"> Estratégico</label>
+                        <label class="cb-row"><input type="checkbox" id="ga-imp-crit"> Crítico</label>
+                    </div>
+
+                    <label class="cb-row" style="margin-top:12px; font-weight:600;">
+                        <input type="checkbox" id="ga-genera-plazo" onchange="gaTogglePlazo()">
+                        ¿Este documento genera un plazo procesal?
+                    </label>
+
+                    <div class="plazo-extra" id="ga-plazo-extra">
+                        <strong style="font-size:0.83rem; color:#92400e;"><i class="fas fa-calendar-exclamation"></i>
+                            Configurar Plazo</strong>
+                        <div class="form-row" style="margin-top:8px;">
+                            <div>
+                                <label>Días Hábiles</label>
+                                <input type="number" id="ga-dias" placeholder="Ej: 10" min="1"
+                                    oninput="gaPreviewPlazo()">
+                            </div>
+                            <div>
+                                <label>Tipo día</label>
+                                <select id="ga-tipo-dia" onchange="gaPreviewPlazo()">
+                                    <option value="habiles">Hábiles (L-S)</option>
+                                    <option value="corridos">Corridos</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="ga-plazo-preview"
+                            style="margin-top:8px; font-size:0.82rem; color:var(--d); font-family:'DM Mono',monospace;">
+                        </div>
+                        <p style="font-size:0.75rem; color:#92400e; margin-top:6px;"><i class="fas fa-user-shield"></i>
+                            La responsabilidad del cálculo es siempre del
+                            abogado.</p>
+                    </div>
+
+                    <div class="ia-hint" id="ga-ia-hint">
+                        <i class="fas fa-robot"></i>
+                        <div id="ga-ia-text"></div>
+                    </div>
+
+                    <div style="display:flex; gap:8px; margin-top:14px;">
+                        <button class="btn btn-p" onclick="gaGuardarDoc()" style="flex:1;"><i class="fas fa-save"></i>
+                            Indexar Documento</button>
+                        <button class="btn btn-d" onclick="gaCancelForm()"><i class="fas fa-times"></i></button>
+                    </div>
+                </div>
+
+                <!-- Vista carpetas + documentos -->
+                <div class="ga-layout" id="ga-doc-area">
+                    <div class="folder-tree">
+                        <div class="folder-tree-header"><i class="fas fa-sitemap"></i> Estructura de Causa</div>
+                        <div id="ga-folder-list"></div>
+                    </div>
+                    <div class="ga-right">
+                        <div class="doc-list" id="ga-doc-list">
+                            <div class="doc-list-header">
+                                <h4 id="ga-folder-title">Todos los documentos</h4>
+                                <div class="doc-filters" id="ga-filters">
+                                    <button class="filter-btn active" onclick="gaFilter('all',this)">Todos</button>
+                                    <button class="filter-btn" onclick="gaFilter('plazo',this)">⏰ Con plazo</button>
+                                    <button class="filter-btn" onclick="gaFilter('prob',this)">🔍
+                                        Probatorio</button>
+                                    <button class="filter-btn" onclick="gaFilter('strat',this)">💡
+                                        Estratégico</button>
+                                    <button class="filter-btn" onclick="gaFilter('crit',this)">🔴 Crítico</button>
+                                </div>
+                            </div>
+                            <div id="ga-items"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Timeline + Alertas de plazos -->
+                <div class="ga-layout" style="margin-top:18px;">
+                    <div class="card">
+                        <h3><i class="fas fa-stream"></i> Línea de Tiempo Documental</h3>
+                        <div id="ga-timeline" class="timeline"></div>
+                    </div>
+                    <div class="card">
+                        <h3><i class="fas fa-exclamation-circle"></i> Alertas de Plazos</h3>
+                        <div id="ga-plazos-alertas"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- JURISPRUDENCIA -->
+        <section id="juris" class="tabs">
+            <div class="hub-nav">
+                <button class="hub-tab" onclick="tab('estrategia', this)"><i class="fas fa-chart-pie"></i>
+                    Estrategia & Riesgo</button>
+                <button class="hub-tab active" onclick="tab('juris', this)"><i class="fas fa-book"></i>
+                    Jurisprudencia & Doctrina</button>
+            </div>
+            <div class="grid">
+                <div class="card">
+                    <h3><i class="fas fa-book-open"></i> Indexar Jurisprudencia</h3>
+                    <label>Rol / Tribunal</label>
+                    <input id="ju-rol" placeholder="Ej: ROL 1234-2023 / CS, 3ª Sala">
+                    <label>Extracto Doctrinal</label>
+                    <textarea id="ju-ext" placeholder="Extracto del fallo o doctrina relevante..."></textarea>
+                    <label>Categoría</label>
+                    <select id="ju-cat">
+                        <option value="Civil">Civil</option>
+                        <option value="Laboral">Laboral</option>
+                        <option value="Penal">Penal</option>
+                        <option value="Constitucional">Constitucional</option>
+                        <option value="Otra">Otra</option>
+                    </select>
+                    <button class="btn btn-p btn-full" onclick="addJuris()"><i class="fas fa-database"></i>
+                        Indexar</button>
+                </div>
+                <div>
+                    <div id="juris-list"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- HONORARIOS -->
+        <section id="honorarios" class="tabs">
+            <div class="card" style="max-width:500px;">
+                <h3><i class="fas fa-wallet"></i> Calculadora de Honorarios Sugerida</h3>
+                <label>Cuantía del Asunto ($)</label>
+                <input type="number" id="hon-val" placeholder="Ej: 10000000" oninput="calcHon()">
+                <h2 id="hon-res">$ 0</h2>
+                <p style="font-size:0.8rem; color:var(--t2); margin-bottom:12px;">Honorario mínimo sugerido (modelo
+                    referencial 15%–10% escalonado)</p>
+                <div id="hon-table"></div>
+            </div>
+        </section>
+
+        <!-- PROSPECTOS CRM (Bloque 3) -->
+        <section id="prospectos" class="tabs">
+            <div class="grid">
+                <div class="card">
+                    <h3><i class="fas fa-funnel-dollar"></i> Nuevo Prospecto</h3>
+                    <label>Nombre</label>
+                    <input id="pro-nom" placeholder="Nombre del prospecto">
+                    <label>Materia</label>
+                    <input id="pro-mat" placeholder="Ej: Laboral, Familia, Civil">
+                    <label>Descripción</label>
+                    <textarea id="pro-desc" placeholder="Descripción del caso..."></textarea>
+                    <label>Complejidad</label>
+                    <select id="pro-comp">
+                        <option value="bajo">Baja</option>
+                        <option value="medio">Media</option>
+                        <option value="alto">Alta</option>
+                    </select>
+                    <label>Probabilidad de Cierre (%)</label>
+                    <input type="number" id="pro-prob" placeholder="50" min="0" max="100">
+                    <label>Honorario Propuesto ($)</label>
+                    <input type="number" id="pro-hon" placeholder="0">
+                    <button class="btn btn-s btn-full" onclick="uiCrearProspecto()"><i class="fas fa-save"></i>
+                        Guardar Prospecto</button>
+                </div>
+                <div>
+                    <div class="card" style="margin-bottom:14px;">
+                        <h3><i class="fas fa-chart-bar"></i> Resumen Económico</h3>
+                        <div id="resumenEconomico"></div>
+                    </div>
+                    <div id="listaProspectos"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CAUSAS PRO (Bloque 1 + 6) -->
+        <section id="causas-pro" class="tabs">
+            <div class="grid">
+                <div class="card">
+                    <h3><i class="fas fa-plus-circle"></i> Nueva Causa Pro</h3>
+                    <label>Carátula</label>
+                    <input id="cp-caratula" placeholder="Nombre de la causa">
+                    <label>Tipo de Procedimiento</label>
+                    <select id="cp-tipo">
+                        <option value="Ordinario Civil">Ordinario Civil</option>
+                        <option value="Ejecutivo">Ejecutivo</option>
+                        <option value="Sumario">Sumario</option>
+                        <option value="Familia">Familia</option>
+                    </select>
+                    <label>Rama / Materia</label>
+                    <input id="cp-rama" placeholder="Ej: Civil, Laboral, Familia">
+                    <button class="btn btn-s btn-full" onclick="uiCrearCausaPro()"><i class="fas fa-gavel"></i>
+                        Crear Causa</button>
+                </div>
+                <div>
+                    <div class="card" style="margin-bottom:14px;">
+                        <h3><i class="fas fa-list-ol"></i> Causas del Sistema Pro</h3>
+                        <div id="dashboardCausas"></div>
+                    </div>
+                    <div class="card">
+                        <h3><i class="fas fa-file-plus"></i> Agregar Documento a Causa</h3>
+                        <label>Seleccionar Causa</label>
+                        <select id="doc-causa-sel"></select>
+                        <label>Nombre del Documento</label>
+                        <input id="doc-nombre" placeholder="Ej: Demanda principal">
+                        <label>Tipo</label>
+                        <select id="doc-tipo">
+                            <option value="Resolución">Resolución</option>
+                            <option value="Escrito">Escrito</option>
+                            <option value="Prueba">Prueba</option>
+                            <option value="Sentencia">Sentencia</option>
+                            <option value="Notificación">Notificación</option>
+                        </select>
+                        <label>Etapa Vinculada</label>
+                        <input id="doc-etapa" placeholder="Ej: Demanda interpuesta">
+                        <label>Fecha del Documento</label>
+                        <input type="date" id="doc-fecha">
+                        <label class="cb-row" style="margin-top:10px; font-weight:600;">
+                            <input type="checkbox" id="doc-genera-plazo" onchange="uiToggleDocPlazo()"> ¿Genera
+                            Plazo?
+                        </label>
+                        <div id="doc-plazo-extra"
+                            style="display:none; margin-top:8px; padding:10px; background:#fffbeb; border-radius:8px;">
+                            <label>Días del Plazo</label>
+                            <input type="number" id="doc-dias" placeholder="Ej: 10" min="1">
+                        </div>
+                        <button class="btn btn-p btn-full" onclick="uiAgregarDocumento()"><i class="fas fa-upload"></i>
+                            Agregar Documento</button>
+                        <div id="listaDocumentos" style="margin-top:14px;"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CALENDARIO (Bloque 2) -->
+        <section id="calendario" class="tabs">
+            <div class="grid">
+                <div class="card">
+                    <h3><i class="fas fa-calendar-week"></i> Eventos y Plazos</h3>
+                    <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+                        <button class="btn btn-p" onclick="evaluarAlertas(); renderCalendario();">
+                            <i class="fas fa-sync"></i> Actualizar Alertas
+                        </button>
+                        <button class="btn btn-sm" style="background:#ede9fe; color:#7c3aed; font-weight:600;"
+                            onclick="exportarCalendarioICS()">
+                            <i class="fas fa-calendar-plus"></i> Exportar a Calendario (.ics)
+                        </button>
+                    </div>
+                    <div
+                        style="padding:8px 12px; background:#f0fdf4; border-left:3px solid #22c55e; border-radius:6px; font-size:0.75rem; color:#14532d; margin-bottom:12px;">
+                        <i class="fas fa-info-circle"></i> El archivo <strong>.ics</strong> es compatible con Google
+                        Calendar, Apple Calendar y Outlook. Importarlo manualmente desde la app de calendario de su
+                        preferencia.
+                    </div>
+                    <div id="calendarioEventos"></div>
+                </div>
+                <div class="card">
+                    <h3><i class="fas fa-plus"></i> Crear Alerta Manual</h3>
+                    <label>Causa Asociada</label>
+                    <select id="cal-causa-sel">
+                        <option value="">-- Sin causa específica --</option>
+                    </select>
+                    <label>Tipo</label>
+                    <select id="cal-tipo">
+                        <option value="procesal">Procesal</option>
+                        <option value="plazo">Plazo</option>
+                        <option value="inactividad">Inactividad</option>
+                        <option value="economica">Económica</option>
+                    </select>
+                    <label>Mensaje</label>
+                    <input id="cal-msg" placeholder="Descripción de la alerta">
+                    <label>Fecha Objetivo</label>
+                    <input type="date" id="cal-fecha">
+                    <label>Prioridad</label>
+                    <select id="cal-prioridad">
+                        <option value="baja">Baja</option>
+                        <option value="media">Media</option>
+                        <option value="alta">Alta</option>
+                        <option value="critica">Crítica</option>
+                    </select>
+                    <button class="btn btn-s btn-full" onclick="uiCrearAlerta()"><i class="fas fa-bell"></i> Crear
+                        Alerta</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- DOCTRINA & PRÁCTICA FORENSE -->
+        <section id="doctrina" class="tabs">
+            <div id="doctrina-main"></div>
+        </section>
+
+        <!-- ESTRATEGIA PRO (Bloque 7) -->
+        <section id="estrategia-pro" class="tabs">
+            <div class="grid">
+                <div class="card">
+                    <h3><i class="fas fa-chess"></i> Motor Estratégico</h3>
+                    <label>Seleccionar Causa Pro</label>
+                    <select id="ep-causa-sel" onchange="uiRenderEstrategiaPro()">
+                        <option value="">-- Seleccione una causa --</option>
+                    </select>
+                    <div style="margin-top:12px;margin-bottom:4px;">
+                        <button
+                            onclick="clAnalizarEstrategiaPro(parseInt(document.getElementById('ep-causa-sel').value))"
+                            style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:linear-gradient(135deg,#7c3aed,#5b21b6);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;box-shadow:0 2px 10px rgba(124,58,237,0.35);">
+                            <i class="fas fa-brain"></i> Análisis Estratégico con Bot AI
+                        </button>
+                    </div>
+                    <div id="analisisEstrategico" style="margin-top:16px;"></div>
+                </div>
+                <div class="card">
+                    <h3><i class="fas fa-book-open"></i> Jurisprudencia Avanzada</h3>
+
+                    <!-- IMPORTAR FALLO CON IA -->
+                    <div
+                        style="background:#f5f3ff; border:1px solid #c4b5fd; border-radius:10px; padding:16px; margin-bottom:18px;">
+                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+                            <span
+                                style="background:#7c3aed; color:white; border-radius:6px; padding:3px 8px; font-size:0.68rem; font-weight:700; font-family:'DM Mono',monospace;">✨
+                                IA GEMINI</span>
+                            <strong style="font-size:0.88rem;">Importar Fallo desde Texto</strong>
+                        </div>
+                        <p style="font-size:0.78rem; color:#5b21b6; margin-bottom:10px;">Pegue el texto completo de
+                            un fallo copiado desde el Poder Judicial, Corte Suprema o Tribunal Constitucional. La IA
+                            extraerá y estructurará los datos automáticamente.</p>
+                        <textarea id="import-fallo-texto" placeholder="Pegue aquí el texto del fallo judicial..."
+                            style="min-height:110px; font-size:0.8rem; border-color:#c4b5fd;"></textarea>
+                        <button class="btn btn-full" style="background:#7c3aed; color:white; margin-top:8px;"
+                            onclick="iaImportarFallo()">
+                            <i class="fas fa-magic"></i> <span id="btn-import-fallo-txt">Analizar con IA e
+                                Indexar</span>
+                        </button>
+                        <div id="import-fallo-status"
+                            style="display:none; margin-top:8px; font-size:0.78rem; padding:8px 12px; border-radius:6px;">
+                        </div>
+                        <!-- DISCLAIMER IA -->
+                        <div
+                            style="margin-top:10px; padding:8px 12px; background:#fef3c7; border-left:3px solid #f59e0b; border-radius:6px; font-size:0.72rem; color:#92400e;">
+                            <i class="fas fa-exclamation-triangle"></i> <strong>Aviso IA:</strong> El análisis
+                            generado por Gemini es referencial y puede contener errores. Verifique siempre los datos
+                            extraídos (ROL, fecha, holding) con el documento original antes de indexar. La IA no
+                            reemplaza el criterio jurídico del abogado.
+                        </div>
+                    </div>
+
+                    <label>Tribunal</label>
+                    <input id="jav-tribunal" placeholder="Ej: Corte Suprema">
+                    <label>Rol</label>
+                    <input id="jav-rol" placeholder="Ej: 1234-2024">
+                    <label>Materia</label>
+                    <input id="jav-materia" placeholder="Ej: Laboral">
+                    <label>Procedimiento</label>
+                    <input id="jav-proc" placeholder="Ej: Ordinario Civil">
+                    <label>Tema Central</label>
+                    <input id="jav-tema" placeholder="Resumen del tema del fallo">
+                    <label>Tendencia</label>
+                    <select id="jav-tend">
+                        <option value="Favorable">Favorable</option>
+                        <option value="Neutra">Neutra</option>
+                        <option value="Desfavorable">Desfavorable</option>
+                    </select>
+                    <label>Relevancia</label>
+                    <select id="jav-relev">
+                        <option value="Alta">Alta</option>
+                        <option value="Media">Media</option>
+                        <option value="Baja">Baja</option>
+                    </select>
+                    <label>Palabras Clave (separadas por coma)</label>
+                    <input id="jav-palabras" placeholder="Ej: prescripción, contrato, daño">
+                    <button class="btn btn-p btn-full" onclick="uiCrearJurisprudencia()"><i class="fas fa-save"></i>
+                        Indexar Jurisprudencia</button>
+                    <div id="listaJurisprudencia" style="margin-top:14px;"></div>
+                </div>
+            </div>
+        </section>
+
+
+
+        <!-- BITÁCORA (Bloque 8) -->
+        <section id="bitacora" class="tabs">
+            <div class="card" style="max-width:800px;">
+                <h3><i class="fas fa-shield-alt"></i> Bitácora del Sistema</h3>
+                <div style="display:flex; gap:8px; margin-bottom:14px;">
+                    <button class="btn btn-p btn-sm" onclick="renderBitacora()"><i class="fas fa-sync"></i>
+                        Actualizar</button>
+                    <button class="btn btn-d btn-sm"
+                        onclick="if(confirm('¿Limpiar bitácora?')){DB.bitacora=[];guardarDB();renderBitacora();}"><i
+                            class="fas fa-trash"></i> Limpiar</button>
+                </div>
+                <div id="bitacoraSistema"></div>
+            </div>
+        </section>
+
+        <!-- DETALLE CAUSA (modal + sección) -->
+        <section id="detalle-causa" class="tabs">
+            <div id="detalle-causa-content">
+                <div class="empty-state card"><i class="fas fa-gavel"></i>
+                    <p>Seleccione una causa para ver su detalle.</p>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- BÚSQUEDA GLOBAL -->
+        <section id="busqueda" class="tabs">
+            <div class="card" style="max-width:700px;">
+                <h3><i class="fas fa-search"></i> Búsqueda Global</h3>
+                <div style="display:flex; gap:8px; margin-bottom:16px;">
+                    <input id="busq-input" placeholder="Buscar causas, clientes, documentos, jurisprudencia..."
+                        oninput="busquedaGlobal(this.value)" style="margin:0; flex:1;">
+                    <button class="btn btn-p" onclick="busquedaGlobal(document.getElementById('busq-input').value)"><i
+                            class="fas fa-search"></i></button>
+                </div>
+                <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;" id="busq-filtros">
+                    <button class="filter-btn active" onclick="setBusqFiltro('todo',this)">Todo</button>
+                    <button class="filter-btn" onclick="setBusqFiltro('causas',this)">Causas</button>
+                    <button class="filter-btn" onclick="setBusqFiltro('clientes',this)">Clientes</button>
+                    <button class="filter-btn" onclick="setBusqFiltro('documentos',this)">Documentos</button>
+                    <button class="filter-btn" onclick="setBusqFiltro('juris',this)">Jurisprudencia</button>
+                </div>
+                <div id="busq-resultados"></div>
+            </div>
+        </section>
+
+        <!-- PRESCRIPCIÓN -->
+        <section id="prescripcion" class="tabs">
+            <div class="card" style="max-width:700px;">
+                <h3><i class="fas fa-hourglass-half"></i> Control de Prescripción</h3>
+                <p style="font-size:0.83rem; color:var(--t2); margin-bottom:16px;">Plazos legales referenciales.
+                    Verificar siempre con normativa vigente.</p>
+                <button class="btn btn-p" style="margin-bottom:16px;" onclick="renderPrescripcion()"><i
+                        class="fas fa-sync"></i> Calcular Prescripciones</button>
+                <div id="prescripcion-lista"></div>
+            </div>
+        </section>
+
+        <!-- RECURSOS (Segunda Instancia) -->
+        <section id="recursos" class="tabs">
+            <div class="grid">
+                <div class="card">
+                    <h3><i class="fas fa-undo"></i> Interponer Recurso</h3>
+                    <label>Causa</label>
+                    <select id="rec-causa-sel"></select>
+                    <label>Tipo de Recurso</label>
+                    <select id="rec-tipo">
+                        <option value="Apelación">Apelación</option>
+                        <option value="Casación en la Forma">Casación en la Forma</option>
+                        <option value="Casación en el Fondo">Casación en el Fondo</option>
+                        <option value="Nulidad">Nulidad</option>
+                        <option value="Reposición">Reposición</option>
+                        <option value="Aclaración">Aclaración</option>
+                    </select>
+                    <label>Fecha de Interposición</label>
+                    <input type="date" id="rec-fecha">
+                    <label>Tribunal Superior</label>
+                    <input id="rec-tribunal" placeholder="Ej: Corte de Apelaciones de Santiago">
+                    <label>Observaciones</label>
+                    <textarea id="rec-obs" placeholder="Fundamentos del recurso..."></textarea>
+                    <button class="btn btn-s btn-full" onclick="uiInterponerRecurso()"><i class="fas fa-save"></i>
+                        Registrar Recurso</button>
+                </div>
+                <div class="card">
+                    <h3><i class="fas fa-list"></i> Recursos Activos</h3>
+                    <div id="recursos-lista"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- INFORME CAUSA -->
+        <section id="informe" class="tabs">
+            <div class="card" style="max-width:700px;">
+                <h3><i class="fas fa-file-alt"></i> Generar Informe de Causa</h3>
+                <label>Seleccionar Causa</label>
+                <select id="inf-causa-sel" onchange="previewInforme()"></select>
+                <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
+                    <button class="btn btn-p" onclick="generarInformeCausa()"><i class="fas fa-eye"></i> Generar
+                        Informe</button>
+                    <button class="btn btn-s" onclick="window.print()"><i class="fas fa-print"></i>
+                        Imprimir</button>
+                    <button class="btn" style="background:var(--bg-2,var(--bg));" onclick="exportarInformeTexto()"><i
+                            class="fas fa-download"></i> Exportar .txt</button>
+                    <button class="btn" style="background:linear-gradient(135deg,#1a3a6b,#0d5e8a);color:#fff;"
+                        onclick="exportarInformeMejorado(document.getElementById('inf-causa-sel').value)">
+                        <i class="fas fa-star"></i> Informe Pro (PDF)
+                    </button>
+                </div>
+                <div id="informe-content" style="margin-top:20px;"></div>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════
+                 GENERADOR DE ESCRITOS — DUAL PRO v2
+                 Layout: Panel Formulario (izq) + Visor A4 (der)
+                 + Panel IA colapsable (fixed derecha)
+            ══════════════════════════════════════════════════════ -->
+        <section id="escritos" class="tabs" style="padding:0;">
+
+            <!-- ── BARRA SUPERIOR ── -->
+            <div class="esc-topbar">
+                <div class="esc-topbar-left">
+                    <i class="fas fa-balance-scale" style="color:var(--cyan);"></i>
+                    <span class="esc-topbar-title">Generador de Escritos</span>
+                    <span class="esc-topbar-badge">Dual Pro v2</span>
+                </div>
+                <div class="esc-topbar-right">
+                    <button class="btn btn-sm" onclick="uiGuardarEscrito()" id="btn-guardar-escrito">
+                        <i class="fas fa-save"></i> Guardar en Causa
+                    </button>
+                    <button class="btn btn-sm" onclick="uiExportarEscrito()" id="btn-exportar-escrito">
+                        <i class="fas fa-download"></i> Exportar
+                    </button>
+                    <button class="btn btn-sm btn-success-outline" onclick="uiCopiarEscrito()" id="btn-copiar-escrito">
+                        <i class="fas fa-copy"></i> Copiar
+                    </button>
+                    <button class="btn btn-sm" onclick="uiAplicarVariables()" id="btn-vars"
+                        title="Reemplaza [VARIABLES] con datos reales de la causa">
+                        <i class="fas fa-magic"></i> Variables
+                    </button>
+                    <button class="btn btn-sm btn-purple-outline" onclick="escToggleIA()" id="btn-panel-ia">
+                        <i class="fas fa-robot"></i> Sugerencias IA
+                    </button>
+                </div>
+            </div>
+
+            <!-- ── CONTENEDOR DUAL ── -->
+            <div class="esc-body">
+
+                <!-- PANEL FORMULARIO -->
+                <div class="esc-form-panel">
+
+                    <!-- Toggle IA -->
+                    <div class="esc-ia-row">
+                        <div class="esc-ia-row-label">
+                            <span class="badge badge-cyan">✨ GEMINI</span>
+                            <span>Redacción con <span id="esc-ia-provider-label">IA</span></span>
+                        </div>
+                        <label class="esc-toggle">
+                            <input type="checkbox" id="esc-modo-ia" onchange="uiToggleModoIA()">
+                            <span class="esc-toggle-track"></span>
+                        </label>
+                    </div>
+
+                    <div id="esc-ia-key-warn" class="esc-key-warn" style="display:none;">
+                        <i class="fas fa-key"></i>
+                        Configure su API Key en <strong>Sistema → Configurar IA</strong>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Causa</label>
+                        <select id="esc-causa-sel"></select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Tipo de Escrito</label>
+                        <select id="esc-tipo">
+                            <!-- Se rellena dinámicamente por rellenarTiposEscritos() según materia de la causa -->
+                            <option value="demanda_civil_ordinaria">Demanda Civil — Juicio Ordinario</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" style="flex:1; display:flex; flex-direction:column;">
+                        <label>Hechos y Antecedentes</label>
+                        <textarea id="esc-hechos" style="flex:1; min-height:160px; resize:vertical;"
+                            placeholder="Describa los hechos relevantes del caso, antecedentes, fundamentos específicos para el tipo de escrito seleccionado..."></textarea>
+                    </div>
+
+                    <button class="btn btn-p btn-full" style="margin-top:12px;" onclick="uiGenerarEscrito()">
+                        <i class="fas fa-magic"></i>
+                        <span id="btn-generar-txt">Generar Borrador</span>
+                    </button>
+
+                    <div id="esc-aviso" class="esc-notice esc-notice-warn" style="display:none; margin-top:10px;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span>Este borrador es referencial. Debe ser revisado y adecuado por el abogado antes de su
+                            presentación.</span>
+                    </div>
+                    <div id="esc-disclaimer-ia" class="esc-notice esc-notice-info"
+                        style="display:none; margin-top:8px;">
+                        <i class="fas fa-robot"></i>
+                        <span><strong>Generado con IA (Gemini):</strong> Los modelos de inteligencia artificial
+                            pueden cometer errores. Este escrito NO debe presentarse sin revisión
+                            profesional.</span>
+                    </div>
+                </div>
+
+                <!-- PANEL VISOR -->
+                <div class="esc-visor-panel">
+                    <div class="esc-visor-header">
+                        <div
+                            style="display:flex; align-items:center; gap:8px; font-weight:600; font-size:13px; color:var(--text);">
+                            <i class="fas fa-file-alt" style="color:var(--cyan);"></i>
+                            <span id="esc-visor-titulo">Borrador — Sin generar</span>
+                        </div>
+                        <span style="font-size:11px; color:var(--text-3); font-family:'DM Mono',monospace;">Times
+                            New Roman · 16pt</span>
+                    </div>
+                    <div class="esc-visor-body">
+                        <div id="esc-loading-overlay"
+                            style="display:none; position:absolute; inset:0; background:rgba(255,255,255,0.7); backdrop-filter:blur(2px); z-index:10; display:none; align-items:center; justify-content:center; flex-direction:column; gap:12px; border-radius:0 0 var(--r-lg) var(--r-lg);">
+                            <div class="spinner"></div>
+                            <div style="font-size:13px; color:var(--text-2); font-weight:500;">Gemini está
+                                redactando el escrito…</div>
+                        </div>
+                        <div class="esc-documento" id="esc-preview">
+                            <div
+                                style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:360px; text-align:center; color:var(--text-3);">
+                                <div
+                                    style="width:64px; height:64px; background:var(--border); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:24px; margin-bottom:16px; color:var(--text-3);">
+                                    <i class="fas fa-file-signature"></i>
+                                </div>
+                                <p style="font-size:13px; line-height:1.6;">Seleccione una causa, complete los
+                                    antecedentes<br>y presione <strong>Generar Borrador</strong>.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PANEL IA LATERAL -->
+            <aside id="esc-ia-panel" class="esc-ia-aside">
+                <div class="esc-ia-aside-header">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <i class="fas fa-robot" style="color:var(--cyan);"></i>
+                        <strong>Sugerencias IA</strong>
+                    </div>
+                    <button class="btn-icon" onclick="escToggleIA()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div id="esc-ia-panel-body" class="esc-ia-aside-body">
+                    <div
+                        style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:200px; text-align:center; color:var(--text-3); gap:12px; padding:20px;">
+                        <i class="fas fa-lightbulb" style="font-size:2rem;"></i>
+                        <p style="font-size:12px; line-height:1.6;">Genera un escrito para ver sugerencias
+                            estratégicas de Gemini.</p>
+                    </div>
+                </div>
+                <div class="esc-ia-aside-footer">
+                    <i class="fas fa-exclamation-triangle" style="color:var(--warning); flex-shrink:0;"></i>
+                    <span>La IA puede cometer errores. Verifique con criterio profesional.</span>
+                </div>
+            </aside>
+
+        </section>
+
+        <!-- ═══ HISTORIAL DE ESCRITOS ═══ -->
+        <section id="historial-escritos" class="tabs">
+            <div class="db-header"
+                style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+                <div>
+                    <h2 class="section-title"><i class="fas fa-history" style="color:var(--cyan);"></i> Historial de
+                        Escritos</h2>
+                    <p class="section-subtitle">Todos los escritos generados y guardados en el despacho</p>
+                </div>
+            </div>
+
+            <!-- Filtros -->
+            <div class="db-filtros"
+                style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:18px; align-items:center;">
+                <input type="text" id="hfilt-texto" placeholder="Buscar por tipo, causa o contenido…"
+                    style="flex:1; min-width:200px;" oninput="historialFiltrar()">
+                <select id="hfilt-origen" onchange="historialFiltrar()" style="min-width:130px;">
+                    <option value="">Todos los orígenes</option>
+                    <option value="ia">✨ Generado con IA</option>
+                    <option value="catalogo">📄 Catálogo estático</option>
+                    <option value="plantilla">📋 Plantilla propia</option>
+                    <option value="manual">Manual</option>
+                </select>
+                <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;">
+                    <input type="checkbox" id="hfilt-favoritos" onchange="historialFiltrar()">
+                    <i class="fas fa-star" style="color:var(--warning);"></i> Solo favoritos
+                </label>
+            </div>
+
+            <!-- Lista -->
+            <div id="historial-escritos-lista">
+                <div class="alert-empty" style="padding:40px;">
+                    <i class="fas fa-history"
+                        style="font-size:2rem; color:var(--text-3); display:block; margin-bottom:12px;"></i>
+                    Cargando historial…
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══ PLANTILLAS PERSONALIZADAS ═══ -->
+        <section id="plantillas-escritos" class="tabs">
+            <div class="db-header"
+                style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+                <div>
+                    <h2 class="section-title"><i class="fas fa-layer-group" style="color:var(--cyan);"></i>
+                        Plantillas Personalizadas</h2>
+                    <p class="section-subtitle">Crea y reutiliza tus propios modelos de escritos judiciales</p>
+                </div>
+                <div style="display:flex;gap:8px;">
+                    <button class="btn btn-p" onclick="plantillaNueva()">
+                        <i class="fas fa-plus"></i> Nueva Plantilla (Escrito)
+                    </button>
+                    <button class="btn" style="background:linear-gradient(135deg,#0891b2,#0d5e8a);color:#fff;"
+                        onclick="tab('plantillas-texto')">
+                        <i class="fas fa-file-alt"></i> Plantillas de Texto
+                    </button>
+                </div>
+            </div>
+
+            <!-- Lista de plantillas de escrito (existentes) -->
+            <div id="plantillas-lista">
+                <div class="alert-empty" style="padding:40px;">
+                    <i class="fas fa-layer-group"
+                        style="font-size:2rem; color:var(--text-3); display:block; margin-bottom:12px;"></i>
+                    Cargando plantillas…
+                </div>
+            </div>
+        </section>
+
+        <!-- PLANTILLAS DE TEXTO PERSONALIZABLES v8 -->
+        <section id="plantillas-texto" class="tabs">
+            <div class="db-header"
+                style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px;">
+                <div>
+                    <h2 class="section-title"><i class="fas fa-file-alt" style="color:var(--cyan);"></i> Plantillas
+                        de Texto Personalizables</h2>
+                    <p class="section-subtitle">Crea modelos reutilizables con variables dinámicas: {{cliente}},
+                        {{causa}}, {{fecha_hoy}}, etc.</p>
+                </div>
+                <button class="btn btn-p" onclick="ptNueva()">
+                    <i class="fas fa-plus"></i> Nueva Plantilla
+                </button>
+            </div>
+
+            <!-- Variables disponibles -->
+            <div class="card" style="margin-bottom:16px; padding:14px 16px;">
+                <div
+                    style="font-size:12px;font-weight:700;color:var(--text-2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;">
+                    Variables disponibles</div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                    <code class="pt-var-badge">{{cliente}}</code>
+                    <code class="pt-var-badge">{{rut_cliente}}</code>
+                    <code class="pt-var-badge">{{causa}}</code>
+                    <code class="pt-var-badge">{{rit}}</code>
+                    <code class="pt-var-badge">{{tribunal}}</code>
+                    <code class="pt-var-badge">{{procedimiento}}</code>
+                    <code class="pt-var-badge">{{rama}}</code>
+                    <code class="pt-var-badge">{{etapa_actual}}</code>
+                    <code class="pt-var-badge">{{fecha_hoy}}</code>
+                    <code class="pt-var-badge">{{fecha_hoy_larga}}</code>
+                    <code class="pt-var-badge">{{año}}</code>
+                    <code class="pt-var-badge">{{despacho}}</code>
+                    <code class="pt-var-badge">{{abogado}}</code>
+                </div>
+            </div>
+
+            <!-- Lista de plantillas de texto -->
+            <div id="pt-lista"></div>
+        </section>
+
+        <!-- REGISTRO DE TIEMPO POR CAUSA (TIMESHEET) v8 -->
+        <section id="timesheet" class="tabs">
+            <div class="db-header"
+                style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px;">
+                <div>
+                    <h2 class="section-title"><i class="fas fa-stopwatch" style="color:var(--cyan);"></i> Registro
+                        de Tiempo</h2>
+                    <p class="section-subtitle">Control de horas trabajadas por causa para facturación precisa</p>
+                </div>
+                <button class="btn" style="background:#475569;color:#fff;" onclick="tiempoExportarCSV()">
+                    <i class="fas fa-file-csv"></i> Exportar CSV
+                </button>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;">
+
+                <!-- Panel izquierdo: cronómetro + entrada manual -->
+                <div>
+                    <!-- CRONÓMETRO -->
+                    <div class="card" style="margin-bottom:16px;">
+                        <h4 style="font-size:13px;font-weight:700;margin-bottom:14px;color:var(--text-2);"><i
+                                class="fas fa-clock"></i> Cronómetro</h4>
+                        <div id="ts-cronometro-display"
+                            style="font-size:2.8rem;font-weight:800;font-family:'DM Mono',monospace;color:var(--text);text-align:center;letter-spacing:.05em;padding:16px 0;">
+                            00:00:00</div>
+                        <label>Causa</label>
+                        <select id="ts-cronometro-causa" style="margin-bottom:10px;"></select>
+                        <label>Actividad (opcional)</label>
+                        <input id="ts-descripcion" placeholder="Ej: Redacción de demanda…" style="margin-bottom:12px;">
+                        <div style="display:flex;gap:8px;">
+                            <button id="ts-btn-iniciar" class="btn btn-p" style="flex:1;"
+                                onclick="tiempoCronometroIniciar(document.getElementById('ts-cronometro-causa').value)">
+                                <i class="fas fa-play"></i> Iniciar
+                            </button>
+                            <button id="ts-btn-detener" class="btn btn-d" style="flex:1;" disabled
+                                onclick="tiempoCronometroDetener()">
+                                <i class="fas fa-stop"></i> Detener y Guardar
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- ENTRADA MANUAL -->
+                    <div class="card">
+                        <h4 style="font-size:13px;font-weight:700;margin-bottom:14px;color:var(--text-2);"><i
+                                class="fas fa-keyboard"></i> Entrada Manual</h4>
+                        <label>Causa</label>
+                        <select id="ts-causa-sel" style="margin-bottom:8px;"></select>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+                            <div>
+                                <label>Horas</label>
+                                <input type="number" id="ts-horas" min="0" max="24" placeholder="0">
+                            </div>
+                            <div>
+                                <label>Minutos</label>
+                                <input type="number" id="ts-minutos" min="0" max="59" placeholder="0">
+                            </div>
+                        </div>
+                        <label>Descripción</label>
+                        <input id="ts-descripcion-manual" placeholder="Ej: Audiencia preparatoria"
+                            style="margin-bottom:8px;">
+                        <label>Fecha</label>
+                        <input type="date" id="ts-fecha" style="margin-bottom:12px;">
+                        <button class="btn btn-p" style="width:100%;" onclick="tiempoRegistrarManual()">
+                            <i class="fas fa-plus"></i> Registrar Tiempo
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Panel derecho: resumen + registros -->
+                <div>
+                    <!-- Resumen por causa -->
+                    <div class="card" style="margin-bottom:16px;">
+                        <h4 style="font-size:13px;font-weight:700;margin-bottom:14px;color:var(--text-2);"><i
+                                class="fas fa-chart-bar"></i> Horas por Causa</h4>
+                        <div id="ts-resumen-causas"></div>
+                    </div>
+
+                    <!-- Registros recientes -->
+                    <div class="card">
+                        <h4 style="font-size:13px;font-weight:700;margin-bottom:14px;color:var(--text-2);"><i
+                                class="fas fa-list"></i> Registros Recientes</h4>
+                        <div id="ts-registros-lista"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- MÓDULO CUANTÍA DINÁMICA -->
+        <section id="cuantia" class="tabs">
+            <div class="grid">
+                <div class="card">
+                    <h3><i class="fas fa-coins"></i> Cuantía en Disputa</h3>
+                    <label>Causa Asociada (opcional)</label>
+                    <select id="cq-causa-sel">
+                        <option value="">-- Sin causa específica --</option>
+                    </select>
+                    <label>Monto Original ($)</label>
+                    <input type="number" id="cq-monto" placeholder="Ej: 25000000" oninput="calcularCuantia()">
+                    <label>Fecha del Hecho / Deuda</label>
+                    <input type="date" id="cq-fecha" oninput="calcularCuantia()">
+                    <label>Tipo de Ajuste</label>
+                    <select id="cq-tipo" onchange="calcularCuantia()">
+                        <option value="ipc">IPC (reajustabilidad UF referencial)</option>
+                        <option value="interes_legal">Interés Legal (0.5% mensual)</option>
+                        <option value="interes_corriente">Interés Corriente (aprox. 1.2% mensual)</option>
+                        <option value="ipc_interes">IPC + Interés Legal (combinado)</option>
+                        <option value="uf">Valor UF histórico referencial</option>
+                    </select>
+                    <label>Honorario Base (% o monto fijo)</label>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;">
+                        <select id="cq-hon-tipo" onchange="calcularCuantia()">
+                            <option value="escala">Escala escalonada</option>
+                            <option value="pct">% fijo</option>
+                            <option value="fijo">Monto fijo ($)</option>
+                        </select>
+                        <input type="number" id="cq-hon-val" placeholder="Ej: 15 o 1500000" oninput="calcularCuantia()">
+                    </div>
+                    <div id="cq-resultado" style="margin-top:14px;"></div>
+                </div>
+                <div class="card">
+                    <h3><i class="fas fa-chart-line"></i> Proyección en el Tiempo</h3>
+                    <p style="font-size:0.78rem; color:var(--t2); margin-bottom:12px;">Evolución del monto ajustado
+                        por mes</p>
+                    <div id="cq-grafico" style="min-height:180px;"></div>
+                    <div
+                        style="margin-top:16px; padding:12px; background:var(--bg); border-radius:8px; font-size:0.8rem;">
+                        <p style="color:var(--t2); margin-bottom:6px;"><i class="fas fa-exclamation-circle"
+                                style="color:var(--w)"></i> <strong>Aviso legal:</strong></p>
+                        <p style="color:var(--t2);">Los valores son referenciales. El IPC y tasas de interés real
+                            deben verificarse con el Banco Central y normativa vigente. Este cálculo no constituye
+                            asesoría financiera ni legal.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CALCULADORA PRO -->
+        <section id="calculadora-pro" class="tabs">
+            <div class="grid">
+                <!-- Configuración Global -->
+                <div class="card">
+                    <h3><i class="fas fa-sliders-h"></i> Parámetros Chile (Referencial)</h3>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                        <div>
+                            <label style="font-size:0.75rem;">Valor UF Actual ($)</label>
+                            <input type="number" id="cp-uf-valor" value="37800" oninput="cpRecalcular()">
+                        </div>
+                        <div>
+                            <label style="font-size:0.75rem;">Valor UTM Actual ($)</label>
+                            <input type="number" id="cp-utm-valor" value="65000" oninput="cpRecalcular()">
+                        </div>
+                    </div>
+                    <div style="margin-top:12px;">
+                        <label style="font-size:0.75rem;">Tasa IPC Mensual (%)</label>
+                        <input type="number" id="cp-ipc-valor" value="0.45" step="0.01" oninput="cpRecalcular()">
+                    </div>
+                    <div style="margin-top:12px;">
+                        <label style="font-size:0.75rem;">Interés Legal (%)</label>
+                        <input type="number" id="cp-int-valor" value="0.5" step="0.1" oninput="cpRecalcular()">
+                    </div>
+                    <p style="font-size:0.72rem; color:var(--text-3); margin-top:12px; line-height:1.4;">
+                        <i class="fas fa-info-circle"></i> Estos valores alimentan todos los cálculos financieros de
+                        la App.
+                    </p>
+                </div>
+
+                <!-- Calculadora -->
+                <div class="card" style="box-shadow:var(--sh-2); border-left:4px solid var(--cyan);">
+                    <h3><i class="fas fa-calculator"></i> Calculadora de Reajustes</h3>
+                    <div style="margin-bottom:12px;">
+                        <label style="font-size:0.75rem;">Monto Base</label>
+                        <div style="display:flex; gap:8px;">
+                            <input type="number" id="cp-monto" placeholder="Ej: 1000000" oninput="cpRecalcular()"
+                                style="flex:2;">
+                            <select id="cp-moneda" onchange="cpRecalcular()" style="flex:1;">
+                                <option value="clp">CLP ($)</option>
+                                <option value="uf">UF</option>
+                                <option value="utm">UTM</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="margin-bottom:12px;">
+                        <label style="font-size:0.75rem;">Fecha de Inicio de Deuda</label>
+                        <input type="date" id="cp-fecha-inicio" oninput="cpRecalcular()">
+                    </div>
+                    <div style="margin-bottom:12px;">
+                        <label style="font-size:0.75rem;">Tipo de Reajuste</label>
+                        <select id="cp-reajuste" onchange="cpRecalcular()">
+                            <option value="ninguno">Sin reajuste (solo conversión)</option>
+                            <option value="ipc">IPC simple</option>
+                            <option value="interes_legal">Interés Legal (0.5%)</option>
+                            <option value="interes_corriente">Interés Corriente (1.2%)</option>
+                            <option value="mix">IPC + Interés Legal</option>
+                        </select>
+                    </div>
+                    <div id="cp-resultado" style="margin-top:16px;">
+                        <p
+                            style="text-align:center; color:var(--text-3); padding:20px; background:var(--bg); border-radius:8px; font-size:0.85rem;">
+                            Complete los campos para calcular</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══ FICHA DE ESTRATEGIA ═══ -->
+        <section id="ficha-estrategia" class="tabs">
+            <div class="grid">
+                <div class="card">
+                    <h3><i class="fas fa-chess-knight"></i> Ficha de Estrategia</h3>
+                    <label>Causa</label>
+                    <select id="fe-causa-sel" onchange="cargarFichaEstrategia()"></select>
+
+                    <div class="ficha-seccion" style="margin-top:14px;">
+                        <h4><i class="fas fa-list-ol" style="color:var(--a)"></i> I. HECHOS</h4>
+                        <textarea id="fe-hechos"
+                            placeholder="Describa los hechos relevantes de forma clara y cronológica..."
+                            style="min-height:100px;" oninput="calcularProbabilidad()"></textarea>
+                        <div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:4px;">
+                            <small style="color:var(--t2); font-size:0.7rem; width:100%; margin-bottom:2px;">Fortalezas
+                                presentes:</small>
+                            <span class="ficha-tag" onclick="toggleTag(this,'hechos')" data-val="documentados">📄
+                                Documentados</span>
+                            <span class="ficha-tag" onclick="toggleTag(this,'hechos')" data-val="testigos">👥
+                                Testigos</span>
+                            <span class="ficha-tag" onclick="toggleTag(this,'hechos')" data-val="cronologia_clara">📅
+                                Cronología clara</span>
+                            <span class="ficha-tag" onclick="toggleTag(this,'hechos')" data-val="sin_contradicciones">✓
+                                Sin contradicciones</span>
+                        </div>
+                    </div>
+
+                    <div class="ficha-seccion">
+                        <h4><i class="fas fa-balance-scale" style="color:var(--a)"></i> II. DERECHO</h4>
+                        <textarea id="fe-derecho" placeholder="Normas aplicables, doctrina y fundamentos jurídicos..."
+                            style="min-height:90px;" oninput="calcularProbabilidad()"></textarea>
+                        <div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:4px;">
+                            <small style="color:var(--t2); font-size:0.7rem; width:100%; margin-bottom:2px;">Base
+                                jurídica:</small>
+                            <span class="ficha-tag" onclick="toggleTag(this,'derecho')" data-val="norma_expresa">⚖️
+                                Norma expresa</span>
+                            <span class="ficha-tag" onclick="toggleTag(this,'derecho')"
+                                data-val="jurisprudencia_favor">📚 Jurisp. favorable</span>
+                            <span class="ficha-tag" onclick="toggleTag(this,'derecho')" data-val="doctrina_uniforme">📖
+                                Doctrina uniforme</span>
+                            <span class="ficha-tag" onclick="toggleTag(this,'derecho')" data-val="precedente_sala">🏛️
+                                Precedente sala</span>
+                        </div>
+                    </div>
+
+                    <div class="ficha-seccion">
+                        <h4><i class="fas fa-search" style="color:var(--a)"></i> III. EVIDENCIA</h4>
+                        <textarea id="fe-evidencia"
+                            placeholder="Medios probatorios disponibles: documentos, peritos, testigos..."
+                            style="min-height:90px;" oninput="calcularProbabilidad()"></textarea>
+                        <div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:4px;">
+                            <small style="color:var(--t2); font-size:0.7rem; width:100%; margin-bottom:2px;">Tipo de
+                                prueba:</small>
+                            <span class="ficha-tag" onclick="toggleTag(this,'evidencia')"
+                                data-val="prueba_documental">📋 Documental</span>
+                            <span class="ficha-tag" onclick="toggleTag(this,'evidencia')" data-val="prueba_pericial">🔬
+                                Pericial</span>
+                            <span class="ficha-tag" onclick="toggleTag(this,'evidencia')"
+                                data-val="prueba_testimonial">🗣️ Testimonial</span>
+                            <span class="ficha-tag" onclick="toggleTag(this,'evidencia')"
+                                data-val="prueba_confesional">✍️ Confesional</span>
+                        </div>
+                    </div>
+
+                    <div class="ficha-seccion">
+                        <h4><i class="fas fa-exclamation-triangle" style="color:var(--w)"></i> IV. RIESGOS Y
+                            DEBILIDADES</h4>
+                        <textarea id="fe-riesgos"
+                            placeholder="Puntos débiles, riesgos procesales, argumentos contrarios..."
+                            style="min-height:80px;" oninput="calcularProbabilidad()"></textarea>
+                    </div>
+
+                    <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
+                        <button class="btn btn-p" style="flex:1;" onclick="guardarFichaEstrategia()"><i
+                                class="fas fa-save"></i> Guardar Ficha</button>
+                        <button class="btn btn-sm" style="background:var(--bg-2,var(--bg));"
+                            onclick="exportarFichaEstrategia()"><i class="fas fa-download"></i> Exportar</button>
+                    </div>
+                </div>
+
+                <div>
+                    <!-- PROBABILIDAD DE ÉXITO -->
+                    <div class="card" style="margin-bottom:14px;">
+                        <h3><i class="fas fa-percentage"></i> Probabilidad de Éxito</h3>
+                        <div class="prob-exito-wrap">
+                            <div class="prob-exito-label">
+                                <span style="font-size:0.83rem; color:var(--t2);" id="fe-prob-label">Complete la
+                                    ficha para calcular</span>
+                                <span class="prob-exito-valor" id="fe-prob-valor" style="color:var(--t2);">—</span>
+                            </div>
+                            <div class="prob-exito-bar">
+                                <div class="prob-exito-fill" id="fe-prob-fill" style="width:0%; background:var(--t2);">
+                                </div>
+                            </div>
+                            <div id="fe-prob-detalle" style="margin-top:10px; font-size:0.78rem; color:var(--t2);">
+                            </div>
+                        </div>
+
+                        <!-- Factores del medidor -->
+                        <div style="margin-top:16px;" id="fe-factores"></div>
+                    </div>
+
+                    <!-- FICHAS GUARDADAS -->
+                    <div class="card">
+                        <h3><i class="fas fa-archive"></i> Fichas Guardadas</h3>
+                        <div id="fe-lista" style="margin-top:10px;"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══ MATRIZ DE PRIORIDAD ═══ -->
+        <section id="matriz-prioridad" class="tabs">
+            <div class="card">
+                <h3><i class="fas fa-sort-amount-down"></i> Matriz de Prioridad Inteligente</h3>
+                <p style="font-size:0.8rem; color:var(--t2); margin:8px 0 16px;">Índice calculado automáticamente
+                    ponderando: cercanía de plazo (40%), monto en disputa (25%), complejidad (20%) y probabilidad de
+                    éxito (15%).</p>
+                <div style="overflow-x:auto;">
+                    <table class="matriz-tabla" id="matriz-tabla">
+                        <thead>
+                            <tr>
+                                <th style="width:60px;">Índice</th>
+                                <th>Causa</th>
+                                <th>Plazo</th>
+                                <th>Complejidad</th>
+                                <th>Prob. Éxito</th>
+                                <th>Monto</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="matriz-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card">
+                <h3><i class="fas fa-info-circle"></i> Cómo se calcula el Índice</h3>
+                <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:10px;">
+                    <div style="text-align:center; padding:12px; background:var(--bg); border-radius:8px;">
+                        <div
+                            style="font-size:1.4rem; font-weight:700; color:var(--d); font-family:'DM Mono',monospace;">
+                            40%</div>
+                        <div style="font-size:0.75rem; color:var(--t2); margin-top:4px;">Cercanía de Plazo</div>
+                        <div style="font-size:0.68rem; color:var(--t2);">Días restantes al próximo vencimiento</div>
+                    </div>
+                    <div style="text-align:center; padding:12px; background:var(--bg); border-radius:8px;">
+                        <div
+                            style="font-size:1.4rem; font-weight:700; color:var(--w); font-family:'DM Mono',monospace;">
+                            25%</div>
+                        <div style="font-size:0.75rem; color:var(--t2); margin-top:4px;">Monto en Disputa</div>
+                        <div style="font-size:0.68rem; color:var(--t2);">Cuantía relativa al portafolio</div>
+                    </div>
+                    <div style="text-align:center; padding:12px; background:var(--bg); border-radius:8px;">
+                        <div
+                            style="font-size:1.4rem; font-weight:700; color:var(--a); font-family:'DM Mono',monospace;">
+                            20%</div>
+                        <div style="font-size:0.75rem; color:var(--t2); margin-top:4px;">Complejidad</div>
+                        <div style="font-size:0.68rem; color:var(--t2);">Nivel de riesgo procesal y probatorio</div>
+                    </div>
+                    <div style="text-align:center; padding:12px; background:var(--bg); border-radius:8px;">
+                        <div
+                            style="font-size:1.4rem; font-weight:700; color:var(--s); font-family:'DM Mono',monospace;">
+                            15%</div>
+                        <div style="font-size:0.75rem; color:var(--t2); margin-top:4px;">Prob. de Éxito</div>
+                        <div style="font-size:0.68rem; color:var(--t2);">Inverso: menor probabilidad = mayor
+                            urgencia</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══ MAPA ECONÓMICO ═══ -->
+        <section id="mapa-economico" class="tabs">
+            <div class="card">
+                <h3><i class="fas fa-chart-bar"></i> Mapa Económico del Estudio</h3>
+                <div class="mapa-eco" id="mapa-eco-kpis"></div>
+                <div class="eco-proyeccion" id="mapa-eco-proyeccion"></div>
+            </div>
+            <div class="grid">
+                <div class="card">
+                    <h3><i class="fas fa-chart-line"></i> Honorarios por Causa</h3>
+                    <div id="mapa-eco-causas"></div>
+                </div>
+                <div class="card">
+                    <h3><i class="fas fa-calendar-alt"></i> Proyección Mensual</h3>
+                    <div id="mapa-eco-proyeccion-mes"></div>
+                    <div
+                        style="margin-top:12px; padding:10px; background:#fafafa; border-radius:6px; font-size:0.75rem; color:var(--t2);">
+                        <i class="fas fa-exclamation-circle" style="color:var(--w)"></i> Proyección basada en ritmo
+                        histórico registrado en el sistema.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══ CONTROL DE INSTANCIAS ═══ -->
+        <section id="instancias" class="tabs">
+            <div class="card">
+                <h3><i class="fas fa-sitemap"></i> Control de Instancias</h3>
+                <div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
+                    <select id="inst-causa-sel" onchange="renderInstancias()" style="flex:1; max-width:300px;">
+                        <option value="">-- Seleccione una causa --</option>
+                    </select>
+                    <button class="btn btn-p" onclick="uiAgregarInstancia()"><i class="fas fa-plus"></i> Nueva
+                        Instancia</button>
+                </div>
+                <div id="inst-timeline"></div>
+            </div>
+            <div class="card">
+                <h3><i class="fas fa-list"></i> Resumen de Instancias — Todas las Causas</h3>
+                <div id="inst-resumen-global"></div>
+            </div>
+        </section>
+
+        <!-- ═══ COHERENCIA ESTRATÉGICA ═══ -->
+        <section id="coherencia" class="tabs">
+            <div class="card">
+                <h3><i class="fas fa-project-diagram"></i> Motor de Coherencia Estratégica</h3>
+                <p style="font-size:0.8rem; color:var(--t2); margin:8px 0 14px;">Cruza la ficha de estrategia con la
+                    evidencia indexada y la jurisprudencia para detectar inconsistencias o fortalezas.</p>
+                <select id="coh-causa-sel" onchange="analizarCoherencia()" style="margin-bottom:14px;">
+                    <option value="">-- Seleccione una causa --</option>
+                </select>
+                <div id="coh-resultado"></div>
+            </div>
+            <div class="card">
+                <h3><i class="fas fa-check-double"></i> Estado de Coherencia — Todas las Causas</h3>
+                <div id="coh-resumen-global"></div>
+            </div>
+        </section>
+
+
+        <section id="admin-usuarios" class="tabs">
+            <div class="page-header">
+                <h2 class="page-title"><i class="fas fa-users-cog"></i> Gestión de Usuarios</h2>
+                <p class="page-subtitle">Control de accesos, roles y permisos del sistema</p>
+            </div>
+
+            <div class="ia-grid-layout">
+                <div class="ia-main-col">
+                    <div class="card" style="padding: 24px; border-top: 4px solid var(--cyan);">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3 style="margin:0;"><i class="fas fa-users"></i> Listado de Usuarios</h3>
+                            <button class="btn btn-p" onclick="uiCrearUsuario()"><i class="fas fa-user-plus"></i> Nuevo
+                                Usuario</button>
+                        </div>
+
+                        <div
+                            style="padding:12px 16px; background:var(--warning-bg, #fffbeb); border:1px solid var(--warning-border, #fde68a); border-radius:8px; margin-bottom:20px; font-size:0.8rem; color:var(--text-2);">
+                            <i class="fas fa-crown" style="color:#f59e0b;"></i> <strong>Cuenta Administrador:</strong>
+                            Acceso total. Todo se almacena localmente en este dispositivo.
+                        </div>
+
+                        <div id="users-lista"></div>
+                    </div>
+                </div>
+
+                <div class="ia-side-col">
+                    <div class="card" style="padding: 24px; border-left: 4px solid var(--cyan);">
+                        <h3 style="margin-bottom: 16px;"><i class="fas fa-shield-alt"></i> Permisos por Rol</h3>
+                        <div style="overflow-x:auto;">
+                            <table style="width:100%; border-collapse:collapse; font-size:0.75rem;">
+                                <thead>
+                                    <tr style="border-bottom:2px solid var(--border);">
+                                        <th style="text-align:left; padding:6px 8px; color:var(--t2);">Acción</th>
+                                        <th style="text-align:center; padding:4px;"><span
+                                                class="user-role-badge urb-admin">Admin</span></th>
+                                        <th style="text-align:center; padding:4px;"><span
+                                                class="user-role-badge urb-abogado">Abo</span></th>
+                                        <th style="text-align:center; padding:4px;"><span
+                                                class="user-role-badge urb-asistente">Asist</span></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="permisos-tabla"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="config-ia" class="tabs">
+            <div class="page-header">
+                <h2><i class="fas fa-robot"></i> Configuración de IA y Cloud</h2>
+                <p>Configuración de inteligencia artificial y almacenamiento en la nube</p>
+            </div>
+
+            <div id="ia-config-container"></div>
+            <div id="drive-config-panel" style="margin-top:24px;"></div>
+        </section>
+
+
+
+        <!-- ═══ BIBLIOTECA DOCUMENTAL ═══ -->
+        <section id="biblioteca" class="tabs">
+            <div class="bib-header">
+                <h2 style="margin:0;"><i class="fas fa-book-open" style="color:var(--a);"></i> Biblioteca Documental
+                </h2>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <div class="bib-view-toggle">
+                        <button class="bib-view-btn activo" id="bib-view-grid" onclick="bibSetView('grid',this)"><i
+                                class="fas fa-th-large"></i></button>
+                        <button class="bib-view-btn" id="bib-view-list" onclick="bibSetView('list',this)"><i
+                                class="fas fa-list"></i></button>
+                    </div>
+                    <button class="btn btn-p" onclick="bibAgregarDocumento()"><i class="fas fa-plus"></i>
+                        Agregar</button>
+                </div>
+            </div>
+            <div class="bib-stats-bar" id="bib-stats"></div>
+            <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
+                <input id="bib-search" placeholder="Buscar por nombre, causa, etiqueta..." oninput="bibRender()"
+                    style="flex:1; min-width:200px;">
+                <select id="bib-filtro-tipo" onchange="bibRender()" style="width:auto;">
+                    <option value="">Todos los tipos</option>
+                    <option value="pdf">PDF</option>
+                    <option value="word">Word</option>
+                    <option value="excel">Excel</option>
+                    <option value="imagen">Imagen</option>
+                    <option value="otro">Otro</option>
+                </select>
+                <select id="bib-filtro-causa" onchange="bibRender()" style="width:auto;">
+                    <option value="">Todas las causas</option>
+                </select>
+                <select id="bib-filtro-etapa" onchange="bibRender()" style="width:auto;">
+                    <option value="">Todas las etapas</option>
+                    <option>Demanda</option>
+                    <option>Notificación</option>
+                    <option>Contestación</option>
+                    <option>Prueba</option>
+                    <option>Sentencia</option>
+                    <option>Recurso</option>
+                    <option>Ejecución</option>
+                    <option>General</option>
+                </select>
+            </div>
+            <div class="bib-filtros" id="bib-tags-filtro">
+                <span class="bib-tag activo" data-tag="" onclick="bibFiltroTag('',this)">Todos</span>
+                <span class="bib-tag" data-tag="demanda" onclick="bibFiltroTag('demanda',this)">Demanda</span>
+                <span class="bib-tag" data-tag="sentencia" onclick="bibFiltroTag('sentencia',this)">Sentencia</span>
+                <span class="bib-tag" data-tag="recurso" onclick="bibFiltroTag('recurso',this)">Recurso</span>
+                <span class="bib-tag" data-tag="pericial" onclick="bibFiltroTag('pericial',this)">Pericial</span>
+                <span class="bib-tag" data-tag="contrato" onclick="bibFiltroTag('contrato',this)">Contrato</span>
+                <span class="bib-tag" data-tag="poder" onclick="bibFiltroTag('poder',this)">Poder</span>
+                <span class="bib-tag" data-tag="escrito" onclick="bibFiltroTag('escrito',this)">Escritos</span>
+            </div>
+            <div id="bib-contenedor" style="margin-top:12px;"></div>
+        </section>
+
+        <section id="seccion-whatsapp" class="tabs">
+            <div style="max-width:640px; margin:0 auto; display:grid; gap:16px;">
+
+                <!-- ── CARD 1: Conexión + usuario activo ── -->
+                <div class="card-premium">
+                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+                        <div class="icon-box-premium" style="background:#25D366; color:white; font-size:1.3rem;">
+                            <i class="fab fa-whatsapp"></i>
+                        </div>
+                        <div style="flex:1; min-width:0;">
+                            <h3 style="margin:0;">WhatsApp Alertas</h3>
+                            <span id="wa-badge"
+                                style="font-size:11px; padding:2px 8px; border-radius:20px; background:#ef4444; color:white;">Desconectado</span>
+                        </div>
+                        <button id="wa-btn-toggle" onclick="waToggle()" class="btn btn-p">Conectar</button>
+                    </div>
+
+                    <!-- QR wrap -->
+                    <div id="wa-qr-wrap"
+                        style="display:none; text-align:center; margin-bottom:16px; padding:16px; background:var(--bg); border-radius:12px;">
+                        <p style="font-size:13px; color:var(--text-2); margin-bottom:10px;">
+                            Escanea con WhatsApp → Menú → <strong>Dispositivos vinculados</strong>
+                        </p>
+                        <img id="wa-qr-img" src="" alt="QR"
+                            style="width:220px; height:220px; border-radius:12px; border:3px solid #25D366;" />
+                        <p style="font-size:11px; color:var(--text-3); margin-top:10px;">Al escanear, la app te pedirá
+                            un nombre para identificar esta sesión.</p>
+                    </div>
+
+                    <!-- Usuario activo (visible sólo cuando hay sesión) -->
+                    <div id="wa-usuario-activo"
+                        style="display:none; background:var(--bg); border-radius:10px; padding:12px 14px; margin-bottom:16px; border-left:3px solid #25D366;">
+                        <div
+                            style="font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px;">
+                            Sesión activa</div>
+                        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                            <div
+                                style="width:36px; height:36px; border-radius:50%; background:#25D366; display:flex; align-items:center; justify-content:center; color:white; font-size:1.1rem; flex-shrink:0;">
+                                <i class="fas fa-user"></i>
+                            </div>
+                            <div>
+                                <div id="wa-activo-nombre" style="font-weight:700; font-size:0.95rem;">—</div>
+                                <div id="wa-activo-numero" style="font-size:11px; color:var(--text-3);">—</div>
+                            </div>
+                            <div style="margin-left:auto; text-align:right;">
+                                <div style="font-size:10px; color:var(--text-3);">Conectado desde</div>
+                                <div id="wa-activo-desde" style="font-size:11px; color:#25D366; font-weight:600;">—
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Alertas automáticas -->
+                    <label
+                        style="display:flex; align-items:center; gap:10px; cursor:pointer; padding:10px; background:var(--bg); border-radius:8px;">
+                        <input type="checkbox" id="wa-activo" style="width:18px; height:18px;" />
+                        <span style="font-size:0.88rem;">Alertas automáticas <span style="color:var(--text-3);">(resumen
+                                8AM + críticas en tiempo real)</span></span>
+                    </label>
+
+                    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:14px;">
+                        <button id="wa-btn-resumen" onclick="waEnviarResumen()" class="btn"
+                            style="background:#25D366; color:white; border:none;">
+                            <i class="fab fa-whatsapp"></i> Enviar resumen ahora
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ── CARD 2: Reenvío automático a número destino ── -->
+                <div class="card-premium">
+                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+                        <div
+                            style="width:32px; height:32px; border-radius:8px; background:#eff6ff; display:flex; align-items:center; justify-content:center; color:#3b82f6; font-size:1rem; flex-shrink:0;">
+                            <i class="fas fa-share"></i>
+                        </div>
+                        <div>
+                            <h4 style="margin:0;">Reenvío automático de reportes</h4>
+                            <small style="color:var(--text-3); font-size:11px;">El dispositivo registrado reenviará los
+                                reportes a este número automáticamente</small>
+                        </div>
+                    </div>
+
+                    <div style="display:grid; gap:10px;">
+                        <div>
+                            <label
+                                style="font-size:11px; color:var(--text-3); display:block; margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px;">Nombre
+                                del destinatario</label>
+                            <input id="wa-dest-nombre" type="text" class="input-field" placeholder="Ej: Dr. Carlos Ruiz"
+                                maxlength="80" />
+                        </div>
+                        <div>
+                            <label
+                                style="font-size:11px; color:var(--text-3); display:block; margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px;">Número
+                                destino (con código de país, sin +)</label>
+                            <input id="wa-numero-alt" type="tel" class="input-field" placeholder="56912345678"
+                                maxlength="15" oninput="waValidarNumeroAlt()" />
+                            <small id="wa-numero-alt-error"
+                                style="color:#ef4444; font-size:11px; display:none;"></small>
+                        </div>
+                    </div>
+
+                    <!-- Destino guardado (visible cuando hay uno configurado) -->
+                    <div id="wa-dest-activo"
+                        style="display:none; margin-top:12px; padding:10px 12px; background:#f0fdf4; border-radius:8px; border:1px solid #bbf7d0; display:flex; align-items:center; gap:10px;">
+                        <i class="fas fa-check-circle" style="color:#16a34a; font-size:1.1rem;"></i>
+                        <div style="flex:1; min-width:0;">
+                            <div style="font-size:12px; font-weight:600; color:#15803d;" id="wa-dest-activo-nombre">—
+                            </div>
+                            <div style="font-size:11px; color:#166534;" id="wa-dest-activo-numero">—</div>
+                        </div>
+                        <button onclick="waLimpiarDestino()" class="btn btn-sm"
+                            style="background:transparent; color:#dc2626; border:1px solid #fca5a5; font-size:11px; padding:3px 8px;">
+                            <i class="fas fa-times"></i> Quitar
+                        </button>
+                    </div>
+
+                    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:14px;">
+                        <button onclick="waGuardarDestino()" class="btn btn-p"><i class="fas fa-save"></i> Guardar
+                            destino</button>
+                        <button id="wa-btn-enviar-alt" onclick="waEnviarAOtroNumero()" class="btn"
+                            style="background:#25D366; color:white; border:none;">
+                            <i class="fab fa-whatsapp"></i> Reenviar ahora
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ── CARD 3: Estadísticas ── -->
+                <div class="card-premium" id="wa-stats-card" style="display:none;">
+                    <h4 style="margin:0 0 12px;">📊 Actividad (últimas 24h)</h4>
+                    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; text-align:center;">
+                        <div>
+                            <div style="font-size:1.8rem; font-weight:800; color:#25D366" id="wa-stat-enviados">0</div>
+                            <div style="font-size:11px; color:var(--text-3)">Enviados</div>
+                        </div>
+                        <div>
+                            <div style="font-size:1.8rem; font-weight:800; color:#ef4444" id="wa-stat-errores">0</div>
+                            <div style="font-size:11px; color:var(--text-3)">Errores</div>
+                        </div>
+                        <div>
+                            <div style="font-size:1.8rem; font-weight:800; color:var(--warning)" id="wa-stat-cola">0
+                            </div>
+                            <div style="font-size:11px; color:var(--text-3)">En cola</div>
+                        </div>
+                    </div>
+                    <div style="margin-top:10px; font-size:11px; color:var(--text-3);">Último envío: <span
+                            id="wa-stat-ultimo">—</span></div>
+                </div>
+
+                <!-- ── CARD 4: Log ── -->
+                <div class="card-premium" id="wa-log-card" style="display:none;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <h4 style="margin:0;">📋 Log de actividad</h4>
+                        <button id="wa-limpiar" onclick="waLimpiarLogs()" class="btn btn-sm"
+                            style="background:var(--bg-2); font-size:11px;">
+                            <i class="fas fa-trash"></i> Limpiar
+                        </button>
+                    </div>
+                    <div id="wa-log-list"
+                        style="max-height:200px; overflow-y:auto; font-size:11.5px; font-family:'IBM Plex Mono',monospace; display:grid; gap:4px;">
+                    </div>
+                </div>
+
+                <!-- ── CARD 5: Reset ── -->
+                <div class="card-premium" style="border:1px solid #fca5a5; background:#fff5f5;">
+                    <div
+                        style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+                        <div>
+                            <h4 style="margin:0 0 4px; color:#dc2626;">⚠️ Zona de reset</h4>
+                            <small style="color:var(--text-3); font-size:11px;">Borra configuración, logs y sesión
+                                WhatsApp. Deberás escanear QR de nuevo.</small>
+                        </div>
+                        <button id="wa-btn-reset" onclick="waReset()" class="btn"
+                            style="background:#dc2626; color:white; border:none; white-space:nowrap;">
+                            <i class="fas fa-trash-alt"></i> Resetear todo
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ── Modal: Nombre de sesión (aparece tras escanear QR) ── -->
+        <div class="modal" id="modal-wa-nombre" onclick="if(event.target===this) cerrarModalWA()">
+            <div class="modal-content" style="max-width:420px;">
+                <div class="modal-header">
+                    <h3><i class="fab fa-whatsapp" style="color:#25D366;"></i> WhatsApp conectado</h3>
+                    <button onclick="cerrarModalWA()" class="modal-close">×</button>
+                </div>
+                <div style="padding:20px; display:grid; gap:14px;">
+                    <p style="margin:0; font-size:0.9rem; color:var(--text-2);">
+                        ✅ El QR fue escaneado correctamente. Ingresa un nombre para identificar esta sesión en los
+                        reportes.
+                    </p>
+                    <div>
+                        <label
+                            style="font-size:11px; color:var(--text-3); display:block; margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px;">Tu
+                            nombre (aparecerá en los reportes)</label>
+                        <input id="wa-modal-nombre" type="text" class="input-field" placeholder="Ej: María González"
+                            maxlength="80" />
+                    </div>
+                    <div>
+                        <label
+                            style="font-size:11px; color:var(--text-3); display:block; margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px;">Tu
+                            número WhatsApp (con código de país, sin +)</label>
+                        <input id="wa-modal-numero" type="tel" class="input-field" placeholder="56912345678"
+                            maxlength="15" />
+                        <small style="color:var(--text-3); font-size:10px; margin-top:3px; display:block;">Este número
+                            identifica la sesión registrada y se usará para enviar los reportes.</small>
+                    </div>
+                    <div style="display:flex; gap:10px; justify-content:flex-end;">
+                        <button onclick="cerrarModalWA()" class="btn" style="background:var(--bg-2);">Cancelar</button>
+                        <button onclick="waConfirmarSesion()" class="btn btn-p"><i class="fas fa-check"></i> Confirmar
+                            sesión</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modales cargados por js/utils/html-loader.js en #modals-container -->
+        <div id="modals-container"></div>
+
+        <div class="modal" id="modal-bib-add" onclick="if(event.target===this)cerrarModal('modal-bib-add')">
+            <div class="modal-content" style="max-width:540px;">
+                <div class="modal-header">
+                    <h3><i class="fas fa-plus-circle"></i> Agregar a Biblioteca</h3><button
+                        onclick="cerrarModal('modal-bib-add')" class="modal-close">×</button>
+                </div>
+                <div class="modal-body">
+                    <label>Nombre del documento *</label>
+                    <input id="bib-nombre" placeholder="Ej: Demanda Civil — López vs. García">
+                    <label>Tipo</label>
+                    <select id="bib-tipo">
+                        <option value="pdf">PDF</option>
+                        <option value="word">Word / DOCX</option>
+                        <option value="excel">Excel</option>
+                        <option value="imagen">Imagen</option>
+                        <option value="otro">Otro</option>
+                    </select>
+                    <label>Causa asociada</label>
+                    <select id="bib-causa-sel"></select>
+                    <label>Etapa procesal</label>
+                    <select id="bib-etapa">
+                        <option value="General">General</option>
+                        <option value="Demanda">Demanda</option>
+                        <option value="Notificación">Notificación</option>
+                        <option value="Contestación">Contestación</option>
+                        <option value="Prueba">Prueba</option>
+                        <option value="Sentencia">Sentencia</option>
+                        <option value="Recurso">Recurso</option>
+                        <option value="Ejecución">Ejecución</option>
+                    </select>
+                    <label>Etiquetas (separadas por coma)</label>
+                    <input id="bib-tags" placeholder="Ej: demanda, civil, prescripción">
+                    <label>Descripción</label>
+                    <textarea id="bib-descripcion" rows="2" placeholder="Resumen breve..."></textarea>
+                    <label>Fecha del documento</label>
+                    <input type="date" id="bib-fecha">
+                    <label>Versión</label>
+                    <input id="bib-version" value="v1.0" style="width:100px;">
+                    <div style="display:flex; gap:8px; margin-top:14px;">
+                        <button class="btn btn-s" style="flex:1;" onclick="bibGuardarDocumento()"><i
+                                class="fas fa-save"></i> Guardar</button>
+                        <button class="btn" style="flex:1;" onclick="cerrarModal('modal-bib-add')">Cancelar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ══ MODAL GENÉRICO DE INPUT (reemplaza todos los prompt() nativos) ══ -->
+    <div class="modal-overlay" id="modal-input-generico">
+        <div class="modal-box" style="max-width:480px;">
+            <div class="modal-header">
+                <h3 id="mig-titulo"><i class="fas fa-edit"></i> Editar</h3>
+                <button class="modal-close" onclick="migCancelar()">×</button>
+            </div>
+            <div id="mig-body" style="padding:4px 0 8px;"></div>
+            <div style="display:flex; gap:8px; margin-top:18px;">
+                <button class="btn btn-p" style="flex:1;" onclick="migConfirmar()"><i class="fas fa-check"></i> <span
+                        id="mig-btn-ok">Guardar</span></button>
+                <button class="btn btn-sm" style="background:var(--bg-2,var(--bg)); color:var(--text-2);"
+                    onclick="migCancelar()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ████████████████████████████████████████████████████████████
+         HTML — BLOQUE 3: MODALES Y OVERLAYS GLOBALES
+    ████████████████████████████████████████████████████████████ -->
+
+    <!-- MODAL PLAZOS CRÍTICOS AL LOGIN -->
+    <div class="modal-overlay" id="modal-plazos-criticos">
+        <div class="modal-box" style="max-width:540px;">
+            <div class="modal-header">
+                <h3 style="color:var(--d);"><i class="fas fa-exclamation-triangle"></i> ⚠️ Plazos Críticos</h3>
+                <button class="modal-close" onclick="cerrarModal('modal-plazos-criticos')">×</button>
+            </div>
+            <p style="font-size:0.83rem; color:var(--t2); margin-bottom:14px;">Los siguientes plazos vencen hoy o
+                mañana:</p>
+            <div id="modal-plazos-content"></div>
+            <button class="btn btn-s btn-full" style="margin-top:16px;"
+                onclick="cerrarModal('modal-plazos-criticos')">Entendido — Revisaré los plazos</button>
+        </div>
+    </div>
+
+    <!-- MODAL DETALLE CAUSA -->
+    <div class="modal-overlay" id="modal-detalle">
+        <div class="modal-box" id="modal-detalle-box">
+            <div class="modal-header" id="modal-detalle-header-generic">
+                <h3 id="modal-detalle-titulo"></h3>
+                <button class="modal-close" onclick="cerrarModal('modal-detalle')">×</button>
+            </div>
+            <div id="modal-detalle-body"></div>
+        </div>
+    </div>
+
+    <!-- MODAL BUSCAR JURISPRUDENCIA -->
+    <div class="modal-overlay" id="modal-buscar-juris">
+        <div class="modal-box" style="max-width:600px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-search"></i> Buscar & Asociar Jurisprudencia</h3>
+                <button class="modal-close" onclick="cerrarModal('modal-buscar-juris')">×</button>
+            </div>
+            <input id="modal-juris-input" placeholder="Buscar por materia, tema o palabras clave..."
+                oninput="uiBuscarJuris(this.value)" style="margin-bottom:12px;">
+            <div id="modal-juris-resultados"></div>
+        </div>
+    </div>
+
+    <!-- ── MODAL HISTORIAL DE BACKUPS ── -->
+
+    <!-- MODAL CONFIRMACIÓN -->
+    <div class="modal-overlay" id="modal-confirm">
+        <div class="modal-box" style="max-width:400px; text-align:center; padding:30px;">
+            <div id="confirm-icon" style="font-size:3rem; color:var(--warning); margin-bottom:20px;">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <h3 id="confirm-titulo" style="margin-bottom:10px;">¿Confirmar acción?</h3>
+            <p id="confirm-mensaje" style="color:var(--text-2); margin-bottom:25px; font-size:0.9rem;">Esta acción no se
+                puede deshacer.</p>
+            <div style="display:flex; gap:12px;">
+                <button class="btn" style="flex:1;" onclick="cerrarModal('modal-confirm')">Cancelar</button>
+                <button id="confirm-btn-ok" class="btn btn-p" style="flex:1;">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-backups">
+        <div class="modal-box" style="max-width:640px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-history" style="color:var(--db-green,#0d7a5f)"></i> Historial de Backups
+                    Automáticos</h3>
+                <button class="modal-close" onclick="cerrarModal('modal-backups')">×</button>
+            </div>
+            <p style="font-size:0.8rem; color:#64748b; margin-bottom:14px;">
+                Se guardan los últimos <strong>5 snapshots</strong> automáticos. Puedes restaurar cualquiera o crear uno
+                manual ahora.
+            </p>
+            <div style="margin-bottom:14px;">
+                <button class="btn btn-p btn-sm" onclick="AutoBackup.crearSnapshot('manual'); abrirHistorialBackups();">
+                    <i class="fas fa-camera"></i> Crear Backup Manual Ahora
+                </button>
+            </div>
+            <div id="backup-history-list"></div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         LEXIUM — Módulos JavaScript
+         Orden de carga: dependencias primero, app core al final
+    ════════════════════════════════════════════════════ -->
+    <!-- Cargar modales parciales antes del resto de la app -->
+    <script src="js/utils/html-loader.js"></script>
+    <!-- v13: EventBus + RenderBus + StorageGuard (debe ir PRIMERO) -->
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="js/00-disk-storage.js"></script>
+    <script src="js/00b-config.js"></script>
+    <script src="js/00-eventbus.js"></script>
+    <script src="js/01-db-auth.js"></script>
+    <script src="js/02-render-crud.js"></script>
+    <script src="js/03-causa-detail.js"></script>
+    <script src="js/04-features.js"></script>
+    <script src="js/05-business-engine.js"></script>
+    <script src="js/06-calculators-strategy.js"></script>
+    <script src="js/07-analytics-export.js"></script>
+    <script src="js/08-dashboard.js"></script>
+    <script src="js/09-app-core.js"></script>
+    <script src="js/12-ia-providers.js"></script>
+    <script src="js/10-ia-escritos.js"></script>
+    <!-- MÓDULO 11 — Escritos: datos separados de UI (refactor v6) -->
+    <script src="js/11a-escritos-data.js"></script>
+    <script src="js/11b-escritos-ui.js"></script>
+    <script src="js/13-features-v7.js"></script>
+    <script src="js/14-features-v8.js"></script>
+    <script src="js/15-tramites-admin.js"></script>
+    <script src="js/16-doctrina.js"></script>
+    <script src="js/16b-doctrina-pdf.js"></script>
+    <script src="js/17-claude-legal.js"></script>
+    <!-- v13: Google Drive F13 + RenderBus Wiring (al final — después de todos los módulos) -->
+    <script src="js/18-google-drive.js"></script>
+    <script src="js/19-renderbus-wiring.js"></script>
+    <script src="js/20-backup-disco.js"></script>
+    <script src="js/21-doc-fisico.js"></script>
+    <script src="js/guardar-global.js"></script>
+    <script src="js/22-whatsapp-panel-v2.js"></script>
+    <script src="js/23-causas-pro-docs.js"></script>
+
+    <!-- MODAL VERSIONES -->
+    <div class="modal-overlay" id="modal-versiones" onclick="if(event.target===this)cerrarModal('modal-versiones')">
+        <div class="modal" style="max-width:600px; width:100%;">
+            <div class="modal-header">
+                <h3 id="modal-versiones-titulo">Historial de Versiones</h3>
+                <button class="btn-icon" onclick="cerrarModal('modal-versiones')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" style="max-height:70vh; overflow-y:auto;">
+                <div id="modal-versiones-lista"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="cerrarModal('modal-versiones')">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+
+    <input type="file" id="adjunto-file-input" multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt,.xlsx,.pptx"
+        style="display:none;" onchange="adjuntosOnFileSelect(this)">
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- MODALS & PANELS — FEATURES v7                                       -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+
+    <!-- PANEL LATERAL DE NOTIFICACIONES -->
+    <div id="notif-panel" class="notif-panel">
+        <div class="notif-panel-header">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <i class="fas fa-bell" style="color:var(--cyan,#0891b2);"></i>
+                <span style="font-weight:700;font-size:15px;">Notificaciones</span>
+            </div>
+            <div style="display:flex;gap:6px;">
+                <button class="btn btn-xs" onclick="notifMarcarTodasLeidas()" title="Marcar todas como leídas">
+                    <i class="fas fa-check-double"></i>
+                </button>
+                <button class="btn btn-xs btn-danger-outline" onclick="notifLimpiarTodo()" title="Limpiar todo">
+                    <i class="fas fa-trash"></i>
+                </button>
+                <button class="btn-icon" onclick="notifTogglePanel()" style="padding:4px 8px;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="notif-panel-body">
+            <div id="notif-lista"></div>
+        </div>
+    </div>
+    <div id="notif-overlay" class="notif-overlay" onclick="notifTogglePanel()"></div>
+
+    <!-- MODAL SELECCIÓN PLANTILLA DE CAUSA -->
+    <div class="modal-overlay" id="modal-plantilla-causa"
+        onclick="if(event.target===this)cerrarModal('modal-plantilla-causa')">
+        <div class="modal-content" style="max-width:700px;width:95%;max-height:85vh;overflow-y:auto;">
+            <div class="modal-header">
+                <div>
+                    <h3><i class="fas fa-sitemap" style="color:var(--cyan,#0891b2);"></i> Crear Causa con Plantilla</h3>
+                    <p style="font-size:12px;color:var(--text-3,#64748b);margin-top:2px;">Cliente: <strong
+                            id="mpc-cliente-nombre"></strong></p>
+                </div>
+                <button class="btn-icon" onclick="cerrarModal('modal-plantilla-causa')"><i
+                        class="fas fa-times"></i></button>
+            </div>
+            <input type="hidden" id="mpc-cliente-id">
+            <div class="modal-body">
+                <p style="font-size:13px;color:var(--text-2,#475569);margin-bottom:16px;">
+                    Seleccione el procedimiento. Se crearán las etapas procesales y alertas de plazos típicas
+                    automáticamente.
+                </p>
+                <div id="mpc-grid" class="mpc-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL PERFIL EXPANDIDO CLIENTE ↔ CAUSAS -->
+    <div class="modal-overlay" id="modal-perfil-cliente"
+        onclick="if(event.target===this)cerrarModal('modal-perfil-cliente')">
+        <div class="modal-content" style="max-width:760px;width:95%;max-height:88vh;overflow-y:auto;">
+            <div class="modal-header">
+                <div style="display:flex;align-items:center;gap:14px;">
+                    <div class="mpc-avatar">
+                        <i class="fas fa-user" style="font-size:1.4rem;color:var(--text-3,#64748b);"></i>
+                    </div>
+                    <div>
+                        <h3 id="mpc-header-nombre" style="margin:0;font-size:17px;"></h3>
+                        <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
+                            <span id="mpc-header-rut"
+                                style="font-size:12px;color:var(--text-3,#64748b);font-family:monospace;"></span>
+                            <span id="mpc-header-estado" class="badge"></span>
+                        </div>
+                    </div>
+                </div>
+                <button class="btn-icon" onclick="cerrarModal('modal-perfil-cliente')"><i
+                        class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <!-- KPIs del cliente -->
+                <div class="mpc-kpis">
+                    <div class="mpc-kpi-item">
+                        <span class="mpc-kpi-val" id="mpc-kpi-causas">0</span>
+                        <span class="mpc-kpi-lbl">Causas</span>
+                    </div>
+                    <div class="mpc-kpi-item">
+                        <span class="mpc-kpi-val" id="mpc-kpi-pagado">$0</span>
+                        <span class="mpc-kpi-lbl">Pagado</span>
+                    </div>
+                    <div class="mpc-kpi-item">
+                        <span class="mpc-kpi-val" id="mpc-kpi-pendiente">$0</span>
+                        <span class="mpc-kpi-lbl">Pendiente</span>
+                    </div>
+                    <div class="mpc-kpi-item">
+                        <span class="mpc-kpi-val" id="mpc-kpi-docs">0</span>
+                        <span class="mpc-kpi-lbl">Adjuntos</span>
+                    </div>
+                </div>
+                <!-- Causas relacionadas -->
+                <div style="display:flex;justify-content:space-between;align-items:center;margin:20px 0 10px;">
+                    <h4 style="margin:0;font-size:14px;font-weight:700;">Causas Relacionadas</h4>
+                    <button class="btn btn-xs btn-p" id="mpc-btn-nueva-causa">
+                        <i class="fas fa-plus"></i> Nueva Causa
+                    </button>
+                </div>
+                <div id="mpc-causas-lista"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL ACCIÓN RÁPIDA (KPI Dashboard) -->
+    <div class="modal-overlay" id="modal-accion-rapida"
+        onclick="if(event.target===this)cerrarModal('modal-accion-rapida')">
+        <div class="modal-content" style="max-width:400px;width:95%;">
+            <div class="modal-header">
+                <h3 id="mar-titulo" style="font-size:15px;margin:0;">Acción Rápida</h3>
+                <button class="btn-icon" onclick="cerrarModal('modal-accion-rapida')"><i
+                        class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" id="mar-body" style="padding:16px;"></div>
+        </div>
+    </div>
+
+    <!-- MODAL ADJUNTOS (para causa específica) -->
+    <div class="modal-overlay" id="modal-adjuntos" onclick="if(event.target===this)cerrarModal('modal-adjuntos')">
+        <div class="modal-content" style="max-width:560px;width:95%;">
+            <div class="modal-header">
+                <h3><i class="fas fa-paperclip" style="color:var(--cyan,#0891b2);"></i> Archivos Adjuntos</h3>
+                <button class="btn-icon" onclick="cerrarModal('modal-adjuntos')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" style="padding:16px;">
+                <!-- Barra de uso -->
+                <div style="margin-bottom:14px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                        <span style="font-size:12px;font-weight:600;color:var(--text-2,#475569);">Almacenamiento</span>
+                        <span id="adjuntos-uso-label"
+                            style="font-size:11px;color:var(--text-3,#64748b);font-family:monospace;">0 MB / 50
+                            MB</span>
+                    </div>
+                    <div style="height:6px;background:var(--bg-2,#f1f5f9);border-radius:3px;overflow:hidden;">
+                        <div id="adjuntos-barra-uso"
+                            style="height:100%;width:0%;border-radius:3px;transition:width 0.4s;background:#0d7a5f;">
+                        </div>
+                    </div>
+                </div>
+                <!-- Botón subir -->
+                <button class="btn btn-p" onclick="adjuntosAbrir(document.getElementById('adjunto-causa-id').value)"
+                    style="width:100%;margin-bottom:14px;">
+                    <i class="fas fa-upload"></i> Adjuntar Archivo (&lt;2 MB · PDF, Imágenes, Word)
+                </button>
+                <input type="hidden" id="adjunto-causa-id">
+                <!-- Lista -->
+                <div id="adjuntos-lista"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- MODALS — FEATURES v8                                                 -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+
+    <!-- ════════════════════════════════════════════════════════
+         LOGIN CANVAS — Partículas + Mesh de nodos + Balanza wireframe
+         (código en js/main-init.js)
+    ═══════════════════════════════════════════════════════════ -->
+    <script src="js/main-init.js"></script>
+
+</body>
+</html>

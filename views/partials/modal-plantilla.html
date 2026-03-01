@@ -1,0 +1,65 @@
+<div class="modal-overlay" id="modal-plantilla" onclick="if(event.target===this)cerrarModal('modal-plantilla')">
+    <div class="modal-content" style="max-width:680px; width:95%;">
+        <div class="modal-header">
+            <h3><i class="fas fa-layer-group" style="color:var(--cyan);"></i> Plantilla de Escrito</h3>
+            <button class="btn-icon" onclick="cerrarModal('modal-plantilla')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body" style="display:flex; flex-direction:column; gap:14px;">
+
+            <div style="display:grid; grid-template-columns:1fr 160px; gap:12px;">
+                <div class="form-group" style="margin:0;">
+                    <label>Nombre de la plantilla <span style="color:var(--danger)">*</span></label>
+                    <input type="text" id="plt-nombre" placeholder="Ej: Mi demanda de cobro de honorarios">
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label>Materia</label>
+                    <select id="plt-materia">
+                        <option value="civil">Civil</option>
+                        <option value="laboral">Laboral</option>
+                        <option value="familia">Familia</option>
+                        <option value="penal">Penal</option>
+                        <option value="tributario">Tributario</option>
+                        <option value="contencioso">Cont.-Adm.</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group" style="margin:0;">
+                <label>Descripción breve</label>
+                <input type="text" id="plt-descripcion" placeholder="Para qué sirve esta plantilla (opcional)">
+            </div>
+
+            <div class="form-group" style="margin:0;">
+                <label>Instrucciones para la IA
+                    <span style="font-size:11px; color:var(--text-3); font-weight:400;">
+                        — Qué debe considerar Gemini al redactar con esta plantilla
+                    </span>
+                </label>
+                <textarea id="plt-instrucciones" rows="3"
+                    placeholder="Ej: Redactar conforme al Art. 254 CPC, con énfasis en la excepción de prescripción. Usar tono formal. Incluir siempre petición de costas…"></textarea>
+            </div>
+
+            <div class="form-group" style="margin:0;">
+                <label>Cuerpo / Estructura base
+                    <span style="font-size:11px; color:var(--text-3); font-weight:400;">
+                        — Se cargará en el campo de hechos al usar la plantilla
+                    </span>
+                </label>
+                <textarea id="plt-cuerpo" rows="6"
+                    placeholder="I. HECHOS&#10;[Describir aquí los hechos relevantes]&#10;&#10;II. DERECHO&#10;[Artículos aplicables]&#10;&#10;III. PETICIÓN&#10;[Lo que se solicita al tribunal]"></textarea>
+            </div>
+
+            <div class="form-group" style="margin:0;">
+                <label>Etiquetas <span style="font-size:11px; color:var(--text-3); font-weight:400;">— separadas por
+                        coma</span></label>
+                <input type="text" id="plt-tags" placeholder="Ej: cobro, ejecutivo, honorarios">
+            </div>
+        </div>
+        <div class="modal-footer" style="display:flex; gap:10px; justify-content:flex-end;">
+            <button class="btn" onclick="cerrarModal('modal-plantilla')">Cancelar</button>
+            <button class="btn btn-p" onclick="plantillaGuardar()">
+                <i class="fas fa-save"></i> Guardar Plantilla
+            </button>
+        </div>
+    </div>
+</div>

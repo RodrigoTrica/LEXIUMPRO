@@ -1,0 +1,82 @@
+{
+  "name": "appbogado",
+  "version": "2.2.0",
+  "description": "AppBogado — Sistema de gestión legal de escritorio",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "start:dev": "cross-env NODE_ENV=development electron .",
+    "build-win": "electron-builder --win --x64",
+    "build-win-portable": "electron-builder --win portable --x64",
+    "audit": "npm audit --audit-level=moderate"
+  },
+  "build": {
+    "appId": "cl.appbogado.app",
+    "productName": "AppBogado",
+    "copyright": "Copyright © 2024 AppBogado",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!dist/**",
+      "!backup/**",
+      "!datos/**",
+      "!**/*.map",
+      "!node_modules/.cache/**"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerHeaderIcon": "assets/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "AppBogado"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.icns"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "electron": "^40.6.0",
+    "electron-builder": "^26.8.1"
+  },
+  "keywords": [
+    "legal",
+    "abogado",
+    "gestion"
+  ],
+  "author": "AppBogado",
+  "license": "UNLICENSED",
+  "overrides": {
+    "semver": "^7.5.4"
+  },
+  "dependencies": {
+    "node-cron": "^4.2.1",
+    "qrcode": "^1.5.4",
+    "whatsapp-web.js": "^1.34.6"
+  }
+}

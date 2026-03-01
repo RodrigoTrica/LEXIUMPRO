@@ -1,0 +1,82 @@
+<div class="modal-overlay" id="modal-plantilla-texto"
+    onclick="if(event.target===this)cerrarModal('modal-plantilla-texto')">
+    <div class="modal-content" style="max-width:720px;width:95%;max-height:90vh;overflow-y:auto;">
+        <div class="modal-header">
+            <h3 id="pt-modal-titulo"><i class="fas fa-file-alt" style="color:var(--cyan);"></i> Nueva Plantilla de
+                Texto</h3>
+            <button class="btn-icon" onclick="cerrarModal('modal-plantilla-texto')"><i
+                    class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+
+            <div style="display:grid;grid-template-columns:1fr 160px;gap:12px;">
+                <div>
+                    <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">Nombre <span
+                            style="color:var(--danger)">*</span></label>
+                    <input type="text" id="pt-nombre" placeholder="Ej: Demanda ejecutiva honorarios">
+                </div>
+                <div>
+                    <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">Categoría</label>
+                    <select id="pt-categoria">
+                        <option value="general">General</option>
+                        <option value="demanda">Demanda</option>
+                        <option value="recurso">Recurso</option>
+                        <option value="notificacion">Notificación</option>
+                        <option value="contrato">Contrato</option>
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">Descripción
+                    breve</label>
+                <input type="text" id="pt-descripcion" placeholder="Para qué sirve esta plantilla">
+            </div>
+
+            <div>
+                <label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px;">
+                    Cuerpo de la Plantilla <span style="color:var(--danger)">*</span>
+                    <span style="font-size:11px;font-weight:400;color:var(--text-3);margin-left:8px;">Use
+                        {{variable}} para datos dinámicos</span>
+                </label>
+                <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">
+                    <button class="pt-var-btn" onclick="ptInsertarVariable('cliente')">{{cliente}}</button>
+                    <button class="pt-var-btn" onclick="ptInsertarVariable('causa')">{{causa}}</button>
+                    <button class="pt-var-btn" onclick="ptInsertarVariable('tribunal')">{{tribunal}}</button>
+                    <button class="pt-var-btn" onclick="ptInsertarVariable('fecha_hoy')">{{fecha_hoy}}</button>
+                    <button class="pt-var-btn" onclick="ptInsertarVariable('rit')">{{rit}}</button>
+                    <button class="pt-var-btn"
+                        onclick="ptInsertarVariable('etapa_actual')">{{etapa_actual}}</button>
+                    <button class="pt-var-btn" onclick="ptInsertarVariable('abogado')">{{abogado}}</button>
+                    <button class="pt-var-btn" onclick="ptInsertarVariable('despacho')">{{despacho}}</button>
+                </div>
+                <textarea id="pt-cuerpo" rows="10"
+                    placeholder="Escribe el cuerpo de la plantilla aquí. Usa {{cliente}}, {{causa}}, {{fecha_hoy}}, etc."
+                    style="font-family:'DM Mono',monospace;font-size:12px;resize:vertical;"></textarea>
+            </div>
+
+            <!-- Previsualización -->
+            <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+                <div
+                    style="background:var(--bg-2);padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-size:12px;font-weight:600;color:var(--text-2);">Vista previa con
+                        variables</span>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <select id="pt-preview-causa" onchange="ptPrevisualizar()"
+                            style="font-size:11px;padding:4px 8px;">
+                            <option value="">Sin causa</option>
+                        </select>
+                        <button class="btn btn-xs" onclick="ptPrevisualizar()"><i class="fas fa-eye"></i>
+                            Previsualizar</button>
+                    </div>
+                </div>
+                <pre id="pt-preview-resultado"
+                    style="padding:14px;font-family:'DM Mono',monospace;font-size:11px;white-space:pre-wrap;max-height:160px;overflow-y:auto;color:var(--text-2);background:var(--bg-card);margin:0;"></pre>
+            </div>
+        </div>
+        <div class="modal-footer" style="display:flex;gap:10px;justify-content:flex-end;padding:14px 20px;">
+            <button class="btn" onclick="cerrarModal('modal-plantilla-texto')">Cancelar</button>
+            <button class="btn btn-p" onclick="ptGuardar()"><i class="fas fa-save"></i> Guardar Plantilla</button>
+        </div>
+    </div>
+</div>
