@@ -2488,14 +2488,35 @@
                         <span class="mpc-kpi-lbl">Adjuntos</span>
                     </div>
                 </div>
-                <!-- Causas relacionadas -->
-                <div style="display:flex;justify-content:space-between;align-items:center;margin:20px 0 10px;">
-                    <h4 style="margin:0;font-size:14px;font-weight:700;">Causas Relacionadas</h4>
-                    <button class="btn btn-xs btn-p" id="mpc-btn-nueva-causa">
-                        <i class="fas fa-plus"></i> Nueva Causa
+
+                <!-- Tabs del perfil de cliente -->
+                <div class="mpc-tabs" style="display:flex;gap:6px;margin-top:16px;margin-bottom:8px;border-bottom:1px solid var(--border,#e2e8f0);">
+                    <button type="button" id="mpc-tab-causas" class="mpc-tab-btn active"
+                        style="border:none;background:transparent;padding:6px 10px;font-size:0.8rem;font-weight:600;color:var(--text-2,#475569);border-bottom:2px solid var(--a,#6366f1);cursor:pointer;">
+                        <i class="fas fa-folder-open"></i> Causas
+                    </button>
+                    <button type="button" id="mpc-tab-actividad" class="mpc-tab-btn"
+                        style="border:none;background:transparent;padding:6px 10px;font-size:0.8rem;font-weight:500;color:var(--text-3,#64748b);border-bottom:2px solid transparent;cursor:pointer;">
+                        <i class="fas fa-stream"></i> Actividad Reciente
                     </button>
                 </div>
-                <div id="mpc-causas-lista"></div>
+
+                <!-- Panel: Causas relacionadas -->
+                <div id="mpc-panel-causas">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0 10px;">
+                        <h4 style="margin:0;font-size:14px;font-weight:700;">Causas Relacionadas</h4>
+                        <button class="btn btn-xs btn-p" id="mpc-btn-nueva-causa">
+                            <i class="fas fa-plus"></i> Nueva Causa
+                        </button>
+                    </div>
+                    <div id="mpc-causas-lista"></div>
+                </div>
+
+                <!-- Panel: Actividad reciente -->
+                <div id="mpc-panel-actividad" style="display:none;margin-top:4px;">
+                    <h4 style="margin:0 0 10px 0;font-size:14px;font-weight:700;">Actividad Reciente</h4>
+                    <div id="mpc-actividad-lista"></div>
+                </div>
             </div>
         </div>
     </div>

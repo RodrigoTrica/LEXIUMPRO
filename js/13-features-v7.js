@@ -845,7 +845,7 @@
 
         /**
          * Abre el modal de perfil expandido de un cliente con todas sus causas,
-         * historial de pagos y documentos adjuntos relacionados.
+         * historial de pagos, documentos adjuntos y actividad consolidada.
          * @param {string} clienteId
          */
         function verPerfilCliente(clienteId) {
@@ -943,7 +943,171 @@
                 plantillaCausaAbrir(clienteId);
             };
 
+            // Renderizar actividad consolidada
+            _mpcRenderActividad(clienteId, causas);
+            _mpcCambiarTab('causas');
+
             abrirModal('modal-perfil-cliente');
+        }
+
+        /**
+         * Cambia entre panel de causas y panel de actividad reciente en el modal de perfil.
+         * @param {'causas'|'actividad'} tab
+         */
+        function _mpcCambiarTab(tab) {
+            const btnCausas = document.getElementById('mpc-tab-causas');
+            const btnActividad = document.getElementById('mpc-tab-actividad');
+            const panelCausas = document.getElementById('mpc-panel-causas');
+            const panelActividad = document.getElementById('mpc-panel-actividad');
+            if (!btnCausas || !btnActividad || !panelCausas || !panelActividad) return;
+
+            const activarCausas = tab === 'causas';
+            btnCausas.classList.toggle('active', activarCausas);
+            btnActividad.classList.toggle('active', !activarCausas);
+            btnCausas.style.borderBottomColor = activarCausas ? 'var(--a,#6366f1)' : 'transparent';
+            btnActividad.style.borderBottomColor = !activarCausas ? 'var(--a,#6366f1)' : 'transparent';
+
+            panelCausas.style.display = activarCausas ? 'block' : 'none';
+            panelActividad.style.display = activarCausas ? 'none' : 'block';
+        }
+
+        /**
+         * Construye el timeline unificado de actividad para un cliente.
+         * Incluye: movimientos, pagos, alertas y documentos de todas sus causas.
+         * @param {string} clienteId
+         * @param {Array} causasCliente - lista de causas del cliente
+         */
+        function _mpcRenderActividad(clienteId, causasCliente) {
+            const cont = document.getElementById('mpc-actividad-lista');
+            if (!cont) return;
+
+            const causas = causasCliente || DB.causas.filter(c => c.clienteId === clienteId);
+            if (!causas.length) {
+                cont.innerHTML = '<div class=\"mpc-empty\">Sin actividad registrada todavía.</div>';
+                return;
+            }
+
+            const eventos = [];
+            const causaIds = causas.map(c => c.id);
+
+            // Movimientos por causa
+            causas.forEach(c => {
+                const etiquetaCausa = c.caratula || `Causa ID ${c.id}`;
+                (c.movimientos || []).forEach(m => {
+                    const f = m.fecha || m.fechaDocumento;
+                    if (!f) return;
+                    const d = new Date(f);
+                    if (isNaN(d.getTime())) return;
+                    eventos.push({
+                        tipo: 'movimiento',
+                        icon: 'fa-file-alt',
+                        color: '#2563eb',
+                        fecha: d,
+                        fechaRaw: f,
+                        causaId: c.id,
+                        causa: etiquetaCausa,
+                        titulo: m.nombre || 'Movimiento en causa',
+                        detalle: (m.tipo || '') + (m.etapa ? ` · ${m.etapa}` : '')
+                    });
+                });
+
+                // Pagos de honorarios
+                const pagos = c.honorarios?.pagos || [];
+                pagos.forEach(p => {
+                    const f = p.fecha;
+                    if (!f) return;
+                    const d = new Date(f);
+                    if (isNaN(d.getTime())) return;
+                    eventos.push({
+                        tipo: 'pago',
+                        icon: 'fa-dollar-sign',
+                        color: '#059669',
+                        fecha: d,
+                        fechaRaw: f,
+                        causaId: c.id,
+                        causa: etiquetaCausa,
+                        titulo: 'Pago recibido',
+                        detalle: `$${(p.monto || 0).toLocaleString('es-CL')} · ${p.descripcion || 'Honorarios'}`
+                    });
+                });
+            });
+
+            // Alertas asociadas a las causas del cliente
+            (DB.alertas || []).filter(a => causaIds.includes(a.causaId)).forEach(a => {
+                const c = causas.find(cx => cx.id === a.causaId);
+                const etiquetaCausa = c?.caratula || `Causa ID ${a.causaId}`;
+                const f = a.fechaObjetivo || a.fecha || a.creadoEn;
+                if (!f) return;
+                const d = new Date(f);
+                if (isNaN(d.getTime())) return;
+                eventos.push({
+                    tipo: 'alerta',
+                    icon: 'fa-bell',
+                    color: '#b45309',
+                    fecha: d,
+                    fechaRaw: f,
+                    causaId: a.causaId,
+                    causa: etiquetaCausa,
+                    titulo: a.mensaje || 'Alerta',
+                    detalle: (a.tipo || '').toUpperCase()
+                });
+            });
+
+            // Documentos de las causas del cliente (DB.documentos global)
+            (DB.documentos || []).filter(d => causaIds.includes(d.causaId)).forEach(d => {
+                const c = causas.find(cx => cx.id === d.causaId);
+                const etiquetaCausa = c?.caratula || `Causa ID ${d.causaId}`;
+                const f = d.fechaDocumento || d.fechaCreacion;
+                if (!f) return;
+                const fd = new Date(f);
+                if (isNaN(fd.getTime())) return;
+                eventos.push({
+                    tipo: 'documento',
+                    icon: 'fa-file-alt',
+                    color: '#4b5563',
+                    fecha: fd,
+                    fechaRaw: f,
+                    causaId: d.causaId,
+                    causa: etiquetaCausa,
+                    titulo: d.nombreOriginal || 'Documento',
+                    detalle: (d.tipo || '') + (d.etapaVinculada ? ` · ${d.etapaVinculada}` : '')
+                });
+            });
+
+            if (!eventos.length) {
+                cont.innerHTML = '<div class=\"mpc-empty\">Sin actividad registrada todavía.</div>';
+                return;
+            }
+
+            eventos.sort((a, b) => b.fecha - a.fecha);
+
+            const fmtFecha = (d) => d.toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' });
+
+            cont.innerHTML = `
+                <div class=\"mpc-timeline\" style=\"position:relative;margin-top:4px;\">\n
+                    ${eventos.map((ev, idx) => {
+                        const fechaStr = fmtFecha(ev.fecha);
+                        const tipoLabel = ev.tipo.charAt(0).toUpperCase() + ev.tipo.slice(1);
+                        const isLast = idx === eventos.length - 1;
+                        return `
+                        <div class=\"mpc-tl-item\" style=\"display:flex;align-items:flex-start;gap:10px;position:relative;padding:8px 0;cursor:pointer;\" 
+                            onclick=\"cerrarModal('modal-perfil-cliente'); tab('detalle-causa'); setTimeout(()=>abrirDetalleCausa?.('${ev.causaId}'),100);\">
+                            <div style=\"width:22px;display:flex;flex-direction:column;align-items:center;flex-shrink:0;position:relative;\">\n
+                                <div style=\"width:18px;height:18px;border-radius:999px;background:${ev.color};display:flex;align-items:center;justify-content:center;color:white;font-size:9px;box-shadow:0 0 0 2px #fff;\">\n
+                                    <i class=\"fas ${ev.icon}\"></i>\n
+                                </div>\n
+                                ${isLast ? '' : '<div style=\"flex:1;width:2px;background:var(--border,#e2e8f0);margin-top:2px;\"></div>'}\n
+                            </div>\n
+                            <div style=\"flex:1;min-width:0;\">\n
+                                <div style=\"font-size:0.75rem;color:var(--text-3,#64748b);margin-bottom:2px;\">${fechaStr}</div>\n
+                                <div style=\"font-size:0.86rem;font-weight:600;color:var(--text,#0f172a);\">\n
+                                    ${tipoLabel} · ${escHtml(ev.causa)}\n
+                                </div>\n
+                                ${ev.titulo ? `<div style=\"font-size:0.82rem;color:var(--text-2,#475569);margin-top:1px;\">${escHtml(ev.titulo)}</div>` : ''}\n
+                                ${ev.detalle ? `<div style=\"font-size:0.78rem;color:var(--text-3,#64748b);margin-top:1px;\">${escHtml(ev.detalle)}</div>` : ''}\n
+                            </div>\n
+                        </div>`;}).join('')}
+                </div>`;
         }
 
         // ═══════════════════════════════════════════════════════════════════
