@@ -433,6 +433,7 @@ function tab(id, btn) {
     }
     if (id === 'doctrina') { if (typeof doctrinaRender === 'function') doctrinaRender(); }
     if (id === 'prescripcion') renderPrescripcion();
+    if (id === 'honorarios') { if (typeof renderHonorarios === 'function') renderHonorarios(); }
     if (id === 'panel') { renderDashboardPanel(); }
     if (id === 'escritos') { gaSelectCausa(); }
     if (id === 'historial-escritos') { if (typeof historialRenderEscritos === 'function') historialRenderEscritos(); }
@@ -469,6 +470,7 @@ function renderAll() {
     if (typeof _tsActualizarSelectores === 'function') _tsActualizarSelectores();
     if (typeof _ptActualizarSelectores === 'function') _ptActualizarSelectores();
     renderCausas();
+    if (typeof renderHonorarios === 'function') renderHonorarios();
     renderAlerts();
     renderJuris();
 

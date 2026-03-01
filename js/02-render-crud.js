@@ -116,17 +116,139 @@
             }).join('');
         }
 
+        // ─── Barra de filtros y orden para listado de causas ─────────────────
+        function _ensureCausasToolbar() {
+            if (document.getElementById('causa-filtros-toolbar')) return;
+            const causaList = document.getElementById('causa-list');
+            if (!causaList || !causaList.parentNode) return;
+
+            const toolbar = document.createElement('div');
+            toolbar.id = 'causa-filtros-toolbar';
+            toolbar.className = 'db-filtros';
+            toolbar.style.marginBottom = '14px';
+            toolbar.innerHTML = `
+                <span class="db-filtro-icon"><i class="fas fa-filter"></i></span>
+                <div class="db-filtro-group">
+                    <label>Estado</label>
+                    <select id="causa-flt-estado">
+                        <option value="">Todos</option>
+                        <option value="En tramitación">En tramitación</option>
+                        <option value="Finalizada">Finalizada</option>
+                        <option value="Suspendida">Suspendida</option>
+                    </select>
+                </div>
+                <div class="db-filtro-group">
+                    <label>Cliente</label>
+                    <select id="causa-flt-cliente">
+                        <option value="">Todos los clientes</option>
+                    </select>
+                </div>
+                <div class="db-filtro-group" style="flex:1; min-width:140px;">
+                    <label>Buscar (carátula / RIT)</label>
+                    <input type="text" id="causa-flt-busqueda" placeholder="Escriba para filtrar..." style="width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:0.85rem; background:var(--bg-2,#f8fafc);">
+                </div>
+                <div class="db-filtro-group">
+                    <label>Ordenar por</label>
+                    <select id="causa-flt-orden">
+                        <option value="fecha">Fecha última actividad</option>
+                        <option value="pendiente">Saldo pendiente</option>
+                        <option value="caratula">Carátula (A-Z)</option>
+                    </select>
+                </div>
+                <button type="button" class="db-clear-btn" id="causa-flt-limpiar" title="Limpiar filtros"><i class="fas fa-times"></i> Limpiar</button>
+                <span class="db-counter" id="causa-filtros-counter" style="margin-left:auto; font-size:0.8rem; color:var(--text-3); white-space:nowrap;"></span>
+            `;
+            causaList.parentNode.insertBefore(toolbar, causaList);
+
+            const onUpdate = () => renderCausas();
+            document.getElementById('causa-flt-estado').addEventListener('change', onUpdate);
+            document.getElementById('causa-flt-cliente').addEventListener('change', onUpdate);
+            document.getElementById('causa-flt-busqueda').addEventListener('input', onUpdate);
+            document.getElementById('causa-flt-orden').addEventListener('change', onUpdate);
+            document.getElementById('causa-flt-limpiar').addEventListener('click', () => {
+                document.getElementById('causa-flt-estado').value = '';
+                document.getElementById('causa-flt-cliente').value = '';
+                document.getElementById('causa-flt-busqueda').value = '';
+                document.getElementById('causa-flt-orden').value = 'fecha';
+                renderCausas();
+            });
+        }
+
+        function _getCausasFiltradasYOrdenadas() {
+            const estadoVal = (document.getElementById('causa-flt-estado') || {}).value || '';
+            const clienteVal = (document.getElementById('causa-flt-cliente') || {}).value || '';
+            const busquedaVal = ((document.getElementById('causa-flt-busqueda') || {}).value || '').trim().toLowerCase();
+            const ordenVal = (document.getElementById('causa-flt-orden') || {}).value || 'fecha';
+
+            let list = DB.causas.slice();
+            if (estadoVal) list = list.filter(c => (c.estadoGeneral || '') === estadoVal);
+            if (clienteVal) list = list.filter(c => String(c.clienteId) === String(clienteVal));
+            if (busquedaVal) {
+                list = list.filter(c => {
+                    const caratula = (c.caratula || '').toLowerCase();
+                    const rit = (c.rut || c.rit || '').toString().toLowerCase();
+                    return caratula.includes(busquedaVal) || rit.includes(busquedaVal);
+                });
+            }
+
+            const saldoPendiente = (c) => {
+                const h = c.honorarios || {};
+                const base = h.montoBase || h.base || 0;
+                const pagado = (h.pagos || []).reduce((s, p) => s + (p.monto || 0), 0);
+                return Math.max(0, base - pagado);
+            };
+            if (ordenVal === 'fecha') {
+                list.sort((a, b) => new Date(b.fechaUltimaActividad || b.fechaCreacion || 0) - new Date(a.fechaUltimaActividad || a.fechaCreacion || 0));
+            } else if (ordenVal === 'pendiente') {
+                list.sort((a, b) => saldoPendiente(b) - saldoPendiente(a));
+            } else {
+                list.sort((a, b) => (a.caratula || '').localeCompare(b.caratula || '', 'es'));
+            }
+            return list;
+        }
+
+        function _actualizarContadorCausas(mostrando, total) {
+            const counter = document.getElementById('causa-filtros-counter');
+            if (counter) counter.textContent = `Mostrando ${mostrando} de ${total} causas`;
+        }
+
+        function _poblarSelectClientesCausas() {
+            const sel = document.getElementById('causa-flt-cliente');
+            if (!sel) return;
+            const clientes = DB.clientes || [];
+            const opts = ['<option value="">Todos los clientes</option>'].concat(
+                clientes.map(c => `<option value="${escHtml(c.id)}">${escHtml(c.nombre || c.nom || 'Sin nombre')}</option>`)
+            );
+            const val = sel.value;
+            sel.innerHTML = opts.join('');
+            if (val) sel.value = val;
+        }
+
         function renderCausas() {
+            _ensureCausasToolbar();
+            _poblarSelectClientesCausas();
+
             const el = document.getElementById('causa-list');
-            if (!DB.causas.length) {
+            const total = DB.causas.length;
+            if (!total) {
+                _actualizarContadorCausas(0, 0);
                 el.innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><i class="fas fa-gavel"></i><p>Sin causas activas. Convierta un prospecto desde la sección Clientes.</p></div>';
                 return;
             }
-            el.innerHTML = DB.causas.map(c => {
-                const colorRiesgo = v => v === 'Alto' ? 'var(--danger)' : v === 'Medio' ? 'var(--warning)' : 'var(--success)';
+
+            const list = _getCausasFiltradasYOrdenadas();
+            if (!list.length) {
+                _actualizarContadorCausas(0, total);
+                el.innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><i class="fas fa-search"></i><p>Ninguna causa coincide con los filtros.</p><button type="button" class="btn btn-sm" style="margin-top:10px;" onclick="document.getElementById(\'causa-flt-limpiar\')?.click()"><i class="fas fa-times"></i> Limpiar filtros</button></div>';
+                return;
+            }
+            _actualizarContadorCausas(list.length, total);
+
+            const colorRiesgo = v => v === 'Alto' ? 'var(--danger)' : v === 'Medio' ? 'var(--warning)' : 'var(--success)';
+            el.innerHTML = list.map(c => {
                 const rProb = c.riesgo?.probatorio || 'Medio';
                 const rProc = c.riesgo?.procesal || 'Bajo';
-                
+                const estado = c.estadoGeneral || 'En tramitación';
                 return `
                 <div class="db-kpi" style="padding:20px; cursor:pointer;" onclick="tab('causa-detail'); viewCausa('${c.id}');">
                     <div class="icon-box-premium" style="background:var(--cyan-light); color:var(--cyan);">
@@ -135,9 +257,9 @@
                     <div class="db-kpi-data">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                             <div class="db-kpi-val" style="font-size:1.1rem; letter-spacing:-0.2px;">${escHtml(c.caratula)}</div>
-                            <span class="badge ${c.estadoGeneral === 'Finalizada' ? 'badge-s' : 'badge-a'}" style="font-size:9px;">${c.estadoGeneral.toUpperCase()}</span>
+                            <span class="badge ${estado === 'Finalizada' ? 'badge-s' : 'badge-a'}" style="font-size:9px;">${estado.toUpperCase()}</span>
                         </div>
-                        <div style="font-size:11px; color:var(--text-3); font-family:'IBM Plex Mono',monospace;">ID: ${c.id} · ${escHtml(c.tipoProcedimiento)}</div>
+                        <div style="font-size:11px; color:var(--text-3); font-family:'IBM Plex Mono',monospace;">ID: ${c.id} · ${escHtml(c.tipoProcedimiento || '')}</div>
                         
                         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-top:14px;">
                             <div class="risk-row" style="margin:0;">
@@ -150,7 +272,7 @@
                             </div>
                         </div>
                     </div>
-                    ${c.estadoGeneral !== 'Finalizada' ? `<div style="position:absolute; top:0; left:0; bottom:0; width:4px; background:var(--cyan);"></div>` : ''}
+                    ${estado !== 'Finalizada' ? `<div style="position:absolute; top:0; left:0; bottom:0; width:4px; background:var(--cyan);"></div>` : ''}
                 </div>`;
             }).join('');
         }
