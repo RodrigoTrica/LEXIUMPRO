@@ -460,6 +460,8 @@
                         <input id="cl-rut" placeholder="Ej: 12.345.678-9"
                             oninput="onRutInput(this); uiVerificarConflicto()">
                         <div id="conflicto-resultado" style="margin-top:6px;"></div>
+                        <label>Teléfono</label>
+                        <input type="tel" id="cl-telefono" placeholder="Ej: +56 9 1234 5678">
                         <label>Relato de Hechos</label>
                         <textarea id="cl-rel"
                             placeholder="Descripción de los hechos para análisis de estrategia..."></textarea>
@@ -2460,6 +2462,8 @@
                         <h3 id="mpc-header-nombre" style="margin:0;font-size:17px;"></h3>
                         <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
                             <span id="mpc-header-rut"
+                                style="font-size:12px;color:var(--text-3,#64748b);font-family:monospace;"></span>
+                            <span id="mpc-header-telefono"
                                 style="font-size:12px;color:var(--text-3,#64748b);font-family:monospace;"></span>
                             <span id="mpc-header-estado" class="badge"></span>
                         </div>

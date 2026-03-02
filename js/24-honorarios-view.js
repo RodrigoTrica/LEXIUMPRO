@@ -103,6 +103,15 @@
                     <td style="text-align:right; font-family:'IBM Plex Mono',monospace; color:var(--danger,#dc2626); font-weight:600;">$${_fmtCLP(d.pendiente)}</td>
                     <td style="text-align:center;">${d.pct}%</td>
                     <td style="font-size:0.85rem; color:var(--text-2);">${_esc(textoUltimoPago)}</td>
+                    <td style="text-align:center;">
+                        <button type="button"
+                            class="btn btn-xs"
+                            style="background:#22c55e;border-color:#16a34a;color:#fff;padding:4px 8px;font-size:0.75rem;display:inline-flex;align-items:center;gap:4px;"
+                            title="Recordar pago por WhatsApp"
+                            onclick="event.stopPropagation(); typeof honRecordarPagoWA==='function' && honRecordarPagoWA('${cliente ? cliente.id : ''}','${c.id}');">
+                            <i class="fab fa-whatsapp"></i>
+                        </button>
+                    </td>
                 </tr>`;
         }).join('');
 
@@ -117,6 +126,7 @@
                         <th style="text-align:right; padding:10px 12px;">Saldo Pendiente</th>
                         <th style="text-align:center; padding:10px 12px;">% Cobrado</th>
                         <th style="text-align:left; padding:10px 12px;">Último Pago</th>
+                        <th style="text-align:center; padding:10px 12px;">Acción</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -129,7 +139,7 @@
                         <td style="text-align:right; padding:12px; font-family:'IBM Plex Mono',monospace; color:var(--success,#059669);">$${_fmtCLP(sumaPagado)}</td>
                         <td style="text-align:right; padding:12px; font-family:'IBM Plex Mono',monospace; color:var(--danger,#dc2626);">$${_fmtCLP(sumaPendiente)}</td>
                         <td style="text-align:center; padding:12px;">${sumaBase > 0 ? Math.round((sumaPagado / sumaBase) * 100) : 0}%</td>
-                        <td></td>
+                        <td colspan="2"></td>
                     </tr>
                 </tfoot>
             </table>`;
@@ -148,5 +158,75 @@
         }
     }
 
+    async function _honRecordarPagoWA(clienteId, causaId) {
+        try {
+            if (!window.electronAPI || !window.electronAPI.whatsapp) {
+                if (typeof showError === 'function') showError('WhatsApp no está configurado en esta instalación.');
+                else alert('WhatsApp no está configurado en esta instalación.');
+                return;
+            }
+
+            const cliente = (DB.clientes || []).find(c => c.id == clienteId);
+            if (!cliente) {
+                if (typeof showError === 'function') showError('No se encontró el cliente en la base de datos.');
+                else alert('No se encontró el cliente en la base de datos.');
+                return;
+            }
+
+            // NOTA: actualmente DB.clientes no define explícitamente un campo telefono.
+            // Este botón funcionará una vez que se agregue y se empiece a poblar.
+            const telefono = cliente.telefono || cliente.phone || '';
+            if (!telefono) {
+                const msg = 'El cliente no tiene teléfono registrado.';
+                if (typeof showInfo === 'function') showInfo(msg);
+                else alert(msg);
+                return;
+            }
+
+            const causa = (DB.causas || []).find(c => c.id == causaId);
+            if (!causa) {
+                if (typeof showError === 'function') showError('No se encontró la causa asociada.');
+                else alert('No se encontró la causa asociada.');
+                return;
+            }
+
+            const h = causa.honorarios || {};
+            const base = h.montoBase || h.base || 0;
+            const pagado = (h.pagos || []).reduce((s, p) => s + (p.monto || 0), 0);
+            const pendiente = Math.max(0, base - pagado);
+            if (pendiente <= 0) {
+                const msg = 'Esta causa no tiene saldo pendiente.';
+                if (typeof showInfo === 'function') showInfo(msg);
+                else alert(msg);
+                return;
+            }
+
+            const nombreCliente = cliente.nombre || cliente.nom || 'Cliente';
+            const estudio = (DB.configuracion && DB.configuracion.nombreEstudio) || 'tu estudio jurídico';
+            const mensaje =
+                `Estimado/a ${nombreCliente}, le recordamos que tiene un saldo pendiente de ` +
+                `$${pendiente.toLocaleString('es-CL')} en la causa \"${causa.caratula}\". ` +
+                `Saludos, ${estudio}.`;
+
+            const numeroLimpio = telefono.replace(/[\s\+\-\(\)]/g, '');
+            const resp = await window.electronAPI.whatsapp.enviarAlertaA(numeroLimpio, mensaje);
+
+            if (resp && resp.ok) {
+                const okMsg = `Recordatorio enviado por WhatsApp a ${nombreCliente} (+${numeroLimpio}).`;
+                if (typeof showSuccess === 'function') showSuccess(okMsg);
+                else alert(okMsg);
+            } else {
+                const errMsg = 'No se pudo enviar el recordatorio por WhatsApp.' + (resp && resp.error ? ` Detalle: ${resp.error}` : '');
+                if (typeof showError === 'function') showError(errMsg);
+                else alert(errMsg);
+            }
+        } catch (e) {
+            const msg = 'Error al enviar recordatorio por WhatsApp: ' + (e.message || e);
+            if (typeof showError === 'function') showError(msg);
+            else alert(msg);
+        }
+    }
+
     window.renderHonorarios = renderHonorarios;
+    window.honRecordarPagoWA = _honRecordarPagoWA;
 })();

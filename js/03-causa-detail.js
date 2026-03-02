@@ -60,6 +60,9 @@
         }
 
         function abrirDetalleCausa(causaId) {
+            // Mantener referencia global de la causa actualmente abierta (para acciones rápidas como honorarios)
+            window._dcCurrentCausaId = causaId;
+
             // Guardar sección activa para restaurar al cerrar el modal
             const seccionActiva = document.querySelector('section.tabs.active');
             const idActivo = seccionActiva ? seccionActiva.id : 'causas';
@@ -277,6 +280,11 @@
         </div>
     `;
             abrirModal('modal-detalle');
+
+            // Si existe el selector global de honorarios (panel Control Financiero), preseleccionar esta causa
+            const selHon = document.getElementById('hr-causa-sel');
+            if (selHon) selHon.value = causaId;
+
             // Render tab inicial
             dcCambiarTab('movimientos', causaId);
         }
@@ -505,7 +513,17 @@
             const pct = base > 0 ? Math.round(pagado / base * 100) : 0;
             const cuantia = causa.cuantia || 0;
 
+            const lblBtnHon = base > 0 ? 'Modificar Honorarios' : 'Asignar Honorarios';
+
             el.innerHTML = `
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px;">
+                <div style="font-size:0.7rem; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:#64748b;">
+                    <i class="fas fa-wallet"></i> Honorarios
+                </div>
+                <button type="button" class="dc-btn" style="font-size:0.76rem;" onclick="dcGestionarHonorarios()">
+                    <i class="fas fa-dollar-sign"></i> ${lblBtnHon}
+                </button>
+            </div>
             <div class="dc-econ-grid">
                 <div class="dc-econ-kpi blue">
                     <div class="dc-econ-label">Monto Base</div>
@@ -556,6 +574,37 @@
                 <span style="font-size:0.72rem; color:#64748b; font-weight:700; text-transform:uppercase; letter-spacing:0.07em;">Cuantía en disputa</span>
                 <div style="font-size:1.2rem; font-weight:700; font-family:'IBM Plex Mono',monospace; color:#1a3a6b; margin-top:4px;">$${cuantia.toLocaleString('es-CL')}</div>
             </div>` : ''}`;
+        }
+
+        function dcGestionarHonorarios() {
+            const causaId = (typeof window._dcCurrentCausaId === 'number' || typeof window._dcCurrentCausaId === 'string')
+                ? parseInt(window._dcCurrentCausaId)
+                : NaN;
+            if (!causaId) { showError('No se pudo determinar la causa actual.'); return; }
+
+            const causa = DB.causas.find(c => c.id === causaId);
+            if (!causa) { showError('Causa no encontrada.'); return; }
+
+            if (typeof migAbrir !== 'function') { showError('No está disponible el formulario de edición.'); return; }
+
+            const baseActual = causa.honorarios?.montoBase || causa.honorarios?.base || 0;
+
+            migAbrir({
+                titulo: '<i class="fas fa-wallet"></i> Honorarios — Monto Base',
+                btnOk: 'Guardar',
+                campos: [
+                    { id: 'montoBase', label: 'Monto Base ($)', valor: baseActual ? String(baseActual) : '', placeholder: 'Ej: 5000000', tipo: 'number', requerido: true }
+                ],
+                onOk: (vals) => {
+                    const monto = parseFloat((vals.montoBase || '').toString().replace(/\./g, '').replace(/,/g, '.'));
+                    if (!monto || monto <= 0) { showError('Ingrese un monto válido.'); return; }
+                    asignarHonorarios(causaId, monto);
+                    registrarEvento(`Honorarios asignados/modificados: $${monto.toLocaleString('es-CL')} — ${causa?.caratula}`);
+                    dcRenderEconomico(causaId);
+                    if (typeof renderAll === 'function') renderAll();
+                    showSuccess('Honorarios actualizados.');
+                }
+            });
         }
 
         // ════════════════════════════════════════════════════════
@@ -725,8 +774,17 @@
         }
 
         // ─── 4. HONORARIOS REALES ────────────────────────────────────────
-        function uiAsignarHonorarios() {
-            const causaId = parseInt(document.getElementById('hr-causa-sel').value);
+        function uiAsignarHonorarios(causaIdOverride) {
+            const sel = document.getElementById('hr-causa-sel');
+            const fromSelect = sel ? parseInt(sel.value) : NaN;
+            const fromOverride = (typeof causaIdOverride === 'number' || typeof causaIdOverride === 'string')
+                ? parseInt(causaIdOverride)
+                : NaN;
+            const fromDetalle = (typeof window._dcCurrentCausaId === 'number' || typeof window._dcCurrentCausaId === 'string')
+                ? parseInt(window._dcCurrentCausaId)
+                : NaN;
+
+            const causaId = Number.isFinite(fromOverride) ? fromOverride : (Number.isFinite(fromSelect) ? fromSelect : fromDetalle);
             const monto = parseFloat(document.getElementById('hr-monto').value);
             if (!causaId) { showError('Seleccione una causa.'); return; }
             if (!monto || monto <= 0) { showError('Ingrese un monto válido.'); return; }

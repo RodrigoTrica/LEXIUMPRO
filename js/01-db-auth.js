@@ -65,10 +65,15 @@ let _raw = (() => {
             if (!d.clientes.find(x => x.id === c.id))
                 d.clientes.push({
                     id: c.id, nombre: c.nom || c.nombre, rut: c.rut || '',
+                    telefono: '',
                     descripcion: c.rel || '', estado: c.status || 'prospecto', fechaCreacion: new Date()
                 });
         });
     }
+    // Normalizar clientes existentes: asegurar campo telefono (compatibilidad hacia atrás)
+    d.clientes.forEach(c => {
+        if (typeof c.telefono !== 'string') c.telefono = '';
+    });
     if (!d.causas) d.causas = [];
     if (d.causes?.length) {
         d.causes.forEach(c => {

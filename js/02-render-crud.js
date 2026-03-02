@@ -107,13 +107,55 @@
                             ${causasCliente > 0 ? `<i class="fas fa-folder-open"></i> ${causasCliente} causa${causasCliente > 1 ? 's' : ''}` : '<i class="fas fa-folder"></i> Sin causas'}
                         </div>
                         <div style="display:flex; gap:8px;">
-                            ${esProspecto ? `<button onclick="plantillaCausaAbrir?.('${c.id}') || convertToCause('${c.id}')" class="btn btn-p btn-sm"><i class="fas fa-plus"></i> Abrir Causa</button>` : ''}
+                            ${esProspecto ? `<button onclick="(typeof plantillaCausaAbrir==='function') ? plantillaCausaAbrir('${c.id}') : convertToCause('${c.id}')" class="btn btn-p btn-sm"><i class="fas fa-plus"></i> Abrir Causa</button>` : ''}
+                            <button onclick="editClient('${c.id}')" class="btn btn-sm" style="background:var(--bg-2); border:none;"><i class="fas fa-edit"></i></button>
                             <button onclick="verPerfilCliente?.('${c.id}')" class="btn btn-sm" style="background:var(--bg-2); border:none;"><i class="fas fa-external-link-alt"></i></button>
                             <button onclick="deleteClient('${c.id}')" class="btn btn-d btn-sm"><i class="fas fa-trash"></i></button>
                         </div>
                     </div>
                 </div>`;
             }).join('');
+        }
+
+        function editClient(id) {
+            const c = DB.clientes.find(x => x.id === id);
+            if (!c) return;
+            if (typeof migAbrir !== 'function') {
+                showError('No está disponible el editor de formularios.');
+                return;
+            }
+
+            migAbrir({
+                titulo: '<i class="fas fa-user-edit"></i> Editar Cliente',
+                btnOk: 'Guardar cambios',
+                campos: [
+                    { id: 'nombre', label: 'Nombre Completo', valor: (c.nombre || c.nom || ''), placeholder: 'Ej: Juan Pérez González', tipo: 'text', requerido: true },
+                    { id: 'rut', label: 'RUT', valor: (c.rut || ''), placeholder: 'Ej: 12.345.678-9', tipo: 'rut' },
+                    { id: 'telefono', label: 'Teléfono', valor: (c.telefono || ''), placeholder: 'Ej: +56 9 1234 5678', tipo: 'tel' },
+                    { id: 'rel', label: 'Relato de Hechos', valor: (c.descripcion || c.rel || ''), placeholder: 'Descripción de los hechos para análisis de estrategia...', tipo: 'textarea' }
+                ],
+                onOk: (vals) => {
+                    const nom = (vals.nombre || '').trim();
+                    const rutRaw = (vals.rut || '').trim();
+                    if (!nom) { showError('Ingrese el nombre del cliente.'); return; }
+                    if (rutRaw && typeof validarRUT === 'function' && !validarRUT(rutRaw)) {
+                        showError('RUT inválido — verifique el dígito verificador.');
+                        return;
+                    }
+
+                    c.nombre = nom;
+                    c.nom = nom;
+                    c.rut = rutRaw ? (typeof formatRUT === 'function' ? formatRUT(rutRaw) : rutRaw) : '';
+                    c.telefono = (vals.telefono || '').trim();
+                    const rel = (vals.rel || '').trim();
+                    c.rel = rel;
+                    c.descripcion = rel;
+
+                    registrarEvento(`Cliente actualizado: ${nom}${c.rut ? ' · RUT: ' + c.rut : ''}`);
+                    if (typeof markAppDirty === "function") markAppDirty(); save(); renderAll();
+                    showSuccess('Cliente actualizado.');
+                }
+            });
         }
 
         // ─── Barra de filtros y orden para listado de causas ─────────────────
@@ -331,6 +373,7 @@
         function addClient() {
             const nom = document.getElementById('cl-nom').value.trim();
             const rutRaw = document.getElementById('cl-rut').value.trim();
+            const tel = (document.getElementById('cl-telefono')?.value || '').trim();
             const rel = document.getElementById('cl-rel').value.trim();
             if (!nom) { showError("Ingrese el nombre del cliente."); return; }
             // Validación RUT si fue ingresado
@@ -346,10 +389,12 @@
                 }
             }
             const rut = rutRaw ? formatRUT(rutRaw) : '';
-            const nuevoCliente = { id: uid(), nombre: nom, nom, rut, rel, descripcion: rel, estado: 'prospecto', status: 'prospecto', fechaCreacion: new Date() };
+            const nuevoCliente = { id: uid(), nombre: nom, nom, rut, telefono: tel, rel, descripcion: rel, estado: 'prospecto', status: 'prospecto', fechaCreacion: new Date() };
             DB.clientes.push(nuevoCliente);
             document.getElementById('cl-nom').value = '';
             document.getElementById('cl-rut').value = '';
+            const telEl = document.getElementById('cl-telefono');
+            if (telEl) telEl.value = '';
             document.getElementById('cl-rel').value = '';
             const fb = document.querySelector('.rut-feedback');
             if (fb) fb.textContent = '';

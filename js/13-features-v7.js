@@ -164,71 +164,115 @@
 
             cerrarModal('modal-plantilla-causa');
 
-            // Mapear rama desde tipo de procedimiento
-            const RAMA_MAP = {
-                'Ordinario Civil': 'Civil', 'Ejecutivo': 'Civil',
-                'Laboral': 'Laboral', 'Familia': 'Familia',
-                'Penal': 'Penal', 'Recurso de Protección': 'Civil'
-            };
-            const rama = RAMA_MAP[tipoProcedimiento] || 'Civil';
+            const _crearCausaConPlantilla = (montoBaseOpt) => {
+                // Mapear rama desde tipo de procedimiento
+                const RAMA_MAP = {
+                    'Ordinario Civil': 'Civil', 'Ejecutivo': 'Civil',
+                    'Laboral': 'Laboral', 'Familia': 'Familia',
+                    'Penal': 'Penal', 'Recurso de Protección': 'Civil'
+                };
+                const rama = RAMA_MAP[tipoProcedimiento] || 'Civil';
 
-            const nueva = {
-                id: uid(),
-                clienteId: cliente.id,
-                rut: cliente.rut || '',
-                caratula: cliente.nombre || cliente.nom,
-                tipoProcedimiento,
-                rama,
-                estadoGeneral: 'En tramitación',
-                instancia: 'Primera',
-                porcentajeAvance: 0,
-                fechaCreacion: new Date(),
-                fechaUltimaActividad: new Date(),
-                etapasProcesales: plantilla.etapas.map(nombre => ({
-                    nombre, completada: false, fecha: null,
-                    observacion: '', documentoAsociado: null
-                })),
-                documentos: [], adjuntos: [],
-                recursos: [], estrategia: {},
-                riesgo: {}, honorarios: {},
-                jurisprudenciaAsociada: [],
-                revisadoHoy: false, prioridadManual: false
-            };
-
-            DB.causas.push(nueva);
-            cliente.estado = 'activo'; cliente.status = 'activo';
-
-            // Crear alertas automáticas de la plantilla
-            const hoy = new Date();
-            plantilla.alertas.forEach(a => {
-                const fechaVenc = new Date(hoy);
-                fechaVenc.setDate(fechaVenc.getDate() + a.diasDesdeHoy);
-                DB.alertas.push({
+                const nueva = {
                     id: uid(),
-                    causaId: nueva.id,
-                    tipo: 'plazo',
-                    mensaje: `[${nueva.caratula}] ${a.nombre}`,
-                    fechaVencimiento: fechaVenc.toISOString(),
-                    prioridad: a.prioridad,
-                    estado: 'activa',
-                    fechaCreacion: hoy.toISOString()
+                    clienteId: cliente.id,
+                    rut: cliente.rut || '',
+                    caratula: cliente.nombre || cliente.nom,
+                    tipoProcedimiento,
+                    rama,
+                    estadoGeneral: 'En tramitación',
+                    instancia: 'Primera',
+                    porcentajeAvance: 0,
+                    fechaCreacion: new Date(),
+                    fechaUltimaActividad: new Date(),
+                    etapasProcesales: plantilla.etapas.map(nombre => ({
+                        nombre, completada: false, fecha: null,
+                        observacion: '', documentoAsociado: null
+                    })),
+                    documentos: [], adjuntos: [],
+                    recursos: [], estrategia: {},
+                    riesgo: {}, honorarios: {},
+                    jurisprudenciaAsociada: [],
+                    revisadoHoy: false, prioridadManual: false
+                };
+
+                DB.causas.push(nueva);
+                cliente.estado = 'activo'; cliente.status = 'activo';
+
+                // Honorarios iniciales (opcional)
+                if (montoBaseOpt && montoBaseOpt > 0 && typeof asignarHonorarios === 'function') {
+                    asignarHonorarios(nueva.id, montoBaseOpt);
+                }
+
+                // Crear alertas automáticas de la plantilla
+                const hoy = new Date();
+                plantilla.alertas.forEach(a => {
+                    const fechaVenc = new Date(hoy);
+                    fechaVenc.setDate(fechaVenc.getDate() + a.diasDesdeHoy);
+                    DB.alertas.push({
+                        id: uid(),
+                        causaId: nueva.id,
+                        tipo: 'plazo',
+                        mensaje: `[${nueva.caratula}] ${a.nombre}`,
+                        fechaVencimiento: fechaVenc.toISOString(),
+                        prioridad: a.prioridad,
+                        estado: 'activa',
+                        fechaCreacion: hoy.toISOString()
+                    });
                 });
-            });
 
-            registrarEvento(`Causa creada (${tipoProcedimiento}) para ${cliente.nombre || cliente.nom}`);
+                registrarEvento(`Causa creada (${tipoProcedimiento}) para ${cliente.nombre || cliente.nom}`);
 
-            // Notificación in-app
-            notifAgregar({
-                tipo: 'causa_creada',
-                titulo: 'Causa creada con plantilla',
-                cuerpo: `"${nueva.caratula}" — ${tipoProcedimiento}. ${plantilla.alertas.length} alertas procesales configuradas.`,
-                causaId: nueva.id,
-                icono: plantilla.icon
-            });
+                // Notificación in-app
+                notifAgregar({
+                    tipo: 'causa_creada',
+                    titulo: 'Causa creada con plantilla',
+                    cuerpo: `"${nueva.caratula}" — ${tipoProcedimiento}. ${plantilla.alertas.length} alertas procesales configuradas.`,
+                    causaId: nueva.id,
+                    icono: plantilla.icon
+                });
 
-            if (typeof markAppDirty === "function") markAppDirty(); save();
-            renderAll();
-            showSuccess(`✓ Causa creada con ${nueva.etapasProcesales.length} etapas y ${plantilla.alertas.length} alertas automáticas.`);
+                if (typeof markAppDirty === "function") markAppDirty();
+                save();
+                renderAll();
+                showSuccess(`✓ Causa creada con ${nueva.etapasProcesales.length} etapas y ${plantilla.alertas.length} alertas automáticas.`);
+            };
+
+            // Preguntar por honorarios iniciales (opcional). Si cancela, se crea igual sin honorarios.
+            if (typeof migAbrir === 'function' && typeof window.migCancelar === 'function') {
+                const oldCancelar = window.migCancelar;
+                let yaCreada = false;
+
+                window.migCancelar = function () {
+                    window.migCancelar = oldCancelar;
+                    if (!yaCreada) {
+                        yaCreada = true;
+                        oldCancelar();
+                        _crearCausaConPlantilla(null);
+                    } else {
+                        oldCancelar();
+                    }
+                };
+
+                migAbrir({
+                    titulo: '<i class="fas fa-wallet"></i> ¿Deseas asignar honorarios iniciales a esta causa?',
+                    btnOk: 'Crear causa',
+                    campos: [
+                        { id: 'montoBase', label: 'Monto Base ($)', valor: '', placeholder: 'Opcional', tipo: 'number' }
+                    ],
+                    onOk: (vals) => {
+                        window.migCancelar = oldCancelar;
+                        if (yaCreada) return;
+                        yaCreada = true;
+
+                        const raw = (vals.montoBase || '').toString().trim();
+                        const monto = raw ? parseFloat(raw.replace(/\./g, '').replace(/,/g, '.')) : null;
+                        _crearCausaConPlantilla((monto && monto > 0) ? monto : null);
+                    }
+                });
+            } else {
+                _crearCausaConPlantilla(null);
+            }
         }
 
         // ═══════════════════════════════════════════════════════════════════
@@ -867,6 +911,8 @@
             // Header
             document.getElementById('mpc-header-nombre').textContent = cliente.nombre || cliente.nom;
             document.getElementById('mpc-header-rut').textContent    = cliente.rut   || 'Sin RUT';
+            const telEl = document.getElementById('mpc-header-telefono');
+            if (telEl) telEl.textContent = cliente.telefono || 'Sin teléfono';
             document.getElementById('mpc-header-estado').textContent  = cliente.estado || cliente.status || 'prospecto';
             document.getElementById('mpc-header-estado').className    = `badge ${(cliente.estado || cliente.status) === 'activo' ? 'badge-green' : ''}`;
 

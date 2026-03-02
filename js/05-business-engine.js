@@ -335,8 +335,24 @@ function convertirACliente(prospectoId, tipoExpediente) {
 function asignarHonorarios(causaId, montoBase) {
     const causa = DB.causas.find(c => c.id === causaId);
     if (!causa) return;
-    causa.honorarios = { montoBase, pagos: [], saldoPendiente: montoBase };
-    if (typeof markAppDirty === "function") markAppDirty(); guardarDB();
+
+    // Si no hay honorarios previos, crear estructura base
+    if (!causa.honorarios) {
+        causa.honorarios = { montoBase, pagos: [], saldoPendiente: montoBase };
+        if (typeof markAppDirty === "function") markAppDirty(); guardarDB();
+        return;
+    }
+
+    // Si ya hay honorarios, NO borrar pagos existentes
+    const pagos = Array.isArray(causa.honorarios.pagos) ? causa.honorarios.pagos : [];
+    const totalPagado = pagos.reduce((s, p) => s + (parseFloat(p?.monto) || 0), 0);
+
+    causa.honorarios.montoBase = montoBase;
+    causa.honorarios.pagos = pagos;
+    causa.honorarios.saldoPendiente = Math.max(0, montoBase - totalPagado);
+
+    if (typeof markAppDirty === "function") markAppDirty();
+    guardarDB();
 }
 
 function registrarPago(causaId, monto) {
