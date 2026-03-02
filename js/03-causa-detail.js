@@ -703,6 +703,76 @@
                 </div>`;
         }
 
+        function _dcEnsureSidDocumentoId(causaId, tipo, idx) {
+            try {
+                const cfg   = _DOCS_CONFIG[tipo];
+                const causa = DB.causas.find(c => c.id === causaId);
+                const doc   = causa?.[cfg.campo]?.[idx];
+                if (!doc) return null;
+
+                // Reusar id ya creado
+                if (doc._sidDocumentoId) return String(doc._sidDocumentoId);
+
+                // Solo creamos canónico para PDFs (por ahora)
+                if (doc.mimetype !== 'application/pdf') return null;
+
+                const dataUrl = String(doc.data || '');
+                const base64 = dataUrl.includes('base64,') ? (dataUrl.split('base64,')[1] || '') : '';
+                const nombre = doc.nombre || 'documento.pdf';
+
+                if (!base64) return null;
+                if (!Array.isArray(DB.documentos)) DB.documentos = [];
+
+                const newId = (typeof uid === 'function')
+                    ? uid()
+                    : (Date.now().toString(36) + Math.random().toString(36).slice(2));
+
+                DB.documentos.push({
+                    id: newId,
+                    causaId: causaId,
+                    nombreOriginal: nombre,
+                    tipo: 'Documento',
+                    etapaVinculada: '',
+                    fechaDocumento: (new Date()).toISOString().slice(0, 10),
+                    generaPlazo: false,
+                    diasPlazo: 0,
+                    fechaVencimiento: null,
+                    fechaIngreso: new Date().toISOString(),
+                    descripcion: nombre,
+                    archivoMime: 'application/pdf',
+                    archivoNombre: nombre,
+                    archivoBase64: base64,
+                    _origenDetalleCausa: { tipo: tipo, idx: idx }
+                });
+
+                doc._sidDocumentoId = newId;
+                if (typeof markAppDirty === 'function') markAppDirty();
+                if (typeof save === 'function') save();
+                return String(newId);
+            } catch (e) {
+                console.warn('[SID] No se pudo asegurar doc canónico:', e?.message || e);
+                return null;
+            }
+        }
+
+        window.dcAnalisisDualDoc = async function(causaId, tipo, idx) {
+            const docId = _dcEnsureSidDocumentoId(causaId, tipo, idx);
+            if (!docId) { if (typeof showError === 'function') showError('No se pudo preparar el documento para análisis.'); return; }
+            if (typeof uiAnalisisDualDocumento === 'function') {
+                return uiAnalisisDualDocumento(docId);
+            }
+            if (typeof showError === 'function') showError('Función de análisis dual no disponible.');
+        };
+
+        window.dcVerInsightDoc = function(causaId, tipo, idx) {
+            const docId = _dcEnsureSidDocumentoId(causaId, tipo, idx);
+            if (!docId) { if (typeof showInfo === 'function') showInfo('Este documento aún no está indexado para Insight IA.'); return; }
+            if (typeof uiVerInsightDocumento === 'function') {
+                return uiVerInsightDocumento(docId);
+            }
+            if (typeof showError === 'function') showError('Visor de Insight no disponible.');
+        };
+
         function _dcDocsHtml(docs, causaId, tipo, cfg) {
             if (!docs.length) return `
                 <div style="text-align:center; padding:24px; color:#94a3b8; font-size:0.82rem;">
@@ -740,8 +810,12 @@
                             <i class="fas fa-eye"></i>
                         </button>
                         ${esPdf ? `<button class="btn btn-xs" style="background:#eff6ff; color:#2563eb; border:none;"
-                            onclick="_dcAnalizarDocIA('${causaId}','${tipo}',${i})" title="Analizar con IA">
+                            onclick="dcAnalisisDualDoc('${causaId}','${tipo}',${i})" title="Análisis Dual (IA A + B)">
                             <i class="fas fa-brain"></i>
+                        </button>
+                        <button class="btn btn-xs" style="background:#fff7ed; color:#b45309; border:none;"
+                            onclick="dcVerInsightDoc('${causaId}','${tipo}',${i})" title="Ver Insight IA">
+                            <i class="fas fa-lightbulb"></i>
                         </button>` : ''}
                         <button class="btn btn-xs" style="background:#fee2e2; color:#c0392b; border:none;"
                             onclick="dcEliminarDocumento('${causaId}','${tipo}',${i})" title="Eliminar">

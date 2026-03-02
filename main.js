@@ -222,6 +222,28 @@ ipcMain.handle('docs:listar', (_e) => {
     } catch (e) { return []; }
 });
 
+// ── IPC Handlers — PDF: extraer texto ─────────────────────────────────────────
+ipcMain.handle('pdf:extraer-texto', async (_e, base64Data) => {
+    try {
+        if (typeof base64Data !== 'string') throw new Error('base64Data inválido');
+        // límite aproximado: base64 de 50MB
+        if (base64Data.length > 70 * 1024 * 1024) throw new Error('PDF demasiado grande (máx 50MB)');
+
+        let pdfParse;
+        try {
+            pdfParse = require('pdf-parse');
+        } catch (e) {
+            return { ok: false, error: 'Dependencia faltante: instale "pdf-parse" en el proyecto (npm install pdf-parse).' };
+        }
+
+        const buf = Buffer.from(base64Data, 'base64');
+        const res = await pdfParse(buf);
+        return { ok: true, text: (res && res.text) ? String(res.text) : '' };
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
+});
+
 // ── IPC Handlers — Prospectos / CRM ───────────────────────────────────────────
 ipcMain.handle('prospectos:generar-pdf', async (_e, { tipo, html, nombre }) => {
     try {

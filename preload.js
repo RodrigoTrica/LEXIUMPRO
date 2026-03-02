@@ -140,6 +140,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
         registrarPago: (args) => ipcRenderer.invoke('prospectos:registrar-pago', args)
     },
 
+    // ── PDF Utils ───────────────────────────────────────────────────────────
+    pdf: {
+        extraerTexto: (base64) => {
+            assertStringOrEmpty(base64, 'base64', 70 * 1024 * 1024);
+            return ipcRenderer.invoke('pdf:extraer-texto', base64);
+        }
+    },
+
     // ── Indicador: corremos en Electron ───────────────────────────────────────
     esElectron: true,
 });

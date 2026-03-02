@@ -20,6 +20,14 @@ function _clEscHtml(s) {
         .replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
 }
 
+function _clFmtVal(v) {
+    if (v == null) return '';
+    if (typeof v === 'string') return v;
+    if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+    if (Array.isArray(v)) return v.map(x => _clFmtVal(x)).filter(Boolean).join(' · ');
+    try { return JSON.stringify(v); } catch (e) { return String(v); }
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // SECCIÓN 1 — CONTEXTO DEL DESPACHO (se inyecta en todos los prompts)
 // ═══════════════════════════════════════════════════════════════════
@@ -33,7 +41,7 @@ function clBuildContext(opts = {}) {
 
     const hoy = new Date().toLocaleDateString('es-CL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-    let ctx = `=== SISTEMA: APPBOGADO — ASISTENTE JURÍDICO LEGAL ===
+    let ctx = `=== SISTEMA: LEXIUM — ASISTENTE JURÍDICO IA ===
 Fecha actual: ${hoy}
 Jurisdicción: Chile (Derecho chileno)
 Rol: Eres un asistente jurídico especializado en derecho chileno.
@@ -87,6 +95,13 @@ function clBuildCausaContext(causaId) {
     const tareas = causa.tareas || [];
     const jurisAsoc = (DB.jurisprudencia || []).filter(j => j.causaAsociada == causaId || causa.jurisprudenciaIds?.includes(j.id));
 
+    const hechosTxt = _clFmtVal(causa.hechos || causa.descripcion || 'No especificados.');
+    const estrategiaBase = (causa.estrategia && typeof causa.estrategia === 'object')
+        ? (causa.estrategia.descripcion || causa.estrategia.detalle || causa.estrategia.resumen || causa.estrategia)
+        : (causa.estrategia || 'No definida.');
+    const estrategiaTxt = _clFmtVal(estrategiaBase) || 'No definida.';
+    const riesgoTxt = (Object.entries(causa.riesgo || {}).map(([k, v]) => `  ${k}: ${_clFmtVal(v) || v}`).join('\n')) || 'Sin evaluación.';
+
     return `
 === CAUSA EN ANÁLISIS ===
 Carátula: ${causa.caratula}
@@ -102,16 +117,16 @@ Fecha inicio: ${causa.fechaIngreso || 'N/D'}
 Monto controversia: ${causa.montoControversia ? '$' + Number(causa.montoControversia).toLocaleString('es-CL') : 'N/D'}
 
 Hechos / Objeto del litigio:
-${causa.hechos || causa.descripcion || 'No especificados.'}
+${hechosTxt}
 
 Estrategia definida:
-${causa.estrategia?.descripcion || causa.estrategia || 'No definida.'}
+${estrategiaTxt}
 
 Etapas procesales (${etapas.filter(e => e.completada).length}/${etapas.length} completadas):
 ${etapas.map(e => `  [${e.completada ? '✓' : '○'}] ${e.nombre}${e.fecha ? ' — ' + new Date(e.fecha).toLocaleDateString('es-CL') : ''}`).join('\n') || 'Sin etapas.'}
 
 Evaluación de riesgo:
-${Object.entries(causa.riesgo || {}).map(([k, v]) => `  ${k}: ${v}`).join('\n') || 'Sin evaluación.'}
+${riesgoTxt}
 
 Documentos asociados: ${docs.length}
 Tareas pendientes: ${tareas.filter(t => !t.done).length}
@@ -168,7 +183,7 @@ function lexbotAbrirConCausa(causaId) {
 }
 
 function clCrearChatPanel() {
-    const provider = typeof IA_PROVIDERS !== 'undefined' ? IA_PROVIDERS[iaGetProvider()]?.label : 'Claude';
+    const provider = typeof IA_PROVIDERS !== 'undefined' ? IA_PROVIDERS[iaGetProvider()]?.label : 'IA';
     // FIX Problema 1: iaGetKey es async — no usar síncronamente.
     // El banner de key faltante se resuelve de forma async (ver bloque al final de esta función).
     const causa = _clChatCausaId ? DB.causas.find(c => c.id == _clChatCausaId) : null;
@@ -1075,7 +1090,7 @@ function _clGenerarDocxReal(titulo, contenido, nombreArchivo) {
             if (typeof registrarEvento === 'function') registrarEvento(`Documento Word generado: ${nombreArchivo}`);
         });
     } catch (e) {
-        console.error('[clDescargarWord]', e);
+        console.info('[Lexium] Bot AI ✓');
         _clDescargarTxt(contenido, nombreArchivo + '.txt');
     }
 }

@@ -622,6 +622,158 @@
             }
         }
 
+        function uiVerInsightDocumento(documentoId) {
+            try {
+                const id = String(documentoId || '').trim();
+                if (!id) { showError('Documento inválido.'); return; }
+                const doc = _getDocumentoById(id);
+                if (!doc) { showError('Documento no encontrado.'); return; }
+
+                const insight = doc.insightIA || null;
+                const previo = doc.analisisPrevio || null;
+                if (!insight && !previo) {
+                    showInfo('Este documento aún no tiene Insight IA guardado.');
+                    return;
+                }
+
+                let vm = document.getElementById('modal-ia-insight');
+                if (!vm) {
+                    vm = document.createElement('div');
+                    vm.id = 'modal-ia-insight';
+                    vm.className = 'modal-overlay';
+                    vm.style.cssText = 'display:none; z-index:9999;';
+                    vm.innerHTML = `
+                        <div class="modal-box" style="max-width:980px; width:92vw;">
+                            <div class="modal-header">
+                                <h3 id="modal-ia-insight-titulo"></h3>
+                                <button class="modal-close" onclick="document.getElementById('modal-ia-insight').style.display='none'">×</button>
+                            </div>
+                            <div id="modal-ia-insight-body" style="display:flex; flex-direction:column; gap:12px;"></div>
+                        </div>`;
+                    document.body.appendChild(vm);
+                }
+
+                const titulo = `Insight IA — ${doc.nombreOriginal || doc.archivoNombre || 'Documento'}`;
+                document.getElementById('modal-ia-insight-titulo').textContent = titulo;
+
+                const jsonInsight = insight ? JSON.stringify(insight, null, 2) : '';
+                const jsonPrevio = previo ? JSON.stringify(previo, null, 2) : '';
+
+                const riesgoNivel = (insight && (insight.riesgo_nivel || insight.riesgoNivel)) || '';
+                const riesgoMotivo = (insight && (insight.riesgo_motivo || insight.riesgoMotivo)) || '';
+                const resumen = (insight && (insight.resumen_ejecutivo || insight.resumenEjecutivo)) || '';
+                const tipoDoc = (insight && (insight.tipo_documento || insight.tipoDocumento)) || '';
+                const analisis = (insight && (insight.analisis_estrategico || insight.analisisEstrategico)) || '';
+                const prox = (insight && (insight.proximos_pasos || insight.proximosPasos)) || [];
+                const crit = (insight && insight.datos_criticos) ? insight.datos_criticos : (insight && insight.datosCriticos) ? insight.datosCriticos : null;
+                const fechas = Array.isArray(crit?.fechas) ? crit.fechas : [];
+                const montos = Array.isArray(crit?.montos) ? crit.montos : [];
+                const plazos = Array.isArray(crit?.plazos) ? crit.plazos : [];
+
+                const riesgoColor = (String(riesgoNivel || '').toLowerCase() === 'alto')
+                    ? '#dc2626'
+                    : (String(riesgoNivel || '').toLowerCase() === 'medio')
+                        ? '#d97706'
+                        : (riesgoNivel ? '#059669' : '#64748b');
+
+                const li = (arr) => Array.isArray(arr) && arr.length
+                    ? `<ul style="margin:8px 0 0 16px; padding:0;">${arr.map(x => `<li style=\"margin:4px 0;\">${escHtml(String(x))}</li>`).join('')}</ul>`
+                    : '<div style="margin-top:6px; color:var(--text-3); font-size:12px;">—</div>';
+
+                const _copy = async (txt) => {
+                    try {
+                        if (!txt) return;
+                        if (navigator.clipboard?.writeText) {
+                            await navigator.clipboard.writeText(txt);
+                            showSuccess('Copiado al portapapeles.');
+                            return;
+                        }
+                    } catch (_) {}
+                    try {
+                        const ta = document.createElement('textarea');
+                        ta.value = txt;
+                        ta.style.position = 'fixed';
+                        ta.style.left = '-9999px';
+                        document.body.appendChild(ta);
+                        ta.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(ta);
+                        showSuccess('Copiado al portapapeles.');
+                    } catch (e) {
+                        showError('No se pudo copiar.');
+                    }
+                };
+
+                document.getElementById('modal-ia-insight-body').innerHTML = `
+                    ${insight ? `
+                        <div style="border:1px solid var(--border); border-radius:12px; padding:14px; background:var(--bg-card);">
+                            <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start; flex-wrap:wrap;">
+                                <div>
+                                    <div style="font-size:12px; font-weight:900; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-3);">Resumen</div>
+                                    <div style="margin-top:6px; font-size:14px; font-weight:800; color:var(--text);">${escHtml(tipoDoc || 'Documento')}</div>
+                                </div>
+                                <div style="display:flex; gap:8px; align-items:center;">
+                                    <span style="display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; border:1px solid ${riesgoColor}40; background:${riesgoColor}12; color:${riesgoColor}; font-weight:900; font-size:12px;">
+                                        <i class="fas fa-shield-alt"></i> Riesgo: ${escHtml(riesgoNivel || '—')}
+                                    </span>
+                                    <button class="btn btn-xs" style="background:var(--bg-2); border:1px solid var(--border);" onclick="(${_copy.toString()})('${escHtml(jsonInsight).replace(/'/g, "\\'")}')" title="Copiar JSON">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            ${resumen ? `<div style="margin-top:10px; color:var(--text-2); font-size:13px; line-height:1.55;">${escHtml(resumen)}</div>` : ''}
+                            ${riesgoMotivo ? `<div style="margin-top:10px; padding:10px 12px; border-radius:10px; background:${riesgoColor}10; border:1px solid ${riesgoColor}25; color:var(--text-2); font-size:12.5px; line-height:1.5;"><strong style="color:${riesgoColor};">Motivo:</strong> ${escHtml(riesgoMotivo)}</div>` : ''}
+                        </div>
+
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                            <div style="border:1px solid var(--border); border-radius:12px; padding:14px; background:var(--bg-card);">
+                                <div style="font-size:12px; font-weight:900; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-3);">Datos críticos</div>
+                                <div style="margin-top:10px;">
+                                    <div style="font-size:12px; font-weight:800; color:var(--text);">Fechas</div>
+                                    ${li(fechas)}
+                                </div>
+                                <div style="margin-top:10px;">
+                                    <div style="font-size:12px; font-weight:800; color:var(--text);">Montos</div>
+                                    ${li(montos)}
+                                </div>
+                                <div style="margin-top:10px;">
+                                    <div style="font-size:12px; font-weight:800; color:var(--text);">Plazos</div>
+                                    ${li(plazos)}
+                                </div>
+                            </div>
+                            <div style="border:1px solid var(--border); border-radius:12px; padding:14px; background:var(--bg-card);">
+                                <div style="font-size:12px; font-weight:900; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-3);">Próximos pasos</div>
+                                ${li(Array.isArray(prox) ? prox : [])}
+                            </div>
+                        </div>
+
+                        ${analisis ? `
+                            <div style="border:1px solid var(--border); border-radius:12px; padding:14px; background:var(--bg-card);">
+                                <div style="font-size:12px; font-weight:900; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-3);">Análisis estratégico</div>
+                                <div style="margin-top:8px; color:var(--text-2); font-size:13px; line-height:1.55; white-space:pre-wrap;">${escHtml(String(analisis))}</div>
+                            </div>
+                        ` : ''}
+
+                        <details style="border:1px solid var(--border); border-radius:12px; background:var(--bg-card); overflow:hidden;">
+                            <summary style="cursor:pointer; padding:10px 12px; background:var(--bg-2); font-weight:900; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; color:var(--text-3);">Ver JSON (IA B)</summary>
+                            <pre style="margin:0; padding:12px; white-space:pre-wrap; word-break:break-word; font-size:12.5px; line-height:1.45;">${escHtml(jsonInsight)}</pre>
+                        </details>
+                    ` : ''}
+                    ${previo ? `
+                        <details style="border:1px solid var(--border); border-radius:12px; background:var(--bg-card); overflow:hidden;">
+                            <summary style="cursor:pointer; padding:10px 12px; background:var(--bg-2); font-weight:900; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; color:var(--text-3);">Ver análisis previo (IA A)</summary>
+                            <pre style="margin:0; padding:12px; white-space:pre-wrap; word-break:break-word; font-size:12.5px; line-height:1.45;">${escHtml(jsonPrevio)}</pre>
+                        </details>
+                    ` : ''}
+                `;
+
+                vm.style.display = 'flex';
+            } catch (e) {
+                console.error('[IA] Error abriendo modal insight:', e);
+                showError(e?.message || 'No se pudo abrir el Insight IA.');
+            }
+        }
+
         function uiActualizarHonorariosVista() {
             const sel = document.getElementById('hr-causa-sel');
             const causaId = sel ? (sel.value || '').toString().trim() : '';
@@ -823,9 +975,101 @@
             if (!w) showError('El navegador bloqueó la ventana emergente.');
         }
 
+        function _getDocumentoById(id) {
+            if (!id) return null;
+            const docs = (DB && Array.isArray(DB.documentos)) ? DB.documentos : [];
+            const hit = docs.find(d => d && (String(d.id) === String(id)));
+            if (hit) return hit;
+            // Fallback legacy: algunos flujos mantienen documentos embebidos en causa.documentos
+            try {
+                const causas = (DB && Array.isArray(DB.causas)) ? DB.causas : [];
+                for (const c of causas) {
+                    const arr = Array.isArray(c?.documentos) ? c.documentos : [];
+                    const d2 = arr.find(d => d && (String(d.id) === String(id)));
+                    if (d2) return d2;
+                }
+            } catch (_) { }
+            return null;
+        }
+
+        async function uiAnalisisDualDocumento(documentoId) {
+            try {
+                if (typeof window.analizarDocumentoDual !== 'function') {
+                    showError('Motor IA no disponible. Verifique js/12-ia-providers.js.');
+                    return;
+                }
+                const id = String(documentoId || '').trim();
+                if (!id) { showError('Documento inválido.'); return; }
+
+                const btn = document.getElementById(`btn-ia-dual-${id}`);
+                const prevTxt = btn ? btn.innerHTML : '';
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analizando...';
+                }
+
+                const r = await window.analizarDocumentoDual(id, (msg) => {
+                    if (btn) btn.innerHTML = `<i class=\"fas fa-spinner fa-spin\"></i> ${escHtml(msg || 'Procesando...')}`;
+                });
+
+                const riesgo = r?.insightFinal?.riesgo_nivel || r?.insightFinal?.riesgoNivel || '';
+                showSuccess(`Análisis completado${riesgo ? `: Riesgo ${riesgo}` : ''}.`);
+                if (typeof renderAll === 'function') renderAll();
+            } catch (e) {
+                console.error('[IA] Error en análisis dual:', e);
+                showError(e?.message || 'No se pudo completar el análisis dual.');
+            } finally {
+                const id = String(documentoId || '').trim();
+                const btn = document.getElementById(`btn-ia-dual-${id}`);
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-brain"></i> Análisis Dual';
+                }
+            }
+        }
+
+        function _guardarComprobanteComoDocumento(causaId, comp, metaDesc) {
+            try {
+                if (!comp || !comp.base64) return null;
+                if (!DB || !Array.isArray(DB.documentos)) DB.documentos = [];
+                const doc = {
+                    id: (typeof uid === 'function') ? uid() : (Date.now().toString(36) + Math.random().toString(36).slice(2)),
+                    causaId: causaId,
+                    nombreOriginal: comp.nombre || 'comprobante.pdf',
+                    tipo: 'Comprobante',
+                    etapaVinculada: '',
+                    fechaDocumento: (new Date().toISOString().split('T')[0]),
+                    generaPlazo: false,
+                    diasPlazo: 0,
+                    fechaVencimiento: null,
+                    fechaIngreso: new Date().toISOString(),
+                    descripcion: metaDesc || 'Comprobante de pago',
+                    archivoBase64: comp.base64,
+                    archivoNombre: comp.nombre || 'comprobante.pdf',
+                    archivoMime: comp.mime || 'application/pdf',
+                    proveedorIA: null,
+                    _origen: 'ui-comprobante'
+                };
+                DB.documentos.push(doc);
+                return doc.id;
+            } catch (e) {
+                console.error('[PAGO] Error guardando comprobante como documento:', e);
+                return null;
+            }
+        }
+
         function uiVerComprobanteCuota(causaId, numeroCuota) {
             const causa = (DB.causas || []).find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
             const cuota = causa?.honorarios?.planPagos?.find(c => parseInt(c.numero) === parseInt(numeroCuota));
+            if (!cuota) { showError('Cuota no encontrada.'); return; }
+
+            if (cuota.comprobanteDocumentoId) {
+                const d = _getDocumentoById(cuota.comprobanteDocumentoId);
+                if (!d?.archivoBase64) { showError('No se encontró el documento del comprobante.'); return; }
+                uiAbrirPdfBase64(d.archivoBase64, d.archivoNombre || d.nombreOriginal || 'comprobante.pdf');
+                return;
+            }
+
             const comp = cuota?.comprobante;
             if (!comp?.base64) { showError('No hay comprobante en esta cuota.'); return; }
             uiAbrirPdfBase64(comp.base64, comp.nombre || 'comprobante.pdf');
@@ -834,6 +1078,15 @@
         function uiVerComprobantePago(causaId, idxPago) {
             const causa = (DB.causas || []).find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
             const pago = (causa?.honorarios?.pagos || [])[parseInt(idxPago)];
+            if (!pago) { showError('Pago no encontrado.'); return; }
+
+            if (pago.comprobanteDocumentoId) {
+                const d = _getDocumentoById(pago.comprobanteDocumentoId);
+                if (!d?.archivoBase64) { showError('No se encontró el documento del comprobante.'); return; }
+                uiAbrirPdfBase64(d.archivoBase64, d.archivoNombre || d.nombreOriginal || 'comprobante.pdf');
+                return;
+            }
+
             const comp = pago?.comprobante;
             if (!comp?.base64) { showError('No hay comprobante en este pago.'); return; }
             uiAbrirPdfBase64(comp.base64, comp.nombre || 'comprobante.pdf');
@@ -870,7 +1123,7 @@
                         </thead>
                         <tbody>
                             ${pagos.map((p, idx) => {
-                                const has = !!(p?.comprobante?.base64);
+                                const has = !!(p?.comprobanteDocumentoId || p?.comprobante?.base64);
                                 const btn = has
                                     ? `<button type="button" class="btn btn-xs" style="background:var(--bg-2); border:1px solid var(--border);" onclick="uiVerComprobantePago('${escHtml(String(causaId))}', ${idx})"><i class=\"fas fa-file-pdf\"></i></button>`
                                     : '<span style="color:var(--text-3); font-size:0.75rem;">—</span>';
@@ -924,7 +1177,7 @@
                                 const badge = estado === 'PAGADA'
                                     ? '<span class="badge badge-s">PAGADA</span>'
                                     : '<span class="badge badge-w">PENDIENTE</span>';
-                                const hasComp = !!(cuota?.comprobante?.base64);
+                                const hasComp = !!(cuota?.comprobanteDocumentoId || cuota?.comprobante?.base64);
                                 const btnComp = hasComp
                                     ? `<button type="button" class="btn btn-xs" style="background:var(--bg-2); border:1px solid var(--border);" onclick="uiVerComprobanteCuota('${escHtml(String(causaId))}', ${cuota.numero})"><i class=\"fas fa-file-pdf\"></i></button>`
                                     : '<span style="color:var(--text-3); font-size:0.75rem;">—</span>';
@@ -965,7 +1218,15 @@
                 cuota.estado = 'PAGADA';
                 cuota.fechaPago = new Date().toISOString();
                 cuota.alertaEnviada = true;
-                if (comp) cuota.comprobante = comp;
+                if (comp) {
+                    const idDoc = _guardarComprobanteComoDocumento(causaId, comp, `Comprobante cuota Nº ${cuota.numero}`);
+                    if (idDoc) {
+                        cuota.comprobanteDocumentoId = idDoc;
+                        cuota.comprobante = { nombre: comp.nombre, mime: comp.mime };
+                    } else {
+                        cuota.comprobante = comp;
+                    }
+                }
 
                 // Registrar pago en legacy para mantener resumen
                 if (!Array.isArray(h.pagos)) h.pagos = [];
@@ -973,7 +1234,8 @@
                     monto: cuota.monto || 0,
                     fecha: new Date().toISOString(),
                     concepto: `Cuota Nº ${cuota.numero}`,
-                    comprobante: comp ? { nombre: comp.nombre, mime: comp.mime, base64: comp.base64 } : null
+                    comprobanteDocumentoId: cuota.comprobanteDocumentoId || null,
+                    comprobante: comp ? { nombre: comp.nombre, mime: comp.mime } : null
                 });
 
             const montoTotal = parseFloat(h.montoTotal || h.montoBase) || 0;
@@ -1115,7 +1377,15 @@
                     if (!causa.honorarios) causa.honorarios = {};
                     if (!Array.isArray(causa.honorarios.pagos)) causa.honorarios.pagos = [];
                     const last = causa.honorarios.pagos[causa.honorarios.pagos.length - 1];
-                    if (last) last.comprobante = comp;
+                    if (last) {
+                        const idDoc = _guardarComprobanteComoDocumento(causaId, comp, `Comprobante pago (${last.concepto || 'Pago'})`);
+                        if (idDoc) {
+                            last.comprobanteDocumentoId = idDoc;
+                            last.comprobante = { nombre: comp.nombre, mime: comp.mime };
+                        } else {
+                            last.comprobante = comp;
+                        }
+                    }
                 }
 
                 registrarEvento(`Pago registrado: $${monto.toLocaleString('es-CL')} — ${causa?.caratula}`);

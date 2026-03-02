@@ -29,6 +29,42 @@ function _iaEscHtml(s) {
         .replace(/'/g, '&#39;');
 }
 
+// ── GLM / Zhipu ───────────────────────────────────────────────────
+async function _iaCallGLM(prompt, key, model) {
+    let resp;
+    try {
+        resp = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${key}`,
+            },
+            body: JSON.stringify({
+                model: model || 'glm-4',
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.3,
+                max_tokens: 4000,
+            }),
+        });
+    } catch (e) {
+        throw new Error('Error de red al conectar con Zhipu (GLM). Verifique su conexión a internet.');
+    }
+
+    if (!resp.ok) {
+        const errBody = await resp.json().catch(() => ({}));
+        const errMsg = errBody?.error?.message || errBody?.msg || `HTTP ${resp.status}`;
+        if (resp.status === 429) {
+            const err = new Error('Cuota de GLM excedida (429). Verifique su límite en open.bigmodel.cn.');
+            err.status = 429; throw err;
+        }
+        if (resp.status === 401) throw new Error('API Key de GLM inválida o expirada (401).');
+        throw new Error(errMsg);
+    }
+
+    const data = await resp.json();
+    return data.choices?.[0]?.message?.content || '';
+}
+
 const _IACrypto = (() => {
     // Secreto base mezclado con fingerprint del navegador.
     // Cambiar este valor invalida todas las keys guardadas (migración limpia).
@@ -177,6 +213,20 @@ const IA_PROVIDERS = {
         ],
         defaultModel: 'claude-sonnet-4-6',
     },
+    glm: {
+        id: 'glm',
+        label: 'GLM / Zhipu AI',
+        icon: 'fas fa-atom',
+        color: '#0ea5e9',
+        keyHint: '•••••••• (Zhipu API Key)',
+        keyUrl: 'https://open.bigmodel.cn/usercenter/apikeys',
+        keyPrefix: '',
+        models: [
+            { id: 'glm-4', label: 'GLM-4', badge: 'RECOMENDADO', badgeColor: '#15803d', desc: 'Modelo general de Zhipu para análisis y redacción.' },
+            { id: 'glm-4v', label: 'GLM-4V', badge: 'VISIÓN', badgeColor: '#6d28d9', desc: 'Modelo multimodal (visión). Puede servir para PDFs convertidos a imágenes.' },
+        ],
+        defaultModel: 'glm-4',
+    },
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -190,6 +240,40 @@ function iaGetProvider() {
 function iaSetProvider(id) {
     if (!IA_PROVIDERS[id]) return;
     try { AppConfig.set('ia_provider', id); } catch(e) { console.warn('[AppConfig] ia_provider', e.message); }
+}
+
+function iaGetProviderA() {
+    try {
+        const v = AppConfig.get('ia_provider_a');
+        return IA_PROVIDERS[v] ? v : (iaGetProvider() || 'gemini');
+    } catch (e) {
+        return iaGetProvider() || 'gemini';
+    }
+}
+
+function iaGetProviderB() {
+    try {
+        const v = AppConfig.get('ia_provider_b');
+        return IA_PROVIDERS[v] ? v : (iaGetProvider() || 'claude');
+    } catch (e) {
+        return iaGetProvider() || 'claude';
+    }
+}
+
+function iaSetProviderA(id) {
+    if (!IA_PROVIDERS[id]) return;
+    try {
+        AppConfig.set('ia_provider_a', id);
+        // IA A también es el motor general del sistema (retrocompatibilidad con módulos que usan ia_provider)
+        AppConfig.set('ia_provider', id);
+    } catch(e) {
+        console.warn('[AppConfig] ia_provider_a', e.message);
+    }
+}
+
+function iaSetProviderB(id) {
+    if (!IA_PROVIDERS[id]) return;
+    try { AppConfig.set('ia_provider_b', id); } catch(e) { console.warn('[AppConfig] ia_provider_b', e.message); }
 }
 
 function _iaGetKeyStorage() {
@@ -269,6 +353,7 @@ async function iaCall(prompt, opts = {}) {
         case 'gemini': return _iaCallGemini(prompt, key, model);
         case 'openai': return _iaCallOpenAI(prompt, key, model);
         case 'claude': return _iaCallClaude(prompt, key, model);
+        case 'glm': return _iaCallGLM(prompt, key, model);
         default: throw new Error(`Proveedor IA desconocido: ${providerId}`);
     }
 }
@@ -402,20 +487,23 @@ async function _iaCallClaude(prompt, key, model) {
 // Reemplaza las funciones de config de 09-app-core para Gemini solo
 // ═══════════════════════════════════════════════════════════════════
 
-let _iaProviderTab = iaGetProvider(); // tab activo en la UI
+let _iaProviderTab = iaGetProviderA(); // tab activo en la UI
 
 /** Renderiza la sección completa de config-ia con tabs de proveedores */
 async function iaRenderConfigUI() {
     const section = document.getElementById('ia-config-container');
     if (!section) return;
 
-    const providerActivo = iaGetProvider();
+    const providerA = iaGetProviderA();
+    const providerB = iaGetProviderB();
+    const providerActivo = providerA;
 
     // Pre-cargar estados de keys (async) para el render de tabs
     const _keyStates = {};
     for (const pid of Object.keys(IA_PROVIDERS)) {
         _keyStates[pid] = !!(await iaGetKey(pid));
     }
+
 
     section.innerHTML = `
             <div style="max-width:1100px; display:grid; grid-template-columns: 1fr 340px; gap:24px; width:100%; align-items: start; margin: 0 auto;">
@@ -430,40 +518,77 @@ async function iaRenderConfigUI() {
                         <p style="font-size:13px; color:var(--text-3); margin-bottom:20px; line-height:1.6;">
                             Seleccione el motor de IA para procesar documentos, redactar escritos y asistir en el chat.
                         </p>
-                        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px;" id="ia-provider-cards">
-                            ${Object.values(IA_PROVIDERS).map(p => {
-        const isActive = p.id === providerActivo;
-        const hasKey = _keyStates[p.id];
-        return `
-                            <label class="card-provider ${isActive ? 'active' : ''}" style="
-                                display:flex; flex-direction:column; align-items:center; gap:12px; padding:20px; border-radius:16px;
-                                border: 2px solid ${isActive ? p.color : 'var(--border)'};
-                                background: ${isActive ? p.color + '08' : 'var(--bg-card)'};
-                                cursor:pointer; position:relative; transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1); text-align:center;
-                                box-shadow: ${isActive ? '0 10px 20px ' + p.color + '15' : 'var(--sh-1)'};">
-                                <input type="radio" name="ia-provider-radio" value="${p.id}"
-                                    ${isActive ? 'checked' : ''}
-                                    onchange="iaSetProvider('${p.id}'); _iaProviderTab='${p.id}'; iaRenderConfigUI();"
-                                    style="display:none;">
-                                <div style="width:48px; height:48px; display:flex; align-items:center; justify-content:center; border-radius:12px; background:${p.color}15; box-shadow: inset 0 0 0 1px ${p.color}20;">
-                                    <i class="${p.icon}" style="font-size:1.6rem; color:${p.color};"></i>
+
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-bottom:16px;">
+                            <div style="padding:14px; border:1px solid var(--border); border-radius:14px; background:var(--bg-card);">
+                                <div style="font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-3); margin-bottom:10px;">
+                                    Primera revisión (Análisis)
                                 </div>
-                                <div style="display:flex; flex-direction:column; gap:4px;">
-                                    <span style="font-size:14.5px; font-weight:700; color:var(--text);">${p.label}</span>
-                                    ${isActive ?
-                `<span style="font-size:10px; font-weight:800; color:${p.color}; text-transform:uppercase; letter-spacing:1px; margin-top:4px;">Seleccionado</span>` :
-                `<span style="font-size:11.5px; color:${hasKey ? 'var(--success)' : 'var(--text-3)'}; font-weight:500;">
-                                            ${hasKey ? '<i class="fas fa-check-circle"></i> Configurado' : 'Pendiente'}
-                                        </span>`
-            }
+                                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:12px;" id="ia-provider-cards-a">
+                                    ${Object.values(IA_PROVIDERS).map(p => {
+                                        const isActive = p.id === providerA;
+                                        const hasKey = _keyStates[p.id];
+                                        return `
+                                            <label class="card-provider ${isActive ? 'active' : ''}" style="
+                                                display:flex; flex-direction:column; align-items:center; gap:10px; padding:14px; border-radius:14px;
+                                                border: 2px solid ${isActive ? p.color : 'var(--border)'};
+                                                background: ${isActive ? p.color + '08' : 'var(--bg-card)'};
+                                                cursor:pointer; position:relative; transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1); text-align:center;
+                                                box-shadow: ${isActive ? '0 10px 20px ' + p.color + '15' : 'var(--sh-1)'};">
+                                                <input type="radio" name="ia-provider-radio-a" value="${p.id}"
+                                                    ${isActive ? 'checked' : ''}
+                                                    onchange="iaSetProviderA('${p.id}'); _iaProviderTab='${p.id}'; iaRenderConfigUI();"
+                                                    style="display:none;">
+                                                <div style="width:42px; height:42px; display:flex; align-items:center; justify-content:center; border-radius:12px; background:${p.color}15; box-shadow: inset 0 0 0 1px ${p.color}20;">
+                                                    <i class="${p.icon}" style="font-size:1.35rem; color:${p.color};"></i>
+                                                </div>
+                                                <div style="display:flex; flex-direction:column; gap:3px;">
+                                                    <span style="font-size:13px; font-weight:800; color:var(--text);">${p.label}</span>
+                                                    <span style="font-size:11px; color:${hasKey ? 'var(--success)' : 'var(--text-3)'}; font-weight:600;">
+                                                        ${hasKey ? '<i class=\"fas fa-check-circle\"></i> Key OK' : 'Sin key'}
+                                                    </span>
+                                                </div>
+                                            </label>`;
+                                    }).join('')}
                                 </div>
-                            </label>`;
-    }).join('')}
+                            </div>
+                            <div style="padding:14px; border:1px solid var(--border); border-radius:14px; background:var(--bg-card);">
+                                <div style="font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-3); margin-bottom:10px;">
+                                    Segunda revisión (Corrección)
+                                </div>
+                                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:12px;" id="ia-provider-cards-b">
+                                    ${Object.values(IA_PROVIDERS).map(p => {
+                                        const isActive = p.id === providerB;
+                                        const hasKey = _keyStates[p.id];
+                                        return `
+                                            <label class="card-provider ${isActive ? 'active' : ''}" style="
+                                                display:flex; flex-direction:column; align-items:center; gap:10px; padding:14px; border-radius:14px;
+                                                border: 2px solid ${isActive ? p.color : 'var(--border)'};
+                                                background: ${isActive ? p.color + '08' : 'var(--bg-card)'};
+                                                cursor:pointer; position:relative; transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1); text-align:center;
+                                                box-shadow: ${isActive ? '0 10px 20px ' + p.color + '15' : 'var(--sh-1)'};">
+                                                <input type="radio" name="ia-provider-radio-b" value="${p.id}"
+                                                    ${isActive ? 'checked' : ''}
+                                                    onchange="iaSetProviderB('${p.id}'); _iaProviderTab='${p.id}'; iaRenderConfigUI();"
+                                                    style="display:none;">
+                                                <div style="width:42px; height:42px; display:flex; align-items:center; justify-content:center; border-radius:12px; background:${p.color}15; box-shadow: inset 0 0 0 1px ${p.color}20;">
+                                                    <i class="${p.icon}" style="font-size:1.35rem; color:${p.color};"></i>
+                                                </div>
+                                                <div style="display:flex; flex-direction:column; gap:3px;">
+                                                    <span style="font-size:13px; font-weight:800; color:var(--text);">${p.label}</span>
+                                                    <span style="font-size:11px; color:${hasKey ? 'var(--success)' : 'var(--text-3)'}; font-weight:600;">
+                                                        ${hasKey ? '<i class=\"fas fa-check-circle\"></i> Key OK' : 'Sin key'}
+                                                    </span>
+                                                </div>
+                                            </label>`;
+                                    }).join('')}
+                                </div>
+                            </div>
                         </div>
                     </div>
 
                     <!-- CONFIGURACIÓN DEL PROVEEDOR ACTIVO -->
-                    ${await _iaRenderProviderCard(providerActivo)}
+                    ${await _iaRenderProviderCard(_iaProviderTab || providerActivo)}
                 </div>
 
                 <div style="display:flex; flex-direction:column; gap:24px;">
@@ -498,7 +623,7 @@ async function iaRenderConfigUI() {
                                 <button onclick="typeof clAbrirBusquedaJuris!=='undefined'&&clAbrirBusquedaJuris()" style="display:flex;align-items:center;gap:7px;padding:8px 10px;background:white;border:1px solid #e9d5ff;border-radius:8px;cursor:pointer;font-size:0.72rem;font-weight:700;color:#4c1d95;" onmouseover="this.style.background='#ede9fe'" onmouseout="this.style.background='white'"><i class="fas fa-book" style="color:#7c3aed;"></i>Jurisprudencia</button>
                                 <button onclick="typeof clAbrirDoctrina!=='undefined'&&clAbrirDoctrina()" style="display:flex;align-items:center;gap:7px;padding:8px 10px;background:white;border:1px solid #e9d5ff;border-radius:8px;cursor:pointer;font-size:0.72rem;font-weight:700;color:#4c1d95;" onmouseover="this.style.background='#ede9fe'" onmouseout="this.style.background='white'"><i class="fas fa-graduation-cap" style="color:#7c3aed;"></i>Doctrina</button>
                                 <button onclick="typeof clMejorarEscritoActual!=='undefined'&&clMejorarEscritoActual()" style="display:flex;align-items:center;gap:7px;padding:8px 10px;background:white;border:1px solid #e9d5ff;border-radius:8px;cursor:pointer;font-size:0.72rem;font-weight:700;color:#4c1d95;" onmouseover="this.style.background='#ede9fe'" onmouseout="this.style.background='white'"><i class="fas fa-magic" style="color:#7c3aed;"></i>Mejorar Escrito</button>
-                                <button onclick="typeof clToggleIframe!=='undefined'&&clToggleIframe()" style="display:flex;align-items:center;gap:7px;padding:8px 10px;background:white;border:1px solid #e9d5ff;border-radius:8px;cursor:pointer;font-size:0.72rem;font-weight:700;color:#4c1d95;" onmouseover="this.style.background='#ede9fe'" onmouseout="this.style.background='white'"><i class="fas fa-robot" style="color:#7c3aed;"></i>Claude.ai</button>
+                                <button onclick="typeof clToggleIframe!=='undefined'&&clToggleIframe()" style="display:flex;align-items:center;gap:7px;padding:8px 10px;background:white;border:1px solid #e9d5ff;border-radius:8px;cursor:pointer;font-size:0.72rem;font-weight:700;color:#4c1d95;" onmouseover="this.style.background='#ede9fe'" onmouseout="this.style.background='white'"><i class="fas fa-robot" style="color:#7c3aed;"></i>IA Web</button>
                             </div>
                         </div>
                         <div style="margin-top:14px; padding:14px; background:rgba(245, 158, 11, 0.05); border:1px solid rgba(245, 158, 11, 0.2); border-radius:14px; font-size:12.5px; color:#d97706; line-height:1.5;">
@@ -507,23 +632,176 @@ async function iaRenderConfigUI() {
                             Las respuestas deben ser supervisadas por el profesional. La IA asiste, no decide.
                         </div>
                     </div>
-
-                    <!-- DRIVE CONFIG PANEL (Placeholder context) -->
-                    <div id="drive-config-panel-inner" class="card" style="padding: 24px;">
-                        <h3 style="font-size:16px; margin-bottom:14px; color:var(--text); display:flex; align-items:center; gap:10px;">
-                            <i class="fab fa-google-drive" style="color:#34a853;"></i> Google Drive
-                        </h3>
-                        <p style="font-size:13px; color:var(--text-3); line-height:1.5; margin-bottom:15px;">
-                            Vincule su cuenta para respaldar expedientes y documentos.
-                        </p>
-                        <button class="btn btn-full" style="background:#e8f5e9; color:#2e7d32; border:1px solid #c8e6c9;">
-                            Conectar Cloud
-                        </button>
-                    </div>
                 </div>
 
             </div>`;
 }
+
+function _iaExtractJson(text) {
+    let s = String(text || '').trim();
+    if (!s) throw new Error('Respuesta vacía de la IA.');
+
+    // Limpiar fences tipo ```json ... ```
+    s = s.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+
+    // Extraer primer objeto JSON balanceando llaves (más robusto que lastIndexOf)
+    const start = s.indexOf('{');
+    if (start < 0) throw new Error('La IA no devolvió un JSON válido.');
+    let depth = 0;
+    let inStr = false;
+    let esc = false;
+    let end = -1;
+    for (let i = start; i < s.length; i++) {
+        const ch = s[i];
+        if (inStr) {
+            if (esc) { esc = false; continue; }
+            if (ch === '\\') { esc = true; continue; }
+            if (ch === '"') inStr = false;
+            continue;
+        }
+        if (ch === '"') { inStr = true; continue; }
+        if (ch === '{') depth++;
+        if (ch === '}') {
+            depth--;
+            if (depth === 0) { end = i; break; }
+        }
+    }
+    if (end < 0) throw new Error('La IA devolvió JSON incompleto (llaves no balanceadas).');
+
+    let jsonStr = s.slice(start, end + 1);
+
+    const _tryParse = (raw) => JSON.parse(raw);
+
+    try {
+        return _tryParse(jsonStr);
+    } catch (e1) {
+        // Reparación simple: comas finales antes de } o ]
+        const repaired = jsonStr
+            .replace(/,\s*}/g, '}')
+            .replace(/,\s*]/g, ']');
+
+        try {
+            return _tryParse(repaired);
+        } catch (e2) {
+            const snippet = jsonStr.slice(0, 900);
+            const msg = (e2 && e2.message) ? e2.message : 'JSON inválido';
+            throw new Error(`La IA devolvió JSON inválido. ${msg}. Snippet: ${snippet}`);
+        }
+    }
+}
+
+async function analizarDocumentoDual(documentoId, onProgress) {
+    const cb = (typeof onProgress === 'function') ? onProgress : null;
+    const DBRef = (window.DB || (typeof DB !== 'undefined' ? DB : null));
+    const docs = (DBRef && Array.isArray(DBRef.documentos)) ? DBRef.documentos : [];
+    let doc = docs.find(d => d && String(d.id) === String(documentoId));
+    let docFromCausa = null;
+    if (!doc) {
+        try {
+            const causas = (DBRef && Array.isArray(DBRef.causas)) ? DBRef.causas : [];
+            for (const c of causas) {
+                const arr = Array.isArray(c?.documentos) ? c.documentos : [];
+                const hit = arr.find(d => d && String(d.id) === String(documentoId));
+                if (hit) { docFromCausa = hit; break; }
+            }
+        } catch (_) {}
+    }
+    if (!doc && docFromCausa) {
+        // Asegurar persistencia canónica en DB.documentos
+        const cloned = { ...docFromCausa };
+        if (DBRef) {
+            DBRef.documentos = Array.isArray(DBRef.documentos) ? DBRef.documentos : [];
+            DBRef.documentos.push(cloned);
+        }
+        doc = cloned;
+    }
+    if (!doc) {
+        const causasCount = (DBRef && Array.isArray(DBRef.causas)) ? DBRef.causas.length : 0;
+        throw new Error(`Documento no encontrado. id=${String(documentoId)} docs=${docs.length} causas=${causasCount}`);
+    }
+
+    const base64 = doc.archivoBase64 || '';
+    const mime = doc.archivoMime || doc.mime || '';
+    const nombre = doc.archivoNombre || doc.nombreOriginal || '';
+    let textoPdfPlano = '';
+    const esPdf = (mime === 'application/pdf') || (String(nombre || '').toLowerCase().endsWith('.pdf'));
+    if (esPdf && base64 && window.electronAPI?.pdf?.extraerTexto) {
+        try {
+            if (cb) cb('Extrayendo texto del PDF...');
+            const r = await window.electronAPI.pdf.extraerTexto(base64);
+            if (r?.ok && r.text) {
+                textoPdfPlano = String(r.text || '').trim();
+            }
+        } catch (e) {
+            // fallback silencioso
+            textoPdfPlano = '';
+        }
+    }
+    const resumenDoc = {
+        id: doc.id,
+        causaId: doc.causaId,
+        nombreOriginal: doc.nombreOriginal,
+        tipo: doc.tipo,
+        fechaDocumento: doc.fechaDocumento,
+        descripcion: doc.descripcion,
+        archivoNombre: nombre,
+        archivoMime: mime,
+        pdfTextoPlanoHead: textoPdfPlano ? textoPdfPlano.slice(0, 12000) : '',
+        pdfTextoPlanoLen: textoPdfPlano ? textoPdfPlano.length : 0,
+        archivoBase64Head: (!textoPdfPlano && base64) ? base64.slice(0, 12000) : '',
+        archivoBase64Len: base64 ? base64.length : 0,
+    };
+
+    const providerA = iaGetProviderA();
+    const providerB = iaGetProviderB();
+    const modelA = iaGetModel(providerA);
+    const modelB = iaGetModel(providerB);
+
+    if (cb) cb('Analizando con IA A...');
+    const promptA = [
+        'SYSTEM: Eres un abogado analista. Extrae datos, fechas, riesgos y propón estrategia. Devuelve JSON estricto.',
+        '',
+        'INSTRUCCIONES:',
+        '- Devuelve SOLO JSON (sin markdown, sin texto extra).',
+        '- Si falta información, usa null o lista vacía.',
+        '',
+        'ESQUEMA JSON:',
+        '{"tipo_documento":"","resumen_ejecutivo":"","datos_criticos":{"fechas":[],"montos":[],"plazos":[]},"analisis_estrategico":"","riesgo_nivel":"","riesgo_motivo":"","proximos_pasos":[],"vinculacion_causal":""}',
+        '',
+        textoPdfPlano ? 'DOCUMENTO (PDF texto extraído + metadata):' : 'DOCUMENTO (metadata + base64 head):',
+        JSON.stringify(resumenDoc)
+    ].join('\n');
+
+    const rawA = await iaCall(promptA, { provider: providerA, model: modelA });
+    const analisisPrevio = _iaExtractJson(rawA);
+
+    if (cb) cb('Revisando con IA B...');
+    const promptB = [
+        'SYSTEM: Eres un Socio Senior. Revisa este análisis, corrige errores y mejora la estrategia. Devuelve el JSON final perfeccionado.',
+        '',
+        'INSTRUCCIONES:',
+        '- Devuelve SOLO JSON (sin markdown, sin texto extra).',
+        '- Conserva el esquema.',
+        '',
+        'ANÁLISIS PREVIO (IA A):',
+        JSON.stringify(analisisPrevio)
+    ].join('\n');
+
+    const rawB = await iaCall(promptB, { provider: providerB, model: modelB });
+    const insightFinal = _iaExtractJson(rawB);
+
+    doc.analisisPrevio = analisisPrevio;
+    doc.insightIA = insightFinal;
+    doc.proveedorIA = providerB;
+    doc._iaDual = { a: { provider: providerA, model: modelA }, b: { provider: providerB, model: modelB }, fecha: new Date().toISOString() };
+
+    if (typeof markAppDirty === 'function') markAppDirty();
+    if (typeof save === 'function') save();
+
+    return { ok: true, analisisPrevio, insightFinal };
+}
+
+window.analizarDocumentoDual = analizarDocumentoDual;
 
 async function _iaRenderProviderCard(pid) {
     const p = IA_PROVIDERS[pid];

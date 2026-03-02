@@ -126,7 +126,7 @@ function renderDocumentos(causaId) {
     const el = document.getElementById('listaDocumentos');
     if (!el) return;
 
-    const docs = DB.documentos.filter(d => d.causaId === causaId);
+    const docs = DB.documentos.filter(d => String(d.causaId) === String(causaId));
 
     if (!docs.length) {
         el.innerHTML = `
@@ -178,8 +178,16 @@ function renderDocumentos(causaId) {
                         ${venc}
                     </div>
                 </div>
+                <button id="btn-ia-dual-${d.id}" class="btn-xs" style="background:transparent; border:1px solid var(--border); color:var(--text-2); cursor:pointer; padding:4px 8px; border-radius:8px;"
+                        onclick="typeof uiAnalisisDualDocumento==='function'&&uiAnalisisDualDocumento('${d.id}')" title="Análisis Dual (IA A + B)">
+                    <i class="fas fa-brain" style="font-size:0.75rem;"></i>
+                </button>
+                <button class="btn-xs" style="background:transparent; border:1px solid var(--border); color:var(--text-2); cursor:pointer; padding:4px 8px; border-radius:8px;"
+                        onclick="typeof uiVerInsightDocumento==='function'&&uiVerInsightDocumento('${d.id}')" title="Ver Insight IA">
+                    <i class="fas fa-lightbulb" style="font-size:0.75rem;"></i>
+                </button>
                 <button class="btn-xs" style="background:transparent; border:none; color:var(--danger); cursor:pointer; padding:4px; border-radius:4px;"
-                        onclick="eliminarDocumento('${d.id}', ${causaId})" title="Eliminar">
+                        onclick="eliminarDocumento('${d.id}', '${String(causaId)}')" title="Eliminar">
                     <i class="fas fa-trash" style="font-size:0.75rem;"></i>
                 </button>
             </div>`;
@@ -483,8 +491,8 @@ async function _extraerDatosConIA(base64, nombreArchivo) {
         const textoTruncado = textoPdf.substring(0, 6000);
 
         // ── 2. Contexto de la causa ──────────────────────────────────────────
-        const causaId = parseInt(document.getElementById('doc-causa-sel')?.value);
-        const causa = causaId ? DB.causas.find(c => c.id === causaId) : null;
+        const causaId = String(document.getElementById('doc-causa-sel')?.value || '').trim();
+        const causa = causaId ? DB.causas.find(c => String(c.id) === String(causaId)) : null;
         const ramaContexto = causa ? `La causa es de rama/materia: "${causa.rama || causa.tipoProcedimiento}".` : '';
 
         _mostrarStatusPdf('loading', '<i class="fas fa-brain fa-pulse"></i> Analizando con IA...');
@@ -643,7 +651,7 @@ function _mostrarStatusPdf(tipo, html) {
  * para que este override tome efecto.
  */
 function uiAgregarDocumento() {
-    const causaId = parseInt(document.getElementById('doc-causa-sel')?.value);
+    const causaId = String(document.getElementById('doc-causa-sel')?.value || '').trim();
     const nombre  = document.getElementById('doc-nombre')?.value.trim();
     const tipo    = document.getElementById('doc-tipo')?.value;
     const etapa   = document.getElementById('doc-etapa')?.value.trim();
@@ -652,7 +660,7 @@ function uiAgregarDocumento() {
     const diasPlazo   = parseInt(document.getElementById('doc-dias')?.value) || 0;
 
     // Validaciones
-    if (!causaId || isNaN(causaId)) { showError('Seleccione una causa.'); return; }
+    if (!causaId) { showError('Seleccione una causa.'); return; }
     if (!nombre)  { showError('Ingrese el nombre del documento.'); return; }
     if (generaPlazo && !diasPlazo)  { showError('Ingrese los días del plazo.'); return; }
     if (generaPlazo && !fecha)      { showError('Ingrese la fecha del documento para calcular el plazo.'); return; }
@@ -721,7 +729,7 @@ function _bindDocCausaSelector() {
     const sel = document.getElementById('doc-causa-sel');
     if (!sel) return;
     sel.addEventListener('change', function () {
-        const id = parseInt(this.value);
+        const id = String(this.value || '').trim();
         if (id) renderDocumentos(id);
         else {
             const el = document.getElementById('listaDocumentos');

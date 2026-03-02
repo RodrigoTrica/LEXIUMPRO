@@ -112,6 +112,13 @@ let _raw = (() => {
         });
     }
     ['prospectos', 'propuestas', 'alertas', 'documentos', 'intentosLogin', 'bitacora', '_doctrina'].forEach(k => { if (!d[k]) d[k] = []; });
+
+    // Normalizar esquema de documentos (SID Fase 1)
+    // - proveedorIA: identifica el proveedor que generó análisis/insights (openai/gemini/glm)
+    //   (para documentos existentes queda null)
+    d.documentos.forEach(doc => {
+        if (doc && doc.proveedorIA === undefined) doc.proveedorIA = null;
+    });
     // Migración única: mover Doctrina del localStorage aislado al Store centralizado
     try {
         const rawDoctr = localStorage.getItem('APPBOGADO_DOCTRINA_V1');
@@ -134,6 +141,80 @@ let _raw = (() => {
             if (!d.documentos.find(x => x.id === doc.id))
                 d.documentos.push({ ...doc, causaId: causa.id });
         });
+
+        // Migración comprobantes (PDF base64) → DB.documentos
+        // Deja solo comprobanteDocumentoId en pagos/cuotas.
+        try {
+            if (!causa.honorarios) causa.honorarios = {};
+            const h = causa.honorarios;
+            if (!Array.isArray(h.planPagos)) h.planPagos = [];
+            if (!Array.isArray(h.pagos)) h.pagos = [];
+
+            const _ensureDoc = (base64, nombre, mime, meta) => {
+                if (!base64 || typeof base64 !== 'string') return null;
+                const archivoNombre = (typeof nombre === 'string' && nombre.trim()) ? nombre.trim() : 'comprobante.pdf';
+                const archivoMime = (typeof mime === 'string' && mime.trim()) ? mime.trim() : 'application/pdf';
+
+                const ya = d.documentos.find(x =>
+                    x && x.causaId === causa.id && x.tipo === 'Comprobante'
+                    && x.archivoBase64 === base64
+                    && x.archivoNombre === archivoNombre
+                );
+                if (ya) return ya.id;
+
+                const doc = {
+                    id: (typeof uid === 'function') ? uid() : (Date.now().toString(36) + Math.random().toString(36).slice(2)),
+                    causaId: causa.id,
+                    nombreOriginal: archivoNombre,
+                    tipo: 'Comprobante',
+                    etapaVinculada: '',
+                    fechaDocumento: (new Date().toISOString().split('T')[0]),
+                    generaPlazo: false,
+                    diasPlazo: 0,
+                    fechaVencimiento: null,
+                    fechaIngreso: new Date().toISOString(),
+                    descripcion: meta?.descripcion || 'Comprobante de pago',
+                    archivoBase64: base64,
+                    archivoNombre: archivoNombre,
+                    archivoMime: archivoMime,
+                    proveedorIA: null,
+                    _origen: meta?._origen || 'migracion-comprobantes'
+                };
+                d.documentos.push(doc);
+                return doc.id;
+            };
+
+            // Cuotas (planPagos)
+            h.planPagos.forEach(cuota => {
+                const comp = cuota?.comprobante;
+                if (!comp || !comp.base64) return;
+                if (cuota.comprobanteDocumentoId) return;
+                const idDoc = _ensureDoc(comp.base64, comp.nombre, comp.mime, {
+                    descripcion: `Comprobante cuota Nº ${cuota.numero || ''}`.trim(),
+                    _origen: 'cuota'
+                });
+                if (!idDoc) return;
+                cuota.comprobanteDocumentoId = idDoc;
+                // Mantener compatibilidad: se deja comp, pero se elimina base64 para reducir peso
+                cuota.comprobante = { nombre: comp.nombre || 'comprobante.pdf', mime: comp.mime || 'application/pdf' };
+            });
+
+            // Pagos (honorarios.pagos)
+            h.pagos.forEach(pago => {
+                const comp = pago?.comprobante;
+                if (!comp || !comp.base64) return;
+                if (pago.comprobanteDocumentoId) return;
+                const idDoc = _ensureDoc(comp.base64, comp.nombre, comp.mime, {
+                    descripcion: `Comprobante pago (${pago.concepto || 'Pago'})`,
+                    _origen: 'pago'
+                });
+                if (!idDoc) return;
+                pago.comprobanteDocumentoId = idDoc;
+                pago.comprobante = { nombre: comp.nombre || 'comprobante.pdf', mime: comp.mime || 'application/pdf' };
+            });
+        } catch (e) {
+            console.warn('[Store] Migración comprobantes falló (no crítico):', e);
+        }
         // Migración CRM Prospectos (campos documentales y financieros)
         if (!causa.docsCliente) causa.docsCliente = [];
         if (!causa.docsTribunal) causa.docsTribunal = [];
