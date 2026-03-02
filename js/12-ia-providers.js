@@ -29,6 +29,25 @@ function _iaEscHtml(s) {
         .replace(/'/g, '&#39;');
 }
 
+async function _iaGetDocumentoBase64(doc) {
+    try {
+        if (!doc) return '';
+        const legacy = (typeof doc.archivoBase64 === 'string') ? doc.archivoBase64 : '';
+        if (legacy) return legacy;
+
+        const docId = (typeof doc.archivoDocId === 'string') ? doc.archivoDocId.trim() : '';
+        if (!docId) return '';
+
+        const api = window.electronAPI;
+        if (!api?.docs?.leer) return '';
+        const r = await api.docs.leer(docId);
+        if (r?.ok && typeof r.data === 'string') return r.data;
+        return '';
+    } catch (_) {
+        return '';
+    }
+}
+
 // ── GLM / Zhipu ───────────────────────────────────────────────────
 async function _iaCallGLM(prompt, key, model) {
     let resp;
@@ -720,7 +739,7 @@ async function analizarDocumentoDual(documentoId, onProgress) {
         throw new Error(`Documento no encontrado. id=${String(documentoId)} docs=${docs.length} causas=${causasCount}`);
     }
 
-    const base64 = doc.archivoBase64 || '';
+    const base64 = await _iaGetDocumentoBase64(doc);
     const mime = doc.archivoMime || doc.mime || '';
     const nombre = doc.archivoNombre || doc.nombreOriginal || '';
     let textoPdfPlano = '';
@@ -746,6 +765,7 @@ async function analizarDocumentoDual(documentoId, onProgress) {
         descripcion: doc.descripcion,
         archivoNombre: nombre,
         archivoMime: mime,
+        archivoDocId: doc.archivoDocId || '',
         pdfTextoPlanoHead: textoPdfPlano ? textoPdfPlano.slice(0, 12000) : '',
         pdfTextoPlanoLen: textoPdfPlano ? textoPdfPlano.length : 0,
         archivoBase64Head: (!textoPdfPlano && base64) ? base64.slice(0, 12000) : '',

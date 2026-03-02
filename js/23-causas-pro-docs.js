@@ -69,6 +69,7 @@ function agregarDocumento(causaId, datos) {
     const doc = {
         id: uid(),
         causaId: causaId,
+        origen: datos.origen || 'cliente',
         nombreOriginal: datos.nombreOriginal || 'Documento sin nombre',
         tipo: datos.tipo || 'Escrito',
         etapaVinculada: datos.etapaVinculada || '',
@@ -78,8 +79,10 @@ function agregarDocumento(causaId, datos) {
         fechaVencimiento: fechaVencimiento,
         fechaIngreso: new Date().toISOString(),
         descripcion: datos.descripcion || datos.nombreOriginal || '',
-        archivoBase64: datos.archivoBase64 || null,
-        archivoNombre: datos.archivoNombre || null
+        archivoDocId: datos.archivoDocId || null,
+        archivoMime: datos.archivoMime || null,
+        archivoNombre: datos.archivoNombre || null,
+        archivoBase64: (!datos.archivoDocId && datos.archivoBase64) ? datos.archivoBase64 : null
     };
 
     DB.documentos.push(doc);
@@ -650,10 +653,11 @@ function _mostrarStatusPdf(tipo, html) {
  * IMPORTANTE: Este archivo debe cargarse DESPUÉS de 02-render-crud.js
  * para que este override tome efecto.
  */
-function uiAgregarDocumento() {
+async function uiAgregarDocumento() {
     const causaId = String(document.getElementById('doc-causa-sel')?.value || '').trim();
     const nombre  = document.getElementById('doc-nombre')?.value.trim();
     const tipo    = document.getElementById('doc-tipo')?.value;
+    const origen  = String(document.getElementById('doc-origen')?.value || '').trim() || 'cliente';
     const etapa   = document.getElementById('doc-etapa')?.value.trim();
     const fecha   = document.getElementById('doc-fecha')?.value;
     const generaPlazo = document.getElementById('doc-genera-plazo')?.checked;
@@ -666,16 +670,44 @@ function uiAgregarDocumento() {
     if (generaPlazo && !fecha)      { showError('Ingrese la fecha del documento para calcular el plazo.'); return; }
     if (generaPlazo && !confirm(`¿Confirmar plazo de ${diasPlazo} días desde ${fecha}?\n\nLa responsabilidad del cálculo es del abogado.`)) return;
 
-    // Agregar documento (con PDF si fue subido)
+    let archivoDocId = null;
+    let archivoNombre = DocsPro.pdfNombre || null;
+    let archivoMime = null;
+    const base64Pdf = DocsPro.pdfBase64 || null;
+
+    if (base64Pdf) {
+        archivoMime = 'application/pdf';
+        if (!archivoNombre) archivoNombre = (nombre || 'documento') + '.pdf';
+        const api = window.electronAPI;
+        if (api?.docs?.guardar) {
+            try {
+                const r = await api.docs.guardar(archivoNombre, base64Pdf, archivoMime);
+                if (r?.ok && r.id) {
+                    archivoDocId = String(r.id);
+                } else {
+                    throw new Error(r?.error || 'No se pudo guardar el archivo.');
+                }
+            } catch (e) {
+                console.error('[DOCS] Error guardando PDF cifrado:', e);
+                showError(e?.message || 'No se pudo guardar el PDF.');
+                return;
+            }
+        }
+    }
+
+    // Agregar documento (con referencia a archivo si fue subido)
     agregarDocumento(causaId, {
+        origen,
         nombreOriginal: nombre,
         tipo,
         etapaVinculada: etapa,
         fechaDocumento: fecha,
         generaPlazo,
         diasPlazo,
-        archivoBase64: DocsPro.pdfBase64 || null,
-        archivoNombre: DocsPro.pdfNombre || null
+        archivoDocId,
+        archivoMime,
+        archivoNombre,
+        archivoBase64: (!archivoDocId && base64Pdf) ? base64Pdf : null
     });
 
     // Limpiar formulario

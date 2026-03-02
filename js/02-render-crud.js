@@ -975,6 +975,25 @@
             if (!w) showError('El navegador bloqueó la ventana emergente.');
         }
 
+        async function _getDocumentoBase64(d) {
+            try {
+                if (!d) return '';
+                const legacy = (typeof d.archivoBase64 === 'string') ? d.archivoBase64 : '';
+                if (legacy) return legacy;
+
+                const docId = (typeof d.archivoDocId === 'string') ? d.archivoDocId.trim() : '';
+                if (!docId) return '';
+
+                const api = window.electronAPI;
+                if (!api?.docs?.leer) return '';
+                const r = await api.docs.leer(docId);
+                if (r?.ok && typeof r.data === 'string') return r.data;
+                return '';
+            } catch (_) {
+                return '';
+            }
+        }
+
         function _getDocumentoById(id) {
             if (!id) return null;
             const docs = (DB && Array.isArray(DB.documentos)) ? DB.documentos : [];
@@ -1058,15 +1077,16 @@
             }
         }
 
-        function uiVerComprobanteCuota(causaId, numeroCuota) {
+        async function uiVerComprobanteCuota(causaId, numeroCuota) {
             const causa = (DB.causas || []).find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
             const cuota = causa?.honorarios?.planPagos?.find(c => parseInt(c.numero) === parseInt(numeroCuota));
             if (!cuota) { showError('Cuota no encontrada.'); return; }
 
             if (cuota.comprobanteDocumentoId) {
                 const d = _getDocumentoById(cuota.comprobanteDocumentoId);
-                if (!d?.archivoBase64) { showError('No se encontró el documento del comprobante.'); return; }
-                uiAbrirPdfBase64(d.archivoBase64, d.archivoNombre || d.nombreOriginal || 'comprobante.pdf');
+                const b64 = await _getDocumentoBase64(d);
+                if (!b64) { showError('No se encontró el documento del comprobante.'); return; }
+                uiAbrirPdfBase64(b64, d?.archivoNombre || d?.nombreOriginal || 'comprobante.pdf');
                 return;
             }
 
@@ -1075,15 +1095,16 @@
             uiAbrirPdfBase64(comp.base64, comp.nombre || 'comprobante.pdf');
         }
 
-        function uiVerComprobantePago(causaId, idxPago) {
+        async function uiVerComprobantePago(causaId, idxPago) {
             const causa = (DB.causas || []).find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
             const pago = (causa?.honorarios?.pagos || [])[parseInt(idxPago)];
             if (!pago) { showError('Pago no encontrado.'); return; }
 
             if (pago.comprobanteDocumentoId) {
                 const d = _getDocumentoById(pago.comprobanteDocumentoId);
-                if (!d?.archivoBase64) { showError('No se encontró el documento del comprobante.'); return; }
-                uiAbrirPdfBase64(d.archivoBase64, d.archivoNombre || d.nombreOriginal || 'comprobante.pdf');
+                const b64 = await _getDocumentoBase64(d);
+                if (!b64) { showError('No se encontró el documento del comprobante.'); return; }
+                uiAbrirPdfBase64(b64, d?.archivoNombre || d?.nombreOriginal || 'comprobante.pdf');
                 return;
             }
 

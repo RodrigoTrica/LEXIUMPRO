@@ -219,6 +219,7 @@ let _raw = (() => {
         if (!causa.docsCliente) causa.docsCliente = [];
         if (!causa.docsTribunal) causa.docsTribunal = [];
         if (!causa.docsTramites) causa.docsTramites = [];
+        if (!causa.docsContraparte) causa.docsContraparte = [];
         if (!causa.estadoCuenta) causa.estadoCuenta = { montoTotal: 0, pagos: [], totalPagado: 0, saldoPendiente: 0 };
 
         // Normalización honorarios (modalidad + planPagos) — compatibilidad hacia atrás
@@ -388,6 +389,136 @@ const DB = Store._ref;
  */
 function save() { Store.save(); }
 const guardarDB = save;
+
+// ── Migración Fase 3A: documentos a archivoDocId (cifrado en disco) ──────────
+const DOCS_MIGRATION_FLAG = 'docs_migracion_archivoDocId_2026_03_02';
+const DOCS_MIGRATION_FLAG_ALIAS = 'migracion_docs_v3_lista';
+
+function _inferirOrigenDocumento(doc) {
+    try {
+        if (!doc) return 'cliente';
+        if (doc.origen) return doc.origen;
+        if (doc.tipo === 'Comprobante') return 'comprobante';
+
+        const o = doc._origen;
+        if (o === 'cuota' || o === 'pago' || o === 'migracion-comprobantes' || o === 'ui-comprobante') return 'comprobante';
+
+        const det = doc._origenDetalleCausa;
+        const tipo = det?.tipo;
+        if (tipo === 'tribunal') return 'tribunal';
+        if (tipo === 'tramites') return 'interno';
+        if (tipo === 'cliente') return 'cliente';
+
+        return 'cliente';
+    } catch (_) {
+        return 'cliente';
+    }
+}
+
+async function migrarDocumentosAArchivoDocIdAsync() {
+    const api = window.electronAPI;
+    if (!api?.docs?.guardar) return { ok: false, skipped: true, reason: 'electron_docs_no_disponible' };
+
+    let flag = null;
+    try { flag = AppConfig.get(DOCS_MIGRATION_FLAG) || null; } catch (_) { flag = null; }
+    let flagAlias = null;
+    try { flagAlias = AppConfig.get(DOCS_MIGRATION_FLAG_ALIAS) || null; } catch (_) { flagAlias = null; }
+
+    if ((flag && (flag.status === 'done' || flag.status === 'in_progress')) || flagAlias === true) {
+        return { ok: true, skipped: true, reason: 'flag' };
+    }
+
+    try {
+        AppConfig.set(DOCS_MIGRATION_FLAG, { status: 'in_progress', at: new Date().toISOString() });
+    } catch (_) {}
+
+    try {
+        console.info('[Store] Iniciando migración de documentos...');
+    } catch (_) {}
+
+    const docs = (DB && Array.isArray(DB.documentos)) ? DB.documentos : [];
+    let migrated = 0;
+    let errors = 0;
+
+    const BATCH = 5;
+    let processed = 0;
+
+    for (let i = 0; i < docs.length; i++) {
+        const doc = docs[i];
+        try {
+            if (!doc) { processed++; continue; }
+            if (doc.archivoDocId) {
+                if (!doc.origen) doc.origen = _inferirOrigenDocumento(doc);
+                processed++;
+                continue;
+            }
+            const base64 = (typeof doc.archivoBase64 === 'string') ? doc.archivoBase64 : '';
+            if (!base64) {
+                if (!doc.origen) doc.origen = _inferirOrigenDocumento(doc);
+                processed++;
+                continue;
+            }
+
+            const nombre = doc.archivoNombre || doc.nombreOriginal || 'documento';
+            const mime = doc.archivoMime || doc.mime || 'application/pdf';
+            const r = await api.docs.guardar(nombre, base64, mime);
+            if (!r?.ok || !r.id) throw new Error(r?.error || 'No se pudo guardar el archivo');
+
+            doc.archivoDocId = String(r.id);
+            doc.archivoMime = doc.archivoMime || mime;
+            doc.archivoNombre = doc.archivoNombre || nombre;
+            if (!doc.origen) doc.origen = _inferirOrigenDocumento(doc);
+
+            // IMPORTANT: base64 debe salir del JSON para aligerar DB
+            delete doc.archivoBase64;
+            migrated++;
+            processed++;
+        } catch (e) {
+            errors++;
+            processed++;
+            console.warn('[Store] Migración archivoDocId falló para un documento (no crítico):', e?.message || e);
+        }
+
+        if (processed % BATCH === 0) {
+            try {
+                console.info(`[Store] Migración en progreso: ${processed}/${docs.length}...`);
+            } catch (_) {}
+            await new Promise(r => setTimeout(r, 0));
+        }
+    }
+
+    if (migrated > 0) {
+        try { if (typeof markAppDirty === 'function') markAppDirty(); } catch (_) {}
+        try { save(); } catch (_) {}
+    }
+
+    try {
+        AppConfig.set(DOCS_MIGRATION_FLAG, {
+            status: 'done',
+            at: new Date().toISOString(),
+            migrated,
+            errors,
+            total: docs.length
+        });
+    } catch (_) {}
+
+    try { AppConfig.set(DOCS_MIGRATION_FLAG_ALIAS, true); } catch (_) {}
+
+    try {
+        console.info(`[Store] Migración completada: ${migrated} documentos procesados.`);
+    } catch (_) {}
+
+    return { ok: true, migrated, errors, total: docs.length };
+}
+
+window.migrarDocumentosAArchivoDocIdAsync = migrarDocumentosAArchivoDocIdAsync;
+
+// Ejecutar diferido para no bloquear el arranque/render
+setTimeout(() => {
+    migrarDocumentosAArchivoDocIdAsync().catch(e => {
+        console.warn('[Store] Migración archivoDocId (async) falló (no crítico):', e?.message || e);
+    });
+}, 1500);
 
 // ════════════════════════════════════════════════════════════════════
 // AUTO-BACKUP — Sistema de respaldo automático con historial rotativo

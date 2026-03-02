@@ -54,6 +54,7 @@
             if (tab === 'partes') dcRenderPartes(causaId);
             if (tab === 'docs-cliente')  dcRenderDocs(causaId, 'cliente');
             if (tab === 'docs-tribunal') dcRenderDocs(causaId, 'tribunal');
+            if (tab === 'docs-contraparte') dcRenderDocs(causaId, 'contraparte');
             if (tab === 'docs-tramites') dcRenderDocs(causaId, 'tramites');
             if (tab === 'proceso') dcRenderProceso(causaId);
         }
@@ -252,6 +253,10 @@
                         onclick="dcCambiarTab('docs-tribunal',${causaId})">
                         <i class="fas fa-gavel"></i> Docs Tribunal
                     </button>
+                    <button id="dctab-docs-contraparte" class="dc-tab-btn"
+                        onclick="dcCambiarTab('docs-contraparte',${causaId})">
+                        <i class="fas fa-user-shield"></i> Contraparte
+                    </button>
                     <button id="dctab-docs-tramites" class="dc-tab-btn"
                         onclick="dcCambiarTab('docs-tramites',${causaId})">
                         <i class="fas fa-wrench"></i> Otros Trámites
@@ -268,6 +273,7 @@
                 <div id="dcpanel-partes"         class="dc-tab-panel"></div>
                 <div id="dcpanel-docs-cliente"   class="dc-tab-panel"></div>
                 <div id="dcpanel-docs-tribunal"  class="dc-tab-panel"></div>
+                <div id="dcpanel-docs-contraparte"  class="dc-tab-panel"></div>
                 <div id="dcpanel-docs-tramites"  class="dc-tab-panel"></div>
                 <div id="dcpanel-proceso"           class="dc-tab-panel"></div>
             </div>
@@ -657,6 +663,7 @@
         const _DOCS_CONFIG = {
             cliente:  { campo: 'docsCliente',  label: 'Docs Cliente',   icono: 'fa-folder',       color: '#2563a8' },
             tribunal: { campo: 'docsTribunal',  label: 'Docs Tribunal',  icono: 'fa-gavel',        color: '#7c3aed' },
+            contraparte: { campo: 'docsContraparte', label: 'Contraparte', icono: 'fa-user-shield', color: '#dc2626' },
             tramites: { campo: 'docsTramites',  label: 'Otros Trámites', icono: 'fa-wrench',       color: '#0891b2' }
         };
 
@@ -703,7 +710,7 @@
                 </div>`;
         }
 
-        function _dcEnsureSidDocumentoId(causaId, tipo, idx) {
+        async function _dcEnsureSidDocumentoId(causaId, tipo, idx) {
             try {
                 const cfg   = _DOCS_CONFIG[tipo];
                 const causa = DB.causas.find(c => c.id === causaId);
@@ -723,6 +730,17 @@
                 if (!base64) return null;
                 if (!Array.isArray(DB.documentos)) DB.documentos = [];
 
+                let archivoDocId = null;
+                const api = window.electronAPI;
+                if (api?.docs?.guardar) {
+                    const r = await api.docs.guardar(nombre, base64, 'application/pdf');
+                    if (r?.ok && r.id) {
+                        archivoDocId = String(r.id);
+                    } else {
+                        throw new Error(r?.error || 'No se pudo guardar el archivo.');
+                    }
+                }
+
                 const newId = (typeof uid === 'function')
                     ? uid()
                     : (Date.now().toString(36) + Math.random().toString(36).slice(2));
@@ -730,6 +748,7 @@
                 DB.documentos.push({
                     id: newId,
                     causaId: causaId,
+                    origen: (tipo === 'tribunal') ? 'tribunal' : (tipo === 'tramites') ? 'interno' : (tipo === 'contraparte') ? 'contraparte' : 'cliente',
                     nombreOriginal: nombre,
                     tipo: 'Documento',
                     etapaVinculada: '',
@@ -741,7 +760,7 @@
                     descripcion: nombre,
                     archivoMime: 'application/pdf',
                     archivoNombre: nombre,
-                    archivoBase64: base64,
+                    archivoDocId: archivoDocId,
                     _origenDetalleCausa: { tipo: tipo, idx: idx }
                 });
 
@@ -756,7 +775,7 @@
         }
 
         window.dcAnalisisDualDoc = async function(causaId, tipo, idx) {
-            const docId = _dcEnsureSidDocumentoId(causaId, tipo, idx);
+            const docId = await _dcEnsureSidDocumentoId(causaId, tipo, idx);
             if (!docId) { if (typeof showError === 'function') showError('No se pudo preparar el documento para análisis.'); return; }
             if (typeof uiAnalisisDualDocumento === 'function') {
                 return uiAnalisisDualDocumento(docId);
@@ -764,8 +783,8 @@
             if (typeof showError === 'function') showError('Función de análisis dual no disponible.');
         };
 
-        window.dcVerInsightDoc = function(causaId, tipo, idx) {
-            const docId = _dcEnsureSidDocumentoId(causaId, tipo, idx);
+        window.dcVerInsightDoc = async function(causaId, tipo, idx) {
+            const docId = await _dcEnsureSidDocumentoId(causaId, tipo, idx);
             if (!docId) { if (typeof showInfo === 'function') showInfo('Este documento aún no está indexado para Insight IA.'); return; }
             if (typeof uiVerInsightDocumento === 'function') {
                 return uiVerInsightDocumento(docId);

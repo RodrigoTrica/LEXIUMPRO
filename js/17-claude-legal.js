@@ -883,7 +883,7 @@ function _crearIframePanel(contextoExtra) {
                     <span style="font-size:1.1rem;">⚖</span>
                     <div>
                         <div class="cl-iframe-title">${titulosModo[_clIframeMode] || titulosModo.general}</div>
-                        <div class="cl-iframe-sub">claude.ai · Integración AppBogado</div>
+                        <div class="cl-iframe-sub">IA Web · Integración AppBogado</div>
                     </div>
                 </div>
                 <div class="cl-iframe-header-actions">
@@ -918,7 +918,7 @@ function _crearIframePanel(contextoExtra) {
                 <div style="font-size:0.69rem; color:#6b7280; margin-top:6px;">
                     <strong>Pasos:</strong>
                     1. Clic en <strong>"Copiar contexto"</strong> ↑ &nbsp;
-                    2. En claude.ai pega el contexto y escribe tu consulta &nbsp;
+                    2. En IA Web pega el contexto y escribe tu consulta &nbsp;
                     3. Trabaja con Claude directamente en el panel de abajo
                 </div>
             </div>
@@ -935,14 +935,14 @@ function _crearIframePanel(contextoExtra) {
                 <div class="cl-iframe-overlay-note" id="cl-iframe-note">
                     <div style="text-align:center; padding:32px 24px;">
                         <div style="font-size:2.5rem; margin-bottom:12px;">⚖</div>
-                        <div style="font-size:0.95rem; font-weight:700; color:#1e293b; margin-bottom:8px;">claude.ai cargando…</div>
+                        <div style="font-size:0.95rem; font-weight:700; color:#1e293b; margin-bottom:8px;">IA Web cargando…</div>
                         <div style="font-size:0.78rem; color:#64748b; line-height:1.6; margin-bottom:16px;">
-                            Si el iframe muestra error de seguridad, abre claude.ai en una pestaña separada<br>
+                            Si el iframe muestra error de seguridad, abre IA Web en una pestaña separada<br>
                             y pega el contexto que copiaste arriba.
                         </div>
                         <a href="https://claude.ai/new" target="_blank"
                             style="padding:10px 20px; background:linear-gradient(135deg,#7c3aed,#6d28d9); color:white; border-radius:9px; text-decoration:none; font-size:0.83rem; font-weight:700; display:inline-block;">
-                            <i class="fas fa-external-link-alt"></i> Abrir claude.ai en pestaña nueva
+                            <i class="fas fa-external-link-alt"></i> Abrir IA Web en pestaña nueva
                         </a>
                     </div>
                 </div>
@@ -1000,7 +1000,7 @@ function clCopiarContextoIframe(modo, extra) {
     const ctx = panel?._contexto || _clContextoActual(_clIframeMode);
     const full = ctx + (extra ? '\n\n' + extra : '');
     navigator.clipboard.writeText(full).then(() => {
-        if (typeof showSuccess === 'function') showSuccess('✅ Contexto copiado. Pégalo en claude.ai.');
+        if (typeof showSuccess === 'function') showSuccess('✅ Contexto copiado. Pégalo en IA Web.');
     }).catch(() => {
         const ta = document.createElement('textarea');
         ta.value = full; document.body.appendChild(ta); ta.select();
@@ -1288,8 +1288,8 @@ function _clAbrirModalIA(cfg) {
         <i class="fas fa-paper-plane"></i> Consultar con IA
       </button>
       <button onclick="clAbrirIframe('${cfg.modo || 'general'}')"
-        style="padding:10px 14px;background:#faf5ff;color:#7c3aed;border:1px solid #c4b5fd;border-radius:9px;cursor:pointer;font-size:0.82rem;font-weight:600;" title="Abrir claude.ai embebido">
-        <i class="fas fa-external-link-alt"></i> Claude.ai
+        style="padding:10px 14px;background:#faf5ff;color:#7c3aed;border:1px solid #c4b5fd;border-radius:9px;cursor:pointer;font-size:0.82rem;font-weight:600;" title="Abrir IA Web embebido">
+        <i class="fas fa-external-link-alt"></i> IA Web
       </button>
     </div>
   </div>
@@ -1579,7 +1579,7 @@ ${texto.substring(0, 14000)}
     style.id = 'cl-legal-styles-v2';
     style.textContent = `
 
-/* ── Panel iframe Claude.ai ─────────────────────────────────── */
+/* ── Panel iframe IA Web ─────────────────────────────────── */
 #cl-iframe-panel {
     position: fixed;
     right: 20px;
@@ -1764,12 +1764,12 @@ ${texto.substring(0, 14000)}
 // ═══════════════════════════════════════════════════════════════════
 function _clInyectarBarrasIA() {
 
-    // ── Botón flotante de Claude.ai iframe ──
+    // ── Botón flotante de IA Web iframe ──
     if (!document.getElementById('cl-fab-iframe')) {
         const fab = document.createElement('button');
         fab.id = 'cl-fab-iframe';
-        fab.innerHTML = '<i class="fas fa-robot"></i> Claude.ai';
-        fab.title = 'Abrir claude.ai embebido';
+        fab.innerHTML = '<i class="fas fa-robot"></i> IA Web';
+        fab.title = 'Abrir IA Web embebido';
         fab.onclick = () => clToggleIframe();
         document.body.appendChild(fab);
     }
@@ -1788,7 +1788,7 @@ function _clInyectarBarrasIA() {
         const btn2 = document.createElement('button');
         btn2.className = 'btn btn-sm';
         btn2.style.cssText = 'background:linear-gradient(135deg,#7c3aed,#6d28d9);color:white;border:none;';
-        btn2.innerHTML = '<i class="fas fa-external-link-alt"></i> Claude.ai';
+        btn2.innerHTML = '<i class="fas fa-external-link-alt"></i> IA Web';
         btn2.onclick = () => clAbrirIframe('escrito');
         escTopRight.appendChild(sep);
         escTopRight.appendChild(btn1);
@@ -1806,7 +1806,7 @@ function _clInyectarBarrasIA() {
                         <i class="fas fa-robot"></i> Buscar jurisprudencia con IA
                     </button>
                     <button class="cl-ia-toolbar-btn secondary" onclick="clAbrirIframe('juris')">
-                        <i class="fas fa-external-link-alt"></i> Abrir Claude.ai
+                        <i class="fas fa-external-link-alt"></i> Abrir IA Web
                     </button>`;
         jurisList.parentNode.insertBefore(bar, jurisList);
     }
@@ -1826,7 +1826,7 @@ function _clInyectarBarrasIA() {
                         <i class="fas fa-chess"></i> Análisis estratégico
                     </button>
                     <button class="cl-ia-toolbar-btn outline" onclick="clAbrirIframe('doctrina')">
-                        <i class="fas fa-external-link-alt"></i> Claude.ai
+                        <i class="fas fa-external-link-alt"></i> IA Web
                     </button>`;
         doctrinaMain.insertBefore(bar, doctrinaMain.firstChild);
     }
