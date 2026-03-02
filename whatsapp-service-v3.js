@@ -22,6 +22,131 @@ try {
     console.warn('[WhatsApp] Instalar: npm install whatsapp-web.js qrcode node-cron');
 }
 
+async function _ejecutarAlertasCobroVencidas(config) {
+    if (!waReady) return { tipo: 'vencidas', cuotasDetectadas: 0, enviadosOk: 0, enviadosTotal: 0, cambios: 0 };
+    try {
+        const db = alertService.getDB();
+        if (!db) return { tipo: 'vencidas', cuotasDetectadas: 0, enviadosOk: 0, enviadosTotal: 0, cambios: 0 };
+
+        const hoy = new Date();
+        const hoyISO = _fechaISO10(hoy);
+        const marca = `v-${hoyISO}`;
+
+        const destinatariosEquipo = _getDestinatarios(config, 'auto');
+        const causas = db.causas || [];
+
+        let cambios = 0;
+        let enviadosOk = 0;
+        let enviadosTotal = 0;
+        let cuotasDetectadas = 0;
+        let cuotasPendientes = 0;
+        let cuotasSinFecha = 0;
+        const ejemplosFechas = [];
+        const ejemplosVence = [];
+        let cuotasVencidas = 0;
+        let cuotasSaltadasPorMarca = 0;
+
+        for (const causa of causas) {
+            const h = causa?.honorarios;
+            if (!h || String(h.modalidad || '').toUpperCase() !== 'CUOTAS') continue;
+            const plan = Array.isArray(h.planPagos) ? h.planPagos : [];
+            if (!plan.length) continue;
+
+            const cliente = (db.clientes || []).find(c => String(c.id) === String(causa.clienteId));
+            const clienteNombre = cliente?.nombre || cliente?.nom || causa?.caratula || 'Cliente';
+            const clienteTel = _waNumeroLimpio(cliente?.telefono);
+
+            for (const cuota of plan) {
+                if (!cuota) continue;
+                if (String(cuota.estado || '').toUpperCase() === 'PAGADA') continue;
+                cuotasPendientes++;
+
+                const venceISO = _fechaISO10(cuota.fechaVencimiento);
+                if (ejemplosVence.length < 5) {
+                    ejemplosVence.push({ raw: cuota.fechaVencimiento, venceISO, hoyISO });
+                }
+                if (!venceISO) {
+                    cuotasSinFecha++;
+                    if (ejemplosFechas.length < 3) ejemplosFechas.push({ raw: cuota.fechaVencimiento, parsed: venceISO });
+                    continue;
+                }
+
+                if (venceISO >= hoyISO) continue;
+
+                cuotasVencidas++;
+
+                if (!cuota._waAlertas) cuota._waAlertas = { cliente: {}, equipo: {} };
+                if (cuota._waAlertas.cliente?.[marca] && cuota._waAlertas.equipo?.[marca]) {
+                    cuotasSaltadasPorMarca++;
+                    continue;
+                }
+
+                const monto = (cuota.monto || 0);
+                const fechaTxt = `el ${new Date(cuota.fechaVencimiento).toLocaleDateString('es-CL')}`;
+                cuotasDetectadas++;
+
+                const msgCliente = `Estimado/a ${clienteNombre}, le recordamos que su cuota Nº ${cuota.numero} de $${Number(monto).toLocaleString('es-CL')} venció ${fechaTxt}.`;
+                const msgEquipo = `ALERTA VENCIDA: Cuota Nº ${cuota.numero} de cliente ${clienteNombre} por $${Number(monto).toLocaleString('es-CL')} venció ${fechaTxt}.`;
+
+                const tasks = [];
+
+                if (clienteTel && !cuota._waAlertas.cliente?.[marca] && validarNumero(clienteTel).ok) {
+                    enviadosTotal++;
+                    tasks.push(
+                        enviarMensaje(clienteTel, msgCliente, 'alerta-cobro-vencida-cliente')
+                            .then(r => {
+                                if (r?.ok !== false) {
+                                    cuota._waAlertas.cliente[marca] = true;
+                                    cambios++;
+                                    enviadosOk++;
+                                }
+                            })
+                            .catch(e => waLogger.logError('cobro-vencida-cliente-envio-fallido', { error: e.message, clienteTel }))
+                    );
+                }
+
+                if (destinatariosEquipo.length > 0 && !cuota._waAlertas.equipo?.[marca]) {
+                    const settled = await Promise.allSettled(destinatariosEquipo.map(d => {
+                        enviadosTotal++;
+                        return enviarMensaje(d.numero, msgEquipo, 'alerta-cobro-vencida-equipo');
+                    }));
+                    const okEquipo = settled.filter(x => x.status === 'fulfilled').length;
+                    if (okEquipo > 0) {
+                        cuota._waAlertas.equipo[marca] = true;
+                        cambios++;
+                        enviadosOk += okEquipo;
+                    }
+                }
+
+                if (tasks.length) await Promise.allSettled(tasks);
+            }
+        }
+
+        if (cambios > 0) {
+            const ok = alertService.saveDB(db);
+            if (!ok) waLogger.logError('cobro-vencida-db-save-fallido', {});
+        }
+
+        if (enviadosTotal > 0) {
+            waLogger.logInfo('cobro-vencida-scheduler-ejecucion', { hoyISO, enviadosOk, enviadosTotal });
+        }
+
+        return {
+            tipo: 'vencidas',
+            cuotasDetectadas,
+            cuotasVencidas,
+            cuotasSaltadasPorMarca,
+            enviadosOk,
+            enviadosTotal,
+            cambios,
+            debug: { hoyISO, cuotasPendientes, cuotasSinFecha, ejemplosFechas, ejemplosVence }
+        };
+    } catch (e) {
+        waLogger.logError('cobro-vencida-scheduler-error', { error: e.message });
+        return { tipo: 'vencidas', cuotasDetectadas: 0, enviadosOk: 0, enviadosTotal: 0, cambios: 0, error: e.message };
+    }
+}
+
 let waClient        = null;
 let waReady         = false;
 let mainWin         = null;
@@ -262,7 +387,7 @@ function iniciarSchedulers(configOrFn) {
         const config = getConf();
         if (!config.activo) return;   // respetar checkbox en tiempo real
         waLogger.logInfo('scheduler-resumen-diario', {});
-        await _ejecutarResumen(config);
+        await _ejecutarResumen(config, 'auto');
     }, { timezone: 'America/Santiago' });
 
     cron.schedule('0 * * * *', async () => {
@@ -271,47 +396,264 @@ function iniciarSchedulers(configOrFn) {
         await _ejecutarCriticos(config);
     }, { timezone: 'America/Santiago' });
 
+    // Alertas de cobro (cuotas): revisar cada hora
+    cron.schedule('10 * * * *', async () => {
+        const config = getConf();
+        if (!config.activo) return;
+        await _ejecutarAlertasCobroVencidas(config);
+        await _ejecutarAlertasCobro(config, 0);
+        await _ejecutarAlertasCobro(config, 2);
+    }, { timezone: 'America/Santiago' });
+
     waLogger.logInfo('schedulers-iniciados', {});
 }
 
-async function _ejecutarResumen(config) {
+function _fechaISO10(d) {
+    try {
+        // Timestamp numérico (ms)
+        if (typeof d === 'number' && Number.isFinite(d)) {
+            const dtN = new Date(d);
+            if (!Number.isNaN(dtN.getTime())) {
+                const yyyy = dtN.getFullYear();
+                const mm = String(dtN.getMonth() + 1).padStart(2, '0');
+                const dd = String(dtN.getDate()).padStart(2, '0');
+                return `${yyyy}-${mm}-${dd}`;
+            }
+        }
+
+        // Objetos comunes (p.ej. Firebase timestamp-like)
+        if (d && typeof d === 'object') {
+            const sec = (typeof d.seconds === 'number') ? d.seconds
+                : (typeof d._seconds === 'number') ? d._seconds
+                    : null;
+            if (sec !== null) {
+                const dtS = new Date(sec * 1000);
+                if (!Number.isNaN(dtS.getTime())) {
+                    const yyyy = dtS.getFullYear();
+                    const mm = String(dtS.getMonth() + 1).padStart(2, '0');
+                    const dd = String(dtS.getDate()).padStart(2, '0');
+                    return `${yyyy}-${mm}-${dd}`;
+                }
+            }
+        }
+
+        if (typeof d === 'string') {
+            const s = d.trim();
+            // Formato DD-MM-YYYY (común en UI)
+            const m1 = s.match(/^([0-3]\d)-([01]\d)-(\d{4})$/);
+            if (m1) {
+                const dd = m1[1];
+                const mm = m1[2];
+                const yyyy = m1[3];
+                return `${yyyy}-${mm}-${dd}`;
+            }
+            // Formato YYYY-MM-DD (o ISO con hora)
+            const m2 = s.match(/^(\d{4})-([01]\d)-([0-3]\d)/);
+            if (m2) {
+                const yyyy = m2[1];
+                const mm = m2[2];
+                const dd = m2[3];
+                return `${yyyy}-${mm}-${dd}`;
+            }
+        }
+
+        const dt = new Date(d);
+        if (Number.isNaN(dt.getTime())) return '';
+        const yyyy = dt.getFullYear();
+        const mm = String(dt.getMonth() + 1).padStart(2, '0');
+        const dd = String(dt.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+    } catch (_) {
+        return '';
+    }
+}
+
+function _waNumeroLimpio(x) {
+    return String(x || '').replace(/[\s\+\-\(\)]/g, '').trim();
+}
+
+async function _ejecutarAlertasCobro(config, diasAntes = 0) {
+    if (!waReady) return { diasAntes, cuotasDetectadas: 0, enviadosOk: 0, enviadosTotal: 0, cambios: 0 };
+    try {
+        const db = alertService.getDB();
+        if (!db) return { diasAntes, cuotasDetectadas: 0, enviadosOk: 0, enviadosTotal: 0, cambios: 0 };
+
+        const hoy = new Date();
+        const target = new Date(hoy);
+        target.setDate(target.getDate() + (parseInt(diasAntes) || 0));
+        const targetISO = _fechaISO10(target);
+
+        const destinatariosEquipo = _getDestinatarios(config, 'auto');
+        const causas = db.causas || [];
+
+        let cambios = 0;
+        let enviadosOk = 0;
+        let enviadosTotal = 0;
+        let cuotasDetectadas = 0;
+        let cuotasPendientes = 0;
+        let cuotasSinFecha = 0;
+        const ejemplosFechas = [];
+        let cuotasCoincidenFecha = 0;
+        let cuotasSaltadasPorMarca = 0;
+
+        for (const causa of causas) {
+            const h = causa?.honorarios;
+            if (!h || String(h.modalidad || '').toUpperCase() !== 'CUOTAS') continue;
+            const plan = Array.isArray(h.planPagos) ? h.planPagos : [];
+            if (!plan.length) continue;
+
+            const cliente = (db.clientes || []).find(c => String(c.id) === String(causa.clienteId));
+            const clienteNombre = cliente?.nombre || cliente?.nom || causa?.caratula || 'Cliente';
+            const clienteTel = _waNumeroLimpio(cliente?.telefono);
+
+            for (const cuota of plan) {
+                if (!cuota) continue;
+                if (String(cuota.estado || '').toUpperCase() === 'PAGADA') continue;
+                cuotasPendientes++;
+                const venceISO = _fechaISO10(cuota.fechaVencimiento);
+                if (!venceISO) {
+                    cuotasSinFecha++;
+                    if (ejemplosFechas.length < 3) ejemplosFechas.push({ raw: cuota.fechaVencimiento, parsed: venceISO });
+                }
+                if (!venceISO || venceISO !== targetISO) continue;
+
+                cuotasCoincidenFecha++;
+
+                if (!cuota._waAlertas) cuota._waAlertas = { cliente: {}, equipo: {} };
+                const marca = (diasAntes === 0) ? 'hoy' : `d-${diasAntes}`;
+                if (cuota._waAlertas.cliente?.[marca] && cuota._waAlertas.equipo?.[marca]) {
+                    cuotasSaltadasPorMarca++;
+                    continue;
+                }
+
+                const monto = (cuota.monto || 0);
+                const fechaTxt = diasAntes === 0
+                    ? 'hoy'
+                    : `el ${new Date(cuota.fechaVencimiento).toLocaleDateString('es-CL')}`;
+
+                cuotasDetectadas++;
+
+                const msgCliente = `Estimado/a ${clienteNombre}, le recordamos que su cuota Nº ${cuota.numero} de $${Number(monto).toLocaleString('es-CL')} vence ${fechaTxt}.`;
+                const msgEquipo = `ALERTA: Cuota Nº ${cuota.numero} de cliente ${clienteNombre} por $${Number(monto).toLocaleString('es-CL')} vence ${fechaTxt}.`;
+
+                const tasks = [];
+
+                // Cliente: SI O SI (si tiene teléfono válido)
+                if (clienteTel && !cuota._waAlertas.cliente?.[marca] && validarNumero(clienteTel).ok) {
+                    enviadosTotal++;
+                    tasks.push(
+                        enviarMensaje(clienteTel, msgCliente, 'alerta-cobro-cliente')
+                            .then(r => {
+                                if (r?.ok !== false) {
+                                    cuota._waAlertas.cliente[marca] = true;
+                                    cambios++;
+                                    enviadosOk++;
+                                }
+                            })
+                            .catch(e => {
+                                waLogger.logError('cobro-cliente-envio-fallido', { error: e.message, clienteTel });
+                            })
+                    );
+                }
+
+                // Equipo: solo autoEnvio
+                if (destinatariosEquipo.length > 0 && !cuota._waAlertas.equipo?.[marca]) {
+                    const settled = await Promise.allSettled(destinatariosEquipo.map(d => {
+                        enviadosTotal++;
+                        return enviarMensaje(d.numero, msgEquipo, 'alerta-cobro-equipo');
+                    }));
+                    const okEquipo = settled.filter(x => x.status === 'fulfilled').length;
+                    if (okEquipo > 0) {
+                        cuota._waAlertas.equipo[marca] = true;
+                        cambios++;
+                        enviadosOk += okEquipo;
+                    }
+                }
+
+                if (tasks.length) await Promise.allSettled(tasks);
+            }
+        }
+
+        if (cambios > 0) {
+            const ok = alertService.saveDB(db);
+            if (!ok) waLogger.logError('cobro-db-save-fallido', {});
+        }
+
+        if (enviadosTotal > 0) {
+            waLogger.logInfo('cobro-scheduler-ejecucion', { diasAntes, enviadosOk, enviadosTotal });
+        }
+        return {
+            diasAntes,
+            cuotasDetectadas,
+            cuotasCoincidenFecha,
+            cuotasSaltadasPorMarca,
+            enviadosOk,
+            enviadosTotal,
+            cambios,
+            debug: { targetISO, cuotasPendientes, cuotasSinFecha, ejemplosFechas }
+        };
+    } catch (e) {
+        waLogger.logError('cobro-scheduler-error', { error: e.message, diasAntes });
+        return { diasAntes, cuotasDetectadas: 0, enviadosOk: 0, enviadosTotal: 0, cambios: 0, error: e.message };
+    }
+}
+
+async function _ejecutarResumen(config, modo = 'auto') {
     if (!waReady) return;
-    // Soporte para lista de destinatarios (nuevo) y fallback a numeroDestino (legacy)
-    const destinatarios = _getDestinatarios(config);
+    const destinatarios = _getDestinatarios(config, modo === 'manual' ? 'manual' : 'auto');
     if (destinatarios.length === 0) return;
     try {
         const resumen = alertService.getResumenParaWhatsApp(); // una sola lectura
         const mensaje = formatearResumen(resumen, config);
-        for (const dest of destinatarios) {
-            try {
-                await enviarMensaje(dest.numero, mensaje, 'resumen-diario');
-            } catch(e) {
-                waLogger.logError('resumen-diario-error', { numero: dest.numero, error: e.message });
+        const settled = await Promise.allSettled(destinatarios.map(dest => enviarMensaje(dest.numero, mensaje, 'resumen-diario')));
+        settled.forEach(r => {
+            if (r.status === 'rejected') {
+                waLogger.logError('resumen-diario-envio-fallido', { error: r.reason?.message || String(r.reason) });
             }
-        }
+        });
     } catch(e) {
         waLogger.logError('resumen-diario-error', { error: e.message });
     }
 }
 
 /**
- * Retorna la lista efectiva de destinatarios para el scheduler 8AM.
+ * Retorna la lista efectiva de destinatarios.
  *
- * - Principal (destinoNumero / numeroDestino): SIEMPRE incluido si está configurado.
- * - Secundarios (config.destinatarios[]): solo los que tienen autoEnvio !== false.
- * - Legacy (numeroDestino sin destinoNumero): compatibilidad hacia atrás.
+ * modo:
+ * - 'auto': solo contactos con autoEnvio !== false
+ * - 'manual': solo contactos con envioManual !== false
  */
-function _getDestinatarios(config) {
+function _getDestinatarios(config, modo = 'auto') {
     const lista = [];
+
+    const permitir = (x) => {
+        if (modo === 'manual') return x?.envioManual !== false;
+        return x?.autoEnvio !== false;
+    };
+
+    // Abogados principales (nuevo): incluir TODOS (si están configurados y son válidos)
+    if (Array.isArray(config.abogadosPrincipales) && config.abogadosPrincipales.length > 0) {
+        for (const a of config.abogadosPrincipales) {
+            if (!a?.numero || !validarNumero(String(a.numero)).ok) continue;
+            if (!permitir(a)) continue;
+            const n = validarNumero(String(a.numero)).numero;
+            if (lista.find(x => x.numero === n)) continue;
+            lista.push({ nombre: a.nombre || '', numero: n, tipo: 'principal' });
+        }
+    }
 
     // Principal
     const numPrincipal = config.destinoNumero || config.numeroDestino || '';
     if (numPrincipal && validarNumero(numPrincipal).ok) {
-        lista.push({
-            nombre: config.destinoNombre || config.nombreAbogado || '',
-            numero: numPrincipal,
-            tipo: 'principal'
-        });
+        // Legacy no tiene flags: se asume permitido
+        const n = validarNumero(numPrincipal).numero;
+        if (!lista.find(x => x.numero === n)) {
+            lista.push({
+                nombre: config.destinoNombre || config.nombreAbogado || '',
+                numero: n,
+                tipo: 'principal'
+            });
+        }
     }
 
     // Secundarios con autoEnvio activo
@@ -319,7 +661,7 @@ function _getDestinatarios(config) {
         for (const d of config.destinatarios) {
             if (!d.numero || !validarNumero(d.numero).ok) continue;
             if (d.numero === numPrincipal) continue;          // evitar duplicado
-            if (d.autoEnvio === false) continue;              // pausado por el usuario
+            if (!permitir(d)) continue;
             lista.push({ nombre: d.nombre || '', numero: d.numero, tipo: 'secundario' });
         }
     }
@@ -331,6 +673,14 @@ function _getDestinatarios(config) {
  * Solo el principal (para envíos manuales desde botón "Enviar resumen ahora").
  */
 function _getPrincipal(config) {
+    // Preferir el primer abogado principal si existe
+    if (Array.isArray(config.abogadosPrincipales) && config.abogadosPrincipales.length > 0) {
+        const first = config.abogadosPrincipales.find(a => a?.numero && validarNumero(String(a.numero)).ok);
+        if (first) {
+            const n = validarNumero(String(first.numero)).numero;
+            return { nombre: first.nombre || '', numero: n };
+        }
+    }
     const num = config.destinoNumero || config.numeroDestino || '';
     if (!num || !validarNumero(num).ok) return null;
     return { nombre: config.destinoNombre || config.nombreAbogado || '', numero: num };
@@ -343,7 +693,7 @@ function _getPrincipal(config) {
  */
 async function _ejecutarCriticos(config) {
     if (!waReady) return;
-    const destinatarios = _getDestinatarios(config);
+    const destinatarios = _getDestinatarios(config, 'auto');
     if (destinatarios.length === 0) return;
     try {
         // UNA sola lectura que ya incluye críticas enriquecidas
@@ -363,10 +713,8 @@ async function _ejecutarCriticos(config) {
         });
         msg += `_Requiere acción inmediata – LEXIUM_`;
 
-        const destinatarios = _getDestinatarios(config);
-        for (const dest of destinatarios) {
-            try { await enviarMensaje(dest.numero, msg, 'alerta-critica'); } catch(_) {}
-        }
+        const targets = _getDestinatarios(config, 'auto');
+        await Promise.allSettled(targets.map(dest => enviarMensaje(dest.numero, msg, 'alerta-critica')));
         criticas.forEach(a => alertService.marcarAlertaNotificada(a.id));
     } catch(e) {
         waLogger.logError('criticos-error', { error: e.message });
@@ -377,12 +725,30 @@ async function _ejecutarCriticos(config) {
 function registrarHandlers(getConfig) {
     ipcMain.handle('whatsapp:estado', () => {
         const cfg = getConfig();
+
+        let numeroConectado = '';
+        let perfilConectado = '';
+        try {
+            // whatsapp-web.js expone info cuando está listo
+            if (waClient && waReady && waClient.info) {
+                const wid = waClient.info.wid;
+                // wid puede ser objeto { user } o string
+                const user = (wid && typeof wid === 'object') ? (wid.user || '') : '';
+                numeroConectado = user || '';
+                perfilConectado = waClient.info.pushname || '';
+            }
+        } catch (_) { }
+
         return {
             conectado:      waReady,
+            numeroConectado,
+            perfilConectado,
             // Sesión activa
             sesionNombre:   cfg.sesionNombre   || '',
             sesionNumero:   cfg.sesionNumero   || '',
             sesionDesde:    cfg.sesionDesde    || null,
+            // Abogados principales (nuevo)
+            abogadosPrincipales: Array.isArray(cfg.abogadosPrincipales) ? cfg.abogadosPrincipales : [],
             // Número principal
             destinoNombre:  cfg.destinoNombre  || cfg.nombreAbogado  || '',
             destinoNumero:  cfg.destinoNumero  || cfg.numeroDestino  || '',
@@ -399,9 +765,9 @@ function registrarHandlers(getConfig) {
     // Enviar resumen a TODOS los destinatarios activos (scheduler 8AM manual)
     ipcMain.handle('whatsapp:enviar-resumen', async () => {
         const config = getConfig();
-        const destinatarios = _getDestinatarios(config);
+        const destinatarios = _getDestinatarios(config, 'manual');
         if (destinatarios.length === 0) return { error: 'Sin destinatarios configurados' };
-        try { await _ejecutarResumen(config); return { ok: true, destinatarios: destinatarios.length }; }
+        try { await _ejecutarResumen(config, 'manual'); return { ok: true, destinatarios: destinatarios.length }; }
         catch(e) { return { error: e.message }; }
     });
 
@@ -421,14 +787,12 @@ function registrarHandlers(getConfig) {
     // Enviar alerta/mensaje a TODOS los destinatarios activos
     ipcMain.handle('whatsapp:enviar-alerta', async (_e, mensaje) => {
         const config = getConfig();
-        const destinatarios = _getDestinatarios(config);
+        const destinatarios = _getDestinatarios(config, 'manual');
         if (destinatarios.length === 0) return { error: 'Sin destinatarios configurados' };
         const v = validarMensaje(mensaje);
         if (!v.ok) return { error: v.error };
         try {
-            for (const dest of destinatarios) {
-                try { await enviarMensaje(dest.numero, mensaje, 'manual'); } catch(_) {}
-            }
+            await Promise.allSettled(destinatarios.map(dest => enviarMensaje(dest.numero, mensaje, 'manual')));
             return { ok: true, destinatarios: destinatarios.length };
         }
         catch(e) { return { error: e.message }; }
@@ -444,6 +808,27 @@ function registrarHandlers(getConfig) {
             await enviarMensaje(v1.numero, mensaje, 'manual-individual');
             return { ok: true };
         } catch(e) { return { error: e.message }; }
+    });
+
+    // Ejecutar ahora alertas de cobro (para pruebas manuales)
+    ipcMain.handle('whatsapp:probar-alertas-cobro', async () => {
+        const config = getConfig();
+        const autoDesactivado = !config.activo;
+        if (!waReady) return { error: 'WhatsApp no está listo/conectado' };
+        try {
+            const rv = await _ejecutarAlertasCobroVencidas(config);
+            const r0 = await _ejecutarAlertasCobro(config, 0);
+            const r2 = await _ejecutarAlertasCobro(config, 2);
+
+            const resumen = {
+                ok: true,
+                warning: autoDesactivado ? 'WhatsApp automático está desactivado; ejecución fue manual (prueba).' : undefined,
+                resultados: [rv, r0, r2]
+            };
+            return resumen;
+        } catch (e) {
+            return { error: e.message };
+        }
     });
 
     ipcMain.handle('whatsapp:desconectar', async () => {

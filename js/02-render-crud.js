@@ -446,6 +446,725 @@
             });
         }
 
+        // ─── Control Financiero (Honorarios) ─────────────────────────────
+        async function uiTestAlertaCobro() {
+            try {
+                if (!window.electronAPI?.whatsapp?.enviarAlertaA) {
+                    showError('WhatsApp no está disponible.');
+                    return;
+                }
+
+                const sel = document.getElementById('hr-causa-sel');
+                const causaId = sel ? (sel.value || '').toString().trim() : '';
+                if (!causaId) { showError('Seleccione una causa.'); return; }
+
+                const causa = (DB.causas || []).find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
+                if (!causa) { showError('Causa no encontrada.'); return; }
+
+                const cliente = (DB.clientes || []).find(c => String(c.id) === String(causa.clienteId));
+                const clienteNombre = cliente?.nombre || cliente?.nom || 'Cliente';
+                const clienteTel = (cliente?.telefono || '').toString().replace(/[\s\+\-\(\)]/g, '').trim();
+
+                const h = causa.honorarios || {};
+                const modalidad = (h.modalidad || 'CONTADO').toUpperCase();
+
+                let monto = 0;
+                let vencTxt = 'Pendiente';
+
+                if (modalidad === 'CUOTAS' && Array.isArray(h.planPagos) && h.planPagos.length > 0) {
+                    const cuota = h.planPagos.find(x => (x?.estado || 'PENDIENTE') !== 'PAGADA') || h.planPagos[0];
+                    monto = parseFloat(cuota?.monto) || 0;
+                    try {
+                        const f = cuota?.fechaVencimiento ? new Date(cuota.fechaVencimiento) : null;
+                        vencTxt = (f && !Number.isNaN(f.getTime()))
+                            ? f.toLocaleDateString('es-CL')
+                            : 'Pendiente';
+                    } catch (_) {
+                        vencTxt = 'Pendiente';
+                    }
+                } else {
+                    monto = (typeof h.saldoPendiente === 'number') ? h.saldoPendiente : (parseFloat(h.saldoPendiente) || 0);
+                    if (!monto) {
+                        const base = parseFloat(h.montoTotal || h.montoBase || 0) || 0;
+                        const pagado = (h.pagos || []).reduce((s, p) => s + (parseFloat(p?.monto) || 0), 0);
+                        monto = Math.max(0, base - pagado);
+                    }
+                    vencTxt = 'Pendiente';
+                }
+
+                const targets = [];
+
+                if (clienteTel && /^\d{10,15}$/.test(clienteTel)) {
+                    const msgCliente = `🧪 *TEST DE ALERTA (CLIENTE)*\nCliente: ${clienteNombre}\nCausa: ${causa.caratula || '—'}\nMonto: $${Math.round(monto).toLocaleString('es-CL')}\nVencimiento: ${vencTxt}`;
+                    console.log(`[TEST] Enviando a Cliente ${clienteNombre} (+${clienteTel})...`);
+                    targets.push({ nombre: `Cliente ${clienteNombre}`, numero: clienteTel, mensaje: msgCliente });
+                }
+
+                // Equipo interno (Auto): abogadosPrincipales + destinatarios con autoEnvio
+                let estadoWA = null;
+                try {
+                    estadoWA = await window.electronAPI.whatsapp.estado();
+                } catch (_) { estadoWA = null; }
+
+                const internosMap = new Map();
+                (estadoWA?.abogadosPrincipales || []).filter(a => a && a.autoEnvio !== false).forEach(a => {
+                    const n = (a?.numero || '').toString().replace(/[\s\+\-\(\)]/g, '').trim();
+                    if (!n) return;
+                    internosMap.set(n, { nombre: a?.nombre || 'Abogado', numero: n });
+                });
+                (estadoWA?.destinatarios || []).filter(d => d && d.autoEnvio !== false).forEach(d => {
+                    const n = (d?.numero || '').toString().replace(/[\s\+\-\(\)]/g, '').trim();
+                    if (!n) return;
+                    if (!internosMap.has(n)) internosMap.set(n, { nombre: d?.nombre || 'Asistente', numero: n });
+                });
+
+                for (const dest of internosMap.values()) {
+                    const msgEquipo = `🧪 *TEST DE ALERTA (EQUIPO)*\nCliente: ${clienteNombre}\nCausa: ${causa.caratula || '—'}\nMonto: $${Math.round(monto).toLocaleString('es-CL')}\nVencimiento: ${vencTxt}`;
+                    console.log(`[TEST] Enviando a Abogado ${dest.nombre} (+${dest.numero})...`);
+                    targets.push({ nombre: dest.nombre, numero: dest.numero, mensaje: msgEquipo });
+                }
+
+                // Enviar concurrente
+                const settled = await Promise.allSettled(
+                    targets.map(t => window.electronAPI.whatsapp.enviarAlertaA(String(t.numero), String(t.mensaje || '')))
+                );
+
+                const ok = settled.filter(r => r.status === 'fulfilled' && r.value?.ok).length;
+                const total = targets.length;
+
+                showSuccess(`Prueba enviada a ${ok} de ${total} contacto(s).`);
+            } catch (e) {
+                console.error('[TEST] Error en uiTestAlertaCobro:', e);
+                showError(e?.message || 'No se pudo enviar la prueba.');
+            }
+        }
+
+        async function uiProbarSchedulerCobros() {
+            try {
+                if (!window.electronAPI?.whatsapp?.probarAlertasCobro) {
+                    showError('Función no disponible. Reinicia la app si acabas de actualizar.');
+                    return;
+                }
+                const r = await window.electronAPI.whatsapp.probarAlertasCobro();
+                if (!r?.ok) {
+                    showError(r?.error || 'No se pudo ejecutar la alerta automática.');
+                    return;
+                }
+
+                const res = Array.isArray(r?.resultados) ? r.resultados : [];
+                const parts = res.map(x => {
+                    const label = (x?.tipo === 'vencidas') ? 'vencidas' : `d+${(x?.diasAntes ?? '?')}`;
+                    const cd = (x?.cuotasDetectadas ?? 0);
+                    const cc = (x?.tipo === 'vencidas')
+                        ? (x?.cuotasVencidas ?? 0)
+                        : (x?.cuotasCoincidenFecha ?? 0);
+                    const sk = (x?.cuotasSaltadasPorMarca ?? 0);
+                    const ok = (x?.enviadosOk ?? 0);
+                    const tot = (x?.enviadosTotal ?? 0);
+                    return `${label}: coinciden=${cc}, omitidas=${sk}, envíos=${ok}/${tot}`;
+                });
+                const warning = r?.warning ? ` (${r.warning})` : '';
+                showSuccess(`Auto ejecutado${warning}. ${parts.join(' | ') || 'Sin datos.'}`);
+
+                try {
+                    const allZero = res.length > 0 && res.every(x => (x?.cuotasDetectadas || 0) === 0);
+                    if (allZero) {
+                        console.log('[COBROS][DEBUG] resultados (obj):', res);
+                        try {
+                            console.log('[COBROS][DEBUG] resultados (json):\n' + JSON.stringify(res, null, 2));
+                        } catch (_) { }
+                    }
+                } catch (_) { }
+            } catch (e) {
+                console.error('[COBROS] Error probando scheduler:', e);
+                showError(e?.message || 'No se pudo ejecutar la alerta automática.');
+            }
+        }
+
+        let _hrEditHonorarios = false;
+
+        function uiSetHonorariosEditMode(on) {
+            _hrEditHonorarios = !!on;
+            const form = document.getElementById('hr-asignar-form');
+            const summary = document.getElementById('hr-asignado-summary');
+            const btn = document.getElementById('hr-btn-modificar');
+            if (form) form.style.display = _hrEditHonorarios ? 'block' : 'none';
+            if (summary) summary.style.display = _hrEditHonorarios ? 'none' : 'block';
+            if (btn) btn.style.display = _hrEditHonorarios ? 'none' : 'inline-flex';
+        }
+
+        function uiCargarHonorariosEnFormulario(causa) {
+            const h = causa?.honorarios || {};
+            const modalidad = (h.modalidad || 'CONTADO').toUpperCase();
+            const monto = parseFloat(h.montoTotal || h.montoBase || 0) || 0;
+            const elModalidad = document.getElementById('hr-modalidad');
+            const elMonto = document.getElementById('hr-monto');
+            if (elModalidad) elModalidad.value = modalidad;
+            if (elMonto) elMonto.value = monto ? String(Math.round(monto)) : '';
+
+            const wrap = document.getElementById('hr-cuotas-wrap');
+            const elNCuotas = document.getElementById('hr-cuotas-num');
+            const elFecha = document.getElementById('hr-cuotas-fecha');
+
+            if (wrap) wrap.style.display = (modalidad === 'CUOTAS') ? 'block' : 'none';
+            if (modalidad === 'CUOTAS') {
+                const plan = Array.isArray(h.planPagos) ? h.planPagos : [];
+                if (elNCuotas) elNCuotas.value = plan.length ? String(plan.length) : (elNCuotas.value || '');
+                if (elFecha) {
+                    const f0 = plan[0]?.fechaVencimiento ? new Date(plan[0].fechaVencimiento) : null;
+                    if (f0 && !Number.isNaN(f0.getTime())) {
+                        const yyyy = String(f0.getFullYear());
+                        const mm = String(f0.getMonth() + 1).padStart(2, '0');
+                        const dd = String(f0.getDate()).padStart(2, '0');
+                        elFecha.value = `${yyyy}-${mm}-${dd}`;
+                    }
+                }
+            }
+        }
+
+        function uiActualizarHonorariosVista() {
+            const sel = document.getElementById('hr-causa-sel');
+            const causaId = sel ? (sel.value || '').toString().trim() : '';
+            const summary = document.getElementById('hr-asignado-summary');
+            if (!summary) return;
+
+            if (!causaId) {
+                summary.innerHTML = '';
+                uiSetHonorariosEditMode(true);
+                return;
+            }
+
+            const causa = (DB.causas || []).find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
+            const h = causa?.honorarios || {};
+            const base = parseFloat(h.montoTotal || h.montoBase || 0) || 0;
+            const modalidad = (h.modalidad || '').toString().toUpperCase();
+            const tieneHonorarios = !!base && (modalidad === 'CONTADO' || modalidad === 'CUOTAS');
+
+            if (!tieneHonorarios) {
+                summary.innerHTML = '';
+                uiSetHonorariosEditMode(true);
+                return;
+            }
+
+            const plan = Array.isArray(h.planPagos) ? h.planPagos : [];
+            const saldo = (typeof h.saldoPendiente === 'number') ? h.saldoPendiente : (parseFloat(h.saldoPendiente) || 0);
+            const fecha0 = plan[0]?.fechaVencimiento ? new Date(plan[0].fechaVencimiento) : null;
+            const fecha0Txt = (fecha0 && !Number.isNaN(fecha0.getTime())) ? fecha0.toLocaleDateString('es-CL') : '—';
+
+            const fmtFecha = (iso) => {
+                try {
+                    if (!iso) return '—';
+                    const d = new Date(iso);
+                    return (!Number.isNaN(d.getTime())) ? d.toLocaleDateString('es-CL') : '—';
+                } catch (_) {
+                    return '—';
+                }
+            };
+
+            const planHtml = (modalidad === 'CUOTAS' && plan.length)
+                ? `
+                    <div style="margin-top:10px; overflow:auto; border:1px solid var(--border); border-radius:10px;">
+                        <table style="width:100%; border-collapse:collapse; font-size:0.82rem;">
+                            <thead>
+                                <tr style="background:var(--bg-2,#f1f5f9); border-bottom:1px solid var(--border);">
+                                    <th style="text-align:left; padding:8px 10px;">Nº</th>
+                                    <th style="text-align:right; padding:8px 10px;">Monto</th>
+                                    <th style="text-align:left; padding:8px 10px;">Vence</th>
+                                    <th style="text-align:left; padding:8px 10px;">Estado</th>
+                                    <th style="text-align:left; padding:8px 10px;">Pago</th>
+                                    <th style="text-align:right; padding:8px 10px;">Respaldo</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${plan.map(cuota => {
+                                    const est = (cuota?.estado || 'PENDIENTE').toUpperCase();
+                                    const badge = est === 'PAGADA'
+                                        ? '<span class="badge badge-s">PAGADA</span>'
+                                        : '<span class="badge badge-w">PENDIENTE</span>';
+                                    const hasComp = !!(cuota?.comprobante?.base64);
+                                    const btnComp = hasComp
+                                        ? `<button type="button" class="btn btn-xs" style="background:var(--bg-2); border:1px solid var(--border);" onclick="uiVerComprobanteCuota('${escHtml(String(causaId))}', ${cuota?.numero ?? 0})"><i class=\"fas fa-file-pdf\"></i></button>`
+                                        : '<span style="color:var(--text-3); font-size:0.75rem;">—</span>';
+                                    return `
+                                        <tr style="border-bottom:1px solid #eef2f7;">
+                                            <td style="padding:8px 10px; font-family:monospace;">${cuota?.numero ?? ''}</td>
+                                            <td style="padding:8px 10px; text-align:right; font-family:monospace;">$${(cuota?.monto || 0).toLocaleString('es-CL')}</td>
+                                            <td style="padding:8px 10px;">${fmtFecha(cuota?.fechaVencimiento)}</td>
+                                            <td style="padding:8px 10px;">${badge}</td>
+                                            <td style="padding:8px 10px;">${fmtFecha(cuota?.fechaPago)}</td>
+                                            <td style="padding:8px 10px; text-align:right;">${btnComp}</td>
+                                        </tr>`;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `
+                : '';
+
+            summary.innerHTML = `
+                <div style="padding:12px; background:var(--bg); border:1px solid var(--border); border-radius:10px;">
+                    <div style="font-weight:800; margin-bottom:8px;">Honorarios asignados</div>
+                    <div style="font-size:0.85rem; color:var(--text-2); line-height:1.5;">
+                        <div><strong>Modalidad:</strong> ${escHtml(modalidad || '—')}</div>
+                        <div><strong>Monto:</strong> $${Math.round(base).toLocaleString('es-CL')}</div>
+                        ${modalidad === 'CUOTAS' ? `<div><strong>Cuotas:</strong> ${plan.length || 0} · <strong>Primera:</strong> ${escHtml(fecha0Txt)}</div>` : ''}
+                        <div><strong>Saldo pendiente:</strong> $${Math.round(saldo).toLocaleString('es-CL')}</div>
+                    </div>
+                    ${planHtml}
+                </div>
+            `;
+
+            uiSetHonorariosEditMode(false);
+        }
+
+        function uiAsignarHonorarios(causaIdOverride) {
+            const sel = document.getElementById('hr-causa-sel');
+            const fromSelect = sel ? (sel.value || '').toString().trim() : '';
+            const fromOverride = (causaIdOverride !== undefined && causaIdOverride !== null)
+                ? causaIdOverride.toString().trim()
+                : '';
+            const causaId = fromOverride || fromSelect;
+
+            const modalidad = (document.getElementById('hr-modalidad')?.value || 'CONTADO').toUpperCase();
+            const monto = parseFloat(document.getElementById('hr-monto').value);
+            if (!causaId) { showError('Seleccione una causa.'); return; }
+            if (!monto || monto <= 0) { showError('Ingrese un monto válido.'); return; }
+
+            const causa = DB.causas.find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
+            if (!causa) { showError('Causa no encontrada.'); return; }
+
+            if (!causa.honorarios) causa.honorarios = {};
+
+            if (modalidad === 'CUOTAS') {
+                const nCuotas = parseInt(document.getElementById('hr-cuotas-num')?.value) || 0;
+                const fechaStr = (document.getElementById('hr-cuotas-fecha')?.value || '').trim();
+                if (!nCuotas || nCuotas <= 0) { showError('Ingrese número de cuotas.'); return; }
+                if (!fechaStr) { showError('Ingrese fecha primera cuota.'); return; }
+
+                let plan = [];
+                try {
+                    plan = generarPlanPagos(causaId, monto, nCuotas, new Date(fechaStr));
+                } catch (e) {
+                    showError(e?.message || 'No se pudo generar el plan de pagos.');
+                    return;
+                }
+
+                causa.honorarios.modalidad = 'CUOTAS';
+                causa.honorarios.montoTotal = monto;
+                causa.honorarios.montoBase = monto; // compat
+                causa.honorarios.planPagos = plan;
+                // Mantener pagos legacy si existían
+                if (!Array.isArray(causa.honorarios.pagos)) causa.honorarios.pagos = [];
+                causa.honorarios.saldoPendiente = plan.reduce((s, c) => s + (c.estado === 'PENDIENTE' ? (c.monto || 0) : 0), 0);
+
+                if (typeof markAppDirty === "function") markAppDirty();
+                save();
+            } else {
+                // CONTADO: reutiliza asignarHonorarios para mantener compatibilidad
+                asignarHonorarios(causaId, monto);
+            }
+
+            registrarEvento(`Honorarios asignados: $${monto.toLocaleString('es-CL')} — ${causa?.caratula}`);
+            document.getElementById('hr-monto').value = '';
+            renderHonorariosResumen();
+            uiRenderPlanPagos(causaId);
+            renderAll();
+
+            uiSetHonorariosEditMode(false);
+            uiActualizarHonorariosVista();
+        }
+
+        function _fileToBase64DataUrl(file) {
+            return new Promise((resolve, reject) => {
+                try {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(String(reader.result || ''));
+                    reader.onerror = () => reject(new Error('No se pudo leer el archivo.'));
+                    reader.readAsDataURL(file);
+                } catch (e) {
+                    reject(e);
+                }
+            });
+        }
+
+        async function _pickPdfComprobante() {
+            return new Promise((resolve) => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.pdf,application/pdf';
+                input.style.display = 'none';
+                document.body.appendChild(input);
+
+                input.onchange = async () => {
+                    try {
+                        const file = input.files && input.files[0];
+                        if (!file) { resolve(null); return; }
+                        if (file.type !== 'application/pdf') { showError('Solo se acepta PDF.'); resolve(null); return; }
+                        const dataUrl = await _fileToBase64DataUrl(file);
+                        const base64 = dataUrl.split(',')[1] || '';
+                        resolve({ nombre: file.name, mime: file.type, base64 });
+                    } catch (e) {
+                        console.error('[PAGO] Error leyendo comprobante:', e);
+                        showError(e?.message || 'No se pudo leer el comprobante.');
+                        resolve(null);
+                    } finally {
+                        try { document.body.removeChild(input); } catch (_) {}
+                    }
+                };
+
+                input.click();
+            });
+        }
+
+        function uiAbrirPdfBase64(base64, nombre = 'comprobante.pdf') {
+            if (!base64) { showError('No hay comprobante.'); return; }
+            const url = `data:application/pdf;base64,${base64}`;
+            const w = window.open(url, '_blank');
+            if (!w) showError('El navegador bloqueó la ventana emergente.');
+        }
+
+        function uiVerComprobanteCuota(causaId, numeroCuota) {
+            const causa = (DB.causas || []).find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
+            const cuota = causa?.honorarios?.planPagos?.find(c => parseInt(c.numero) === parseInt(numeroCuota));
+            const comp = cuota?.comprobante;
+            if (!comp?.base64) { showError('No hay comprobante en esta cuota.'); return; }
+            uiAbrirPdfBase64(comp.base64, comp.nombre || 'comprobante.pdf');
+        }
+
+        function uiVerComprobantePago(causaId, idxPago) {
+            const causa = (DB.causas || []).find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
+            const pago = (causa?.honorarios?.pagos || [])[parseInt(idxPago)];
+            const comp = pago?.comprobante;
+            if (!comp?.base64) { showError('No hay comprobante en este pago.'); return; }
+            uiAbrirPdfBase64(comp.base64, comp.nombre || 'comprobante.pdf');
+        }
+
+        function uiRenderPagosList(causaId) {
+            const el = document.getElementById('hr-pagos-list');
+            if (!el) return;
+            const causa = (DB.causas || []).find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
+            const pagos = Array.isArray(causa?.honorarios?.pagos) ? causa.honorarios.pagos : [];
+            if (!causaId || !pagos.length) { el.innerHTML = ''; return; }
+
+            const fmtFecha = (iso) => {
+                try {
+                    if (!iso) return '—';
+                    const d = new Date(iso);
+                    return (!Number.isNaN(d.getTime())) ? d.toLocaleDateString('es-CL') : '—';
+                } catch (_) { return '—'; }
+            };
+
+            el.innerHTML = `
+                <div style="font-size:0.72rem; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:#64748b; margin:10px 0 8px;">
+                    <i class="fas fa-receipt"></i> Pagos registrados
+                </div>
+                <div style="overflow:auto; border:1px solid var(--border); border-radius:10px;">
+                    <table style="width:100%; border-collapse:collapse; font-size:0.82rem;">
+                        <thead>
+                            <tr style="background:var(--bg-2,#f1f5f9); border-bottom:1px solid var(--border);">
+                                <th style="text-align:left; padding:8px 10px;">Fecha</th>
+                                <th style="text-align:right; padding:8px 10px;">Monto</th>
+                                <th style="text-align:left; padding:8px 10px;">Concepto</th>
+                                <th style="text-align:right; padding:8px 10px;">Respaldo</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${pagos.map((p, idx) => {
+                                const has = !!(p?.comprobante?.base64);
+                                const btn = has
+                                    ? `<button type="button" class="btn btn-xs" style="background:var(--bg-2); border:1px solid var(--border);" onclick="uiVerComprobantePago('${escHtml(String(causaId))}', ${idx})"><i class=\"fas fa-file-pdf\"></i></button>`
+                                    : '<span style="color:var(--text-3); font-size:0.75rem;">—</span>';
+                                return `
+                                    <tr style="border-bottom:1px solid #eef2f7;">
+                                        <td style="padding:8px 10px;">${fmtFecha(p?.fecha)}</td>
+                                        <td style="padding:8px 10px; text-align:right; font-family:monospace;">$${(p?.monto || 0).toLocaleString('es-CL')}</td>
+                                        <td style="padding:8px 10px;">${escHtml(p?.concepto || '—')}</td>
+                                        <td style="padding:8px 10px; text-align:right;">${btn}</td>
+                                    </tr>`;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        function uiRenderPlanPagos(causaId) {
+            const cont = document.getElementById('hr-plan');
+            if (!cont) return;
+            const causa = (DB.causas || []).find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
+            const h = causa?.honorarios;
+            const plan = Array.isArray(h?.planPagos) ? h.planPagos : [];
+            if (!causa || !h || !plan.length) { cont.innerHTML = ''; return; }
+
+            const fmtFecha = (iso) => {
+                try { return iso ? new Date(iso).toLocaleDateString('es-CL') : '—'; }
+                catch (_) { return '—'; }
+            };
+
+            cont.innerHTML = `
+                <div style="font-size:0.7rem; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:#64748b; margin-bottom:8px;">
+                    <i class="fas fa-list"></i> Plan de pagos (${h.modalidad || '—'})
+                </div>
+                <div style="overflow:auto; border:1px solid var(--border); border-radius:10px;">
+                    <table style="width:100%; border-collapse:collapse; font-size:0.82rem;">
+                        <thead>
+                            <tr style="background:var(--bg-2,#f1f5f9); border-bottom:1px solid var(--border);">
+                                <th style="text-align:left; padding:8px 10px;">Nº</th>
+                                <th style="text-align:right; padding:8px 10px;">Monto</th>
+                                <th style="text-align:left; padding:8px 10px;">Vence</th>
+                                <th style="text-align:left; padding:8px 10px;">Estado</th>
+                                <th style="text-align:left; padding:8px 10px;">Pago</th>
+                                <th style="text-align:right; padding:8px 10px;">Respaldo</th>
+                                <th style="text-align:right; padding:8px 10px;">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${plan.map(cuota => {
+                                const estado = cuota.estado || 'PENDIENTE';
+                                const badge = estado === 'PAGADA'
+                                    ? '<span class="badge badge-s">PAGADA</span>'
+                                    : '<span class="badge badge-w">PENDIENTE</span>';
+                                const hasComp = !!(cuota?.comprobante?.base64);
+                                const btnComp = hasComp
+                                    ? `<button type="button" class="btn btn-xs" style="background:var(--bg-2); border:1px solid var(--border);" onclick="uiVerComprobanteCuota('${escHtml(String(causaId))}', ${cuota.numero})"><i class=\"fas fa-file-pdf\"></i></button>`
+                                    : '<span style="color:var(--text-3); font-size:0.75rem;">—</span>';
+                                const btn = (estado === 'PENDIENTE')
+                                    ? `<button type="button" class="btn btn-xs btn-p" onclick="uiMarcarCuotaPagada('${causaId}', ${cuota.numero})">Marcar Pagada</button>`
+                                    : `<button type="button" class="btn btn-xs btn-d" onclick="uiDeshacerCuotaPagada('${causaId}', ${cuota.numero})">Deshacer</button>`;
+                                return `
+                                    <tr style="border-bottom:1px solid #eef2f7;">
+                                        <td style="padding:8px 10px; font-family:monospace;">${cuota.numero}</td>
+                                        <td style="padding:8px 10px; text-align:right; font-family:monospace;">$${(cuota.monto || 0).toLocaleString('es-CL')}</td>
+                                        <td style="padding:8px 10px;">${fmtFecha(cuota.fechaVencimiento)}</td>
+                                        <td style="padding:8px 10px;">${badge}</td>
+                                        <td style="padding:8px 10px;">${fmtFecha(cuota.fechaPago)}</td>
+                                        <td style="padding:8px 10px; text-align:right;">${btnComp}</td>
+                                        <td style="padding:8px 10px; text-align:right;">${btn}</td>
+                                    </tr>`;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        function uiMarcarCuotaPagada(causaId, numeroCuota) {
+            const causa = (DB.causas || []).find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
+            if (!causa || !causa.honorarios) return;
+            const h = causa.honorarios;
+            if (!Array.isArray(h.planPagos)) return;
+
+            const cuota = h.planPagos.find(c => parseInt(c.numero) === parseInt(numeroCuota));
+            if (!cuota) return;
+            if (cuota.estado === 'PAGADA') return;
+
+            (async () => {
+                const quiere = confirm('¿Adjuntar comprobante PDF para esta cuota?');
+                const comp = quiere ? await _pickPdfComprobante() : null;
+
+                cuota.estado = 'PAGADA';
+                cuota.fechaPago = new Date().toISOString();
+                cuota.alertaEnviada = true;
+                if (comp) cuota.comprobante = comp;
+
+                // Registrar pago en legacy para mantener resumen
+                if (!Array.isArray(h.pagos)) h.pagos = [];
+                h.pagos.push({
+                    monto: cuota.monto || 0,
+                    fecha: new Date().toISOString(),
+                    concepto: `Cuota Nº ${cuota.numero}`,
+                    comprobante: comp ? { nombre: comp.nombre, mime: comp.mime, base64: comp.base64 } : null
+                });
+
+            const montoTotal = parseFloat(h.montoTotal || h.montoBase) || 0;
+            const totalPagado = (h.pagos || []).reduce((s, p) => s + (parseFloat(p?.monto) || 0), 0);
+            h.saldoPendiente = Math.max(0, montoTotal - totalPagado);
+
+                registrarEvento(`Cuota marcada pagada: Nº ${cuota.numero} — ${causa.caratula}`);
+                if (typeof markAppDirty === "function") markAppDirty();
+                save();
+                renderHonorariosResumen();
+                uiRenderPlanPagos(causa.id);
+                uiActualizarHonorariosVista();
+                uiRenderPagosList(causa.id);
+                renderAll();
+            })();
+        }
+
+        function uiDeshacerCuotaPagada(causaId, numeroCuota) {
+            const causa = (DB.causas || []).find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
+            if (!causa || !causa.honorarios) return;
+            const h = causa.honorarios;
+            if (!Array.isArray(h.planPagos)) return;
+
+            const cuota = h.planPagos.find(c => parseInt(c.numero) === parseInt(numeroCuota));
+            if (!cuota) return;
+            if (cuota.estado !== 'PAGADA') return;
+            if (!confirm(`¿Deshacer el pago de la cuota Nº ${cuota.numero}?`)) return;
+
+            cuota.estado = 'PENDIENTE';
+            cuota.fechaPago = null;
+            if (cuota.comprobante) cuota.comprobante = null;
+            if (cuota._waAlertas) {
+                cuota._waAlertas = { cliente: {}, admin: {} };
+            }
+            cuota.alertaEnviada = false;
+
+            // Revertir pago legacy asociado (si existe)
+            if (Array.isArray(h.pagos) && h.pagos.length) {
+                const concepto = `Cuota Nº ${cuota.numero}`;
+                const idx = [...h.pagos].map((p, i) => ({ p, i }))
+                    .reverse()
+                    .find(x => (x.p?.concepto === concepto) && ((parseFloat(x.p?.monto) || 0) === (parseFloat(cuota.monto) || 0)))?.i;
+                if (typeof idx === 'number' && idx >= 0) h.pagos.splice(idx, 1);
+            }
+
+            const montoTotal = parseFloat(h.montoTotal || h.montoBase) || 0;
+            const totalPagado = (h.pagos || []).reduce((s, p) => s + (parseFloat(p?.monto) || 0), 0);
+            h.saldoPendiente = Math.max(0, montoTotal - totalPagado);
+
+            registrarEvento(`Pago deshecho: Cuota Nº ${cuota.numero} — ${causa.caratula}`);
+            if (typeof markAppDirty === "function") markAppDirty();
+            save();
+            renderHonorariosResumen();
+            uiRenderPlanPagos(causa.id);
+            uiActualizarHonorariosVista();
+            uiRenderPagosList(causa.id);
+            renderAll();
+        }
+
+        // UI: mostrar/ocultar campos cuotas
+        (function _initHonorariosCuotasUI() {
+            const modalidadSel = document.getElementById('hr-modalidad');
+            const wrap = document.getElementById('hr-cuotas-wrap');
+            if (modalidadSel && wrap) {
+                const apply = () => {
+                    const m = (modalidadSel.value || 'CONTADO').toUpperCase();
+                    wrap.style.display = (m === 'CUOTAS') ? 'block' : 'none';
+                };
+                modalidadSel.addEventListener('change', apply);
+                apply();
+            }
+
+            const causaSel = document.getElementById('hr-causa-sel');
+            if (causaSel) {
+                causaSel.addEventListener('change', () => {
+                    const id = (causaSel.value || '').toString().trim();
+                    if (id) uiRenderPlanPagos(id);
+                    uiActualizarHonorariosVista();
+                    uiRenderPagosList(id);
+                });
+            }
+
+            const causaPagoSel = document.getElementById('hr-pago-causa-sel');
+            if (causaPagoSel) {
+                causaPagoSel.addEventListener('change', () => {
+                    const id = (causaPagoSel.value || '').toString().trim();
+                    uiRenderPagosList(id);
+                });
+            }
+
+            const btnMod = document.getElementById('hr-btn-modificar');
+            if (btnMod) {
+                btnMod.addEventListener('click', () => {
+                    const sel = document.getElementById('hr-causa-sel');
+                    const causaId = sel ? (sel.value || '').toString().trim() : '';
+                    const causa = (DB.causas || []).find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
+                    if (causa) uiCargarHonorariosEnFormulario(causa);
+                    uiSetHonorariosEditMode(true);
+                });
+            }
+
+            uiActualizarHonorariosVista();
+        })();
+
+        function uiRegistrarPago() {
+            const causaId = (document.getElementById('hr-pago-causa-sel')?.value || '').toString().trim();
+            const monto = parseFloat(document.getElementById('hr-pago-monto').value);
+            if (!causaId) { showError('Seleccione una causa.'); return; }
+            if (!monto || monto <= 0) { showError('Ingrese un monto válido.'); return; }
+            const causa = DB.causas.find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
+            const montoTotal = causa?.honorarios?.montoTotal || causa?.honorarios?.montoBase || 0;
+            if (!montoTotal) { showError('Esta causa no tiene honorarios asignados. Asígnelos primero.'); return; }
+
+            (async () => {
+                let comp = null;
+                const inp = document.getElementById('hr-pago-comprobante');
+                const file = inp?.files && inp.files[0];
+                if (file) {
+                    if (file.type !== 'application/pdf') {
+                        showError('Solo se acepta PDF como comprobante.');
+                        return;
+                    }
+                    const dataUrl = await _fileToBase64DataUrl(file);
+                    const base64 = dataUrl.split(',')[1] || '';
+                    comp = { nombre: file.name, mime: file.type, base64 };
+                }
+
+                // Mantener compatibilidad con registrarPago (si existe), pero asegurando comprobante
+                if (typeof registrarPago === 'function') {
+                    registrarPago(causaId, monto);
+                } else {
+                    if (!causa.honorarios) causa.honorarios = {};
+                    if (!Array.isArray(causa.honorarios.pagos)) causa.honorarios.pagos = [];
+                    causa.honorarios.pagos.push({ monto, fecha: new Date().toISOString(), concepto: 'Pago registrado', comprobante: null });
+                }
+
+                // Adjuntar comprobante al último pago si corresponde
+                if (comp) {
+                    if (!causa.honorarios) causa.honorarios = {};
+                    if (!Array.isArray(causa.honorarios.pagos)) causa.honorarios.pagos = [];
+                    const last = causa.honorarios.pagos[causa.honorarios.pagos.length - 1];
+                    if (last) last.comprobante = comp;
+                }
+
+                registrarEvento(`Pago registrado: $${monto.toLocaleString('es-CL')} — ${causa?.caratula}`);
+                document.getElementById('hr-pago-monto').value = '';
+                const inp2 = document.getElementById('hr-pago-comprobante');
+                if (inp2) inp2.value = '';
+
+                renderHonorariosResumen();
+                uiActualizarHonorariosVista();
+                uiRenderPlanPagos(causaId);
+                uiRenderPagosList(causaId);
+                renderAll();
+            })().catch(e => {
+                console.error('[PAGO] Error registrando pago:', e);
+                showError(e?.message || 'No se pudo registrar el pago.');
+            });
+        }
+
+        function renderHonorariosResumen() {
+            const el = document.getElementById('hr-resumen');
+            if (!el) return;
+            const causasConHon = DB.causas.filter(c => (c.honorarios?.montoTotal || c.honorarios?.montoBase));
+            if (!causasConHon.length) {
+                el.innerHTML = '<div class="empty-state"><i class="fas fa-wallet"></i><p>Sin honorarios asignados.</p></div>'; return;
+            }
+            el.innerHTML = causasConHon.map(c => {
+                const h = c.honorarios || {};
+                const base = h.montoTotal || h.montoBase || 0;
+                const saldo = typeof h.saldoPendiente === 'number' ? h.saldoPendiente : (parseFloat(h.saldoPendiente) || 0);
+                const pagado = base - saldo;
+                const pct = base > 0 ? Math.round((pagado / base) * 100) : 0;
+                return `<div class="card" style="margin-bottom:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <strong style="font-size:0.88rem;">${escHtml(c.caratula)}</strong>
+                <span class="badge ${saldo <= 0 ? 'badge-s' : 'badge-w'}">${saldo <= 0 ? 'PAGADO' : 'PENDIENTE'}</span>
+            </div>
+            <div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${pct}%"></div></div>
+            <div style="display:flex; justify-content:space-between; font-size:0.78rem; color:var(--t2); margin-top:6px;">
+                <span>Base: $${base.toLocaleString('es-CL')}</span>
+                <span>Pagado: <strong style="color:var(--s);">$${pagado.toLocaleString('es-CL')}</strong></span>
+                <span>Pendiente: <strong style="color:var(--d);">$${saldo.toLocaleString('es-CL')}</strong></span>
+            </div>
+            ${h.pagos?.length ? `<div style="margin-top:10px; border-top:1px solid #f1f5f9; padding-top:8px;">
+                ${h.pagos.map(p => `<div class="pago-item"><span>${new Date(p.fecha).toLocaleDateString('es-CL')}</span><span class="pago-monto">+$${p.monto.toLocaleString('es-CL')}</span></div>`).join('')}
+            </div>` : ''}
+        </div>`;
+            }).join('');
+        }
+
         function deleteCause(id) {
             showConfirm("¿Archivar causa?", "¿Está seguro de que desea archivar esta causa? Podrá encontrarla en el histórico.", () => {
                 DB.causas = DB.causas.filter(c => c.id !== id);

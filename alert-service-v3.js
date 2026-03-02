@@ -327,6 +327,8 @@ function getCacheInfo() {
 
 module.exports = {
     init,
+    getDB: () => _leerDB(true),
+    saveDB: (db) => _escribirDBAtomico(db),
     getAlertasActivas,
     getAlertasCriticas,
     getCausasConHonorariosPendientes,

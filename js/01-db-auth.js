@@ -139,6 +139,58 @@ let _raw = (() => {
         if (!causa.docsTribunal) causa.docsTribunal = [];
         if (!causa.docsTramites) causa.docsTramites = [];
         if (!causa.estadoCuenta) causa.estadoCuenta = { montoTotal: 0, pagos: [], totalPagado: 0, saldoPendiente: 0 };
+
+        // Normalización honorarios (modalidad + planPagos) — compatibilidad hacia atrás
+        if (!causa.honorarios) causa.honorarios = {};
+        const h = causa.honorarios;
+
+        // montoTotal: preferir el nuevo, si no tomar legacy montoBase/base
+        const montoTotal = (typeof h.montoTotal === 'number' ? h.montoTotal : (parseFloat(h.montoTotal) || 0))
+            || (typeof h.montoBase === 'number' ? h.montoBase : (parseFloat(h.montoBase) || 0))
+            || (typeof h.base === 'number' ? h.base : (parseFloat(h.base) || 0));
+        if (montoTotal > 0) {
+            h.montoTotal = montoTotal;
+            h.montoBase = montoTotal; // mantener alias usado por vistas legacy
+        }
+
+        // Asegurar pagos legacy como array
+        if (!Array.isArray(h.pagos)) h.pagos = [];
+        const totalPagadoLegacy = h.pagos.reduce((s, p) => s + (parseFloat(p?.monto) || 0), 0);
+
+        // Modalidad
+        if (h.modalidad !== 'CONTADO' && h.modalidad !== 'CUOTAS') {
+            // Inferir por presencia de cuotas/plan
+            h.modalidad = (Array.isArray(h.cuotas) && h.cuotas.length) ? 'CUOTAS' : 'CONTADO';
+        }
+
+        // planPagos
+        if (!Array.isArray(h.planPagos) || !h.planPagos.length) {
+            if (Array.isArray(h.cuotas) && h.cuotas.length) {
+                // Migrar cuotas legacy → planPagos
+                h.planPagos = h.cuotas.map((c, idx) => ({
+                    numero: c.numero || (idx + 1),
+                    monto: parseFloat(c.monto) || 0,
+                    fechaVencimiento: c.fechaVencimiento ? new Date(c.fechaVencimiento).toISOString() : new Date().toISOString(),
+                    estado: (c.pagada || c.estado === 'PAGADA') ? 'PAGADA' : 'PENDIENTE',
+                    fechaPago: c.fechaPago ? new Date(c.fechaPago).toISOString() : null
+                }));
+            } else if (montoTotal > 0) {
+                // Default contado: una sola cuota
+                h.planPagos = [{
+                    numero: 1,
+                    monto: montoTotal,
+                    fechaVencimiento: new Date().toISOString(),
+                    estado: (totalPagadoLegacy >= montoTotal) ? 'PAGADA' : 'PENDIENTE',
+                    fechaPago: (totalPagadoLegacy >= montoTotal) ? new Date().toISOString() : null
+                }];
+            } else {
+                h.planPagos = [];
+            }
+        }
+
+        // saldoPendiente legacy: recalcular desde montoTotal - totalPagado
+        const totalP = (montoTotal > 0) ? montoTotal : 0;
+        h.saldoPendiente = Math.max(0, totalP - totalPagadoLegacy);
     });
 })(_raw);
 

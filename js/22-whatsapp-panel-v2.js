@@ -16,13 +16,27 @@ let _conectado = false;
 let _intervalEstado = null;
 
 let _sesion = { nombre: '', numero: '', desde: null };
-let _destino = { nombre: '', numero: '' };
+let _abogadosPrincipales = []; // lista flexible: [{ nombre, numero }]
+let _principalEditNumero = null; // numero (limpio) en edición
 let _destinatarios = []; // lista de destinatarios (nuevo sistema)
+let _destEditNumero = null; // numero (limpio) en edición
 let _reconexionAuto = false;  // true cuando reconecta desde sesión guardada (sin QR)
 
 function _esPanelVisible() {
     const sec = document.getElementById('seccion-whatsapp');
     return sec && sec.classList.contains('active');
+}
+
+async function waRevisarCobrosAhora() {
+    try {
+        console.log('[WA] Revisar Cobros Ahora: iniciando...');
+        await verificarAlertasCobro(0);
+        console.log('[WA] Revisar Cobros Ahora: fin');
+        EventBus.emit('notificacion', { tipo: 'ok', mensaje: 'Revisión de cobros ejecutada. Revisa la consola para ver a quién se envió.' });
+    } catch (e) {
+        console.error('[WA] Error en Revisar Cobros Ahora:', e);
+        EventBus.emit('notificacion', { tipo: 'error', mensaje: e?.message || 'Error al revisar cobros.' });
+    }
 }
 
 function _iniciarPolling() {
@@ -74,6 +88,18 @@ function initWhatsAppPanel() {
 
     actualizarEstado();
     _cargarConfigGuardada();
+
+    // Persistir el toggle "Alertas automáticas" al instante
+    try {
+        const chk = document.getElementById('wa-activo');
+        if (chk && !chk._lexiumBound) {
+            chk._lexiumBound = true;
+            chk.addEventListener('change', async () => {
+                await _guardarDestinatarios();
+            });
+        }
+    } catch (_) { }
+
     _iniciarPolling();
 }
 
@@ -87,26 +113,47 @@ async function _cargarConfigGuardada() {
             _sesion.desde = e.sesionDesde ? new Date(e.sesionDesde) : null;
         }
 
-        // Número principal (soporta campos nuevos y legacy)
-        _destino.nombre = e.destinoNombre || e.nombreAbogado || '';
-        _destino.numero = e.destinoNumero || e.numeroDestino || '';
+        // Abogados principales (nuevo). Compat: si vienen campos legacy, migrar a lista.
+        if (Array.isArray(e.abogadosPrincipales) && e.abogadosPrincipales.length > 0) {
+            _abogadosPrincipales = e.abogadosPrincipales
+                .map(a => ({
+                    nombre: a?.nombre || '',
+                    numero: a?.numero || '',
+                    autoEnvio: a?.autoEnvio !== false,
+                    envioManual: a?.envioManual !== false
+                }))
+                .filter(a => !!_waNumeroLimpio(a.numero));
+        } else {
+            const legacyNombre = e.destinoNombre || e.nombreAbogado || '';
+            const legacyNumero = e.destinoNumero || e.numeroDestino || '';
+            if (_waNumeroLimpio(legacyNumero)) {
+                _abogadosPrincipales = [{ nombre: legacyNombre, numero: legacyNumero, autoEnvio: true, envioManual: true }];
+            } else {
+                _abogadosPrincipales = [];
+            }
+        }
 
-        // Pre-rellenar inputs del principal
+        // Pre-rellenar inputs para "agregar"
         const pNombre = document.getElementById('wa-principal-nombre');
         const pNumero = document.getElementById('wa-principal-numero');
-        if (pNombre) pNombre.value = _destino.nombre;
-        if (pNumero) pNumero.value = _destino.numero;
+        if (pNombre) pNombre.value = '';
+        if (pNumero) pNumero.value = '';
+        _principalEditNumero = null;
+        _syncPrincipalEdicionUI();
 
-        _renderPrincipal();
+        _renderListaPrincipales();
 
         // Secundarios: { nombre, numero, autoEnvio }
         if (Array.isArray(e.destinatarios) && e.destinatarios.length > 0) {
             _destinatarios = e.destinatarios.map(d => ({
                 nombre:    d.nombre    || '',
                 numero:    d.numero    || '',
-                autoEnvio: d.autoEnvio !== false   // default true
+                autoEnvio: d.autoEnvio !== false,   // default true
+                envioManual: d.envioManual !== false
             }));
         }
+        _destEditNumero = null;
+        _syncDestEdicionUI();
         _renderListaDestinatarios();
 
         const chk = document.getElementById('wa-activo');
@@ -126,40 +173,116 @@ function mostrarQR(dataUrl) {
     setBadge('Escanea el QR', '#f59e0b');
 }
 
-/** Verifica cuotas que vencen HOY y envía alerta WA si no fue enviada */
-async function _alertarCobrosHoy() {
+function _waNumeroLimpio(raw) {
+    return (raw || '').toString().replace(/[\s\+\-\(\)]/g, '').trim();
+}
+
+function _fechaISO10(d) {
+    try { return new Date(d).toISOString().slice(0, 10); }
+    catch (_) { return ''; }
+}
+
+/**
+ * Verifica cuotas que vencen HOY (o n días antes) y envía alertas WA doble vía.
+ * - Al Cliente (si tiene teléfono)
+ * - Al Abogado/Admin (número principal configurado en panel WA)
+ *
+ * Evita spam marcando flags por cuota y día.
+ */
+async function verificarAlertasCobro(diasAntes = 0) {
     if (!_conectado) return;
-    const hoy = new Date().toISOString().slice(0, 10);
+    if (!window.electronAPI?.whatsapp) return;
+
+    const hoy = new Date();
+    const target = new Date(hoy);
+    target.setDate(target.getDate() + (parseInt(diasAntes) || 0));
+    const targetISO = _fechaISO10(target);
+
     const causas = DB?.causas || [];
 
     for (const causa of causas) {
-        const cuotas = causa.honorarios?.cuotas || [];
-        for (const cuota of cuotas) {
-            if (cuota.pagada) continue;
-            if (cuota.fechaVencimiento !== hoy) continue;
-            if (cuota.alertaEnviada) continue;
+        const h = causa?.honorarios;
+        if (!h || h.modalidad !== 'CUOTAS') continue;
+        const plan = Array.isArray(h.planPagos) ? h.planPagos : [];
+        if (!plan.length) continue;
 
-            const msg = `💰 *LEXIUM — Cobro Pendiente*\n\n` +
-                `📋 *Causa:* ${causa.caratula}\n` +
-                `💵 *Monto:* $${(cuota.monto || 0).toLocaleString('es-CL')}\n` +
-                `📝 *Concepto:* ${cuota.descripcion || 'Honorarios'}\n` +
-                `📅 *Vencimiento:* ${cuota.fechaVencimiento}\n\n` +
-                `_Requiere gestión inmediata — LEXIUM_`;
+        const cliente = (DB?.clientes || []).find(c => c.id === causa.clienteId);
+        const clienteNombre = cliente?.nombre || cliente?.nom || causa?.caratula || 'Cliente';
+        const clienteTel = _waNumeroLimpio(cliente?.telefono);
+
+        const internosMap = new Map();
+        (_abogadosPrincipales || []).filter(a => a && a.autoEnvio !== false).forEach(a => {
+            const n = _waNumeroLimpio(a?.numero);
+            if (!n) return;
+            internosMap.set(n, { nombre: a?.nombre || 'Abogado principal', numero: n, tipo: 'principal' });
+        });
+        (_destinatarios || []).filter(d => d && d.autoEnvio !== false).forEach(d => {
+            const n = _waNumeroLimpio(d.numero);
+            if (!n) return;
+            if (!internosMap.has(n)) internosMap.set(n, { nombre: d?.nombre || 'Reenvío', numero: n, tipo: 'secundario' });
+        });
+
+        for (const cuota of plan) {
+            if (!cuota) continue;
+            if (cuota.estado === 'PAGADA') continue;
+            const venceISO = _fechaISO10(cuota.fechaVencimiento);
+            if (!venceISO || venceISO !== targetISO) continue;
+
+            // Compat/migración: versiones anteriores usaban { cliente, admin }
+            if (!cuota._waAlertas || typeof cuota._waAlertas !== 'object') cuota._waAlertas = {};
+            if (!cuota._waAlertas.cliente || typeof cuota._waAlertas.cliente !== 'object') cuota._waAlertas.cliente = {};
+            if (!cuota._waAlertas.equipo || typeof cuota._waAlertas.equipo !== 'object') {
+                cuota._waAlertas.equipo = (cuota._waAlertas.admin && typeof cuota._waAlertas.admin === 'object')
+                    ? cuota._waAlertas.admin
+                    : {};
+            }
+            const marca = (diasAntes === 0) ? 'hoy' : `d-${diasAntes}`;
+            if (cuota._waAlertas.cliente?.[marca] && cuota._waAlertas.equipo?.[marca]) continue;
+
+            const monto = (cuota.monto || 0);
+            const msgCliente = `Estimado/a ${clienteNombre}, le recordamos que su cuota Nº ${cuota.numero} de $${monto.toLocaleString('es-CL')} vence ${diasAntes === 0 ? 'hoy' : `el ${new Date(cuota.fechaVencimiento).toLocaleDateString('es-CL')}`}.`;
+            const msgEquipo = `ALERTA: Cuota Nº ${cuota.numero} de cliente ${clienteNombre} por $${monto.toLocaleString('es-CL')} vence ${diasAntes === 0 ? 'hoy' : `el ${new Date(cuota.fechaVencimiento).toLocaleDateString('es-CL')}`}.`;
 
             try {
-                await window.electronAPI.whatsapp.enviarAlerta(msg);
-                cuota.alertaEnviada = true;
-                if (typeof guardarDB === 'function') guardarDB();
+                if (clienteTel && !cuota._waAlertas.cliente?.[marca]) {
+                    const respC = await window.electronAPI.whatsapp.enviarAlertaA(clienteTel, msgCliente);
+                    if (respC?.ok) {
+                        cuota._waAlertas.cliente[marca] = true;
+                    }
+                }
             } catch (e) {
-                console.error('[WA] Error enviando alerta cobro:', e);
+                console.error('[WA] Error enviando alerta a cliente:', e);
             }
+
+            try {
+                if (internosMap.size > 0 && !cuota._waAlertas.equipo?.[marca]) {
+                    let enviados = 0;
+                    for (const dest of internosMap.values()) {
+                        try {
+                            console.log(`[WA] Enviando a ${dest.nombre} (+${dest.numero})...`);
+                            const r = await window.electronAPI.whatsapp.enviarAlertaA(dest.numero, msgEquipo);
+                            if (r?.ok) enviados++;
+                        } catch (e2) {
+                            console.error('[WA] Error enviando alerta a interno:', e2);
+                        }
+                    }
+                    if (enviados > 0) {
+                        cuota._waAlertas.equipo[marca] = true;
+                    }
+                }
+            } catch (e) {
+                console.error('[WA] Error enviando alerta a equipo:', e);
+            }
+
+            // Persistir flags aunque solo haya salido uno (evita reintentos excesivos)
+            if (typeof guardarDB === 'function') guardarDB();
         }
     }
 }
 
 // Ejecutar verificación al iniciar y luego cada hora
-setTimeout(_alertarCobrosHoy, 5000);
-setInterval(_alertarCobrosHoy, 60 * 60 * 1000);
+setTimeout(() => verificarAlertasCobro(0), 5000);
+setInterval(() => verificarAlertasCobro(0), 60 * 60 * 1000);
 
 function _onQRListo(data) {
     const wrap = document.getElementById('wa-qr-wrap');
@@ -233,6 +356,23 @@ function onConectado(data) {
 
     setBadge('Conectado ✓', '#25D366');
 
+    // Mostrar info real de la cuenta conectada (si el backend la expone)
+    try {
+        const numero = _waNumeroLimpio(data?.numeroConectado) || _waNumeroLimpio(_sesion.numero);
+        const perfil = (data?.perfilConectado || '').toString().trim();
+        if (perfil) {
+            setText('wa-activo-nombre', perfil);
+        }
+        if (numero) {
+            const phoneEl = document.getElementById('topbar-phone');
+            if (phoneEl) {
+                phoneEl.textContent = `+${numero}`;
+                phoneEl.style.display = 'block';
+            }
+            setText('wa-activo-numero', `+${numero}`);
+        }
+    } catch (_) { }
+
     const qr = document.getElementById('wa-qr-wrap');
     const btn = document.getElementById('wa-btn-toggle');
     if (qr) qr.style.display = 'none';
@@ -285,18 +425,41 @@ async function actualizarEstado() {
     try {
         const e = await window.electronAPI.whatsapp.estado();
 
+        // Si está conectado, actualizar cabecera con info de la cuenta (si existe)
+        if (e?.conectado) {
+            try {
+                if (e.perfilConectado) {
+                    setText('wa-activo-nombre', e.perfilConectado);
+                }
+                if (e.numeroConectado) {
+                    const n = _waNumeroLimpio(e.numeroConectado);
+                    const phoneEl = document.getElementById('topbar-phone');
+                    if (phoneEl && n) {
+                        phoneEl.textContent = `+${n}`;
+                        phoneEl.style.display = 'block';
+                    }
+                    if (n) setText('wa-activo-numero', `+${n}`);
+                }
+            } catch (_) { }
+        }
+
         // Siempre sincronizar config guardada (por si se guardó desde otra sesión)
-        if (e.destinoNumero || e.numeroDestino) {
+        if (Array.isArray(e.abogadosPrincipales)) {
+            const incoming = e.abogadosPrincipales
+                .map(a => ({ nombre: a?.nombre || '', numero: a?.numero || '' }))
+                .filter(a => !!_waNumeroLimpio(a.numero));
+            const same = JSON.stringify(incoming.map(x => ({ n: _waNumeroLimpio(x.numero), nombre: x.nombre || '' }))) ===
+                         JSON.stringify((_abogadosPrincipales || []).map(x => ({ n: _waNumeroLimpio(x.numero), nombre: x.nombre || '' })));
+            if (!same) {
+                _abogadosPrincipales = incoming;
+                _renderListaPrincipales();
+            }
+        } else if ((e.destinoNumero || e.numeroDestino) && (_abogadosPrincipales || []).length === 0) {
             const num = e.destinoNumero || e.numeroDestino;
             const nom = e.destinoNombre || e.nombreAbogado || '';
-            if (num !== _destino.numero) {
-                _destino.numero = num;
-                _destino.nombre = nom;
-                const pN = document.getElementById('wa-principal-nombre');
-                const pU = document.getElementById('wa-principal-numero');
-                if (pN && !pN.value) pN.value = nom;
-                if (pU && !pU.value) pU.value = num;
-                _renderPrincipal();
+            if (_waNumeroLimpio(num)) {
+                _abogadosPrincipales = [{ nombre: nom, numero: num }];
+                _renderListaPrincipales();
             }
         }
         if (Array.isArray(e.destinatarios) && e.destinatarios.length > 0 && _destinatarios.length === 0) {
@@ -311,7 +474,45 @@ async function actualizarEstado() {
     } catch (_) { }
 }
 
-// ── Guardar número PRINCIPAL ──────────────────────────────────────
+function _getPrincipalLegacyCompat() {
+    const a = (_abogadosPrincipales || []).find(x => _waNumeroLimpio(x?.numero));
+    if (!a) return { nombre: '', numero: '' };
+    return { nombre: a.nombre || '', numero: _waNumeroLimpio(a.numero) };
+}
+
+function _syncPrincipalEdicionUI() {
+    const btn = document.getElementById('wa-btn-guardar-principal');
+    const btnCancel = document.getElementById('wa-btn-cancelar-edicion-principal');
+    if (btn) btn.innerHTML = _principalEditNumero ? '<i class="fas fa-save"></i> Actualizar abogado' : '<i class="fas fa-save"></i> Guardar abogado';
+    if (btnCancel) btnCancel.style.display = _principalEditNumero ? 'inline-flex' : 'none';
+}
+
+function _syncDestEdicionUI() {
+    const btn = document.getElementById('wa-btn-guardar-dest');
+    const btnCancel = document.getElementById('wa-btn-cancelar-edicion-dest');
+    if (btn) btn.innerHTML = _destEditNumero ? '<i class="fas fa-save"></i> Actualizar reenvío' : '<i class="fas fa-user-plus"></i> Agregar reenvío';
+    if (btnCancel) btnCancel.style.display = _destEditNumero ? 'inline-flex' : 'none';
+}
+
+function waCancelarEdicionPrincipal() {
+    _principalEditNumero = null;
+    const n = document.getElementById('wa-principal-nombre');
+    const u = document.getElementById('wa-principal-numero');
+    if (n) n.value = '';
+    if (u) u.value = '';
+    _syncPrincipalEdicionUI();
+}
+
+function waCancelarEdicionDestinatario() {
+    _destEditNumero = null;
+    const n = document.getElementById('wa-dest-nombre');
+    const u = document.getElementById('wa-numero-alt');
+    if (n) n.value = '';
+    if (u) u.value = '';
+    _syncDestEdicionUI();
+}
+
+// ── Guardar Abogado PRINCIPAL (Agregar / Actualizar) ─────────────────────────
 async function waGuardarPrincipal() {
     const nombre = document.getElementById('wa-principal-nombre')?.value?.trim() || '';
     const numero = document.getElementById('wa-principal-numero')?.value?.replace(/[\s\+\-\(\)]/g, '').trim() || '';
@@ -320,17 +521,51 @@ async function waGuardarPrincipal() {
         EventBus.emit('notificacion', { tipo: 'warn', mensaje: 'Ingresa el número principal.' });
         return;
     }
-    if (!/^\d{11,15}$/.test(numero)) {
+    if (!/^(\d){11,15}$/.test(numero)) {
         EventBus.emit('notificacion', { tipo: 'error', mensaje: 'Número inválido. Ej: 56912345678 (con código de país, sin +)' });
         return;
     }
 
-    _destino.nombre = nombre;
-    _destino.numero = numero;
+    const key = _waNumeroLimpio(numero);
+
+    // Validar duplicados contra secundarios
+    if (_destinatarios.find(d => _waNumeroLimpio(d.numero) === key)) {
+        EventBus.emit('notificacion', { tipo: 'warn', mensaje: 'Este número ya existe en Reenvíos. Elimínalo o edítalo primero.' });
+        return;
+    }
+
+    if (_principalEditNumero) {
+        const idx = (_abogadosPrincipales || []).findIndex(a => _waNumeroLimpio(a.numero) === _principalEditNumero);
+        if (idx < 0) {
+            _principalEditNumero = null;
+        } else {
+            // Evitar colisión: otro principal con el mismo número
+            const ya = (_abogadosPrincipales || []).some((a, i) => i !== idx && _waNumeroLimpio(a.numero) === key);
+            if (ya) {
+                EventBus.emit('notificacion', { tipo: 'warn', mensaje: 'Ya existe un abogado principal con ese número.' });
+                return;
+            }
+            _abogadosPrincipales[idx] = {
+                ..._abogadosPrincipales[idx],
+                nombre,
+                numero: key,
+                autoEnvio: _abogadosPrincipales[idx]?.autoEnvio !== false,
+                envioManual: _abogadosPrincipales[idx]?.envioManual !== false
+            };
+        }
+    }
+    if (!_principalEditNumero) {
+        if ((_abogadosPrincipales || []).some(a => _waNumeroLimpio(a.numero) === key)) {
+            EventBus.emit('notificacion', { tipo: 'warn', mensaje: 'Este número ya está en la lista de abogados principales.' });
+            return;
+        }
+        _abogadosPrincipales.push({ nombre, numero: key, autoEnvio: true, envioManual: true });
+    }
 
     await _guardarDestinatarios();
-    _renderPrincipal();
-    EventBus.emit('notificacion', { tipo: 'ok', mensaje: `Número principal guardado: ${nombre || numero}` });
+    _renderListaPrincipales();
+    waCancelarEdicionPrincipal();
+    EventBus.emit('notificacion', { tipo: 'ok', mensaje: `Abogado principal guardado: ${nombre || key}` });
 }
 
 // ── Agregar destinatario SECUNDARIO ───────────────────────────────
@@ -342,37 +577,96 @@ async function waGuardarDestino() {
         EventBus.emit('notificacion', { tipo: 'warn', mensaje: 'Ingresa el número para agregar.' });
         return;
     }
-    if (!/^\d{11,15}$/.test(numero)) {
+    if (!/^(\d){11,15}$/.test(numero)) {
         EventBus.emit('notificacion', { tipo: 'error', mensaje: 'Número inválido. Ej: 56912345678 (con código de país, sin +)' });
         return;
     }
-    if (_destino.numero && _destino.numero === numero) {
-        EventBus.emit('notificacion', { tipo: 'warn', mensaje: 'Este número ya es el destinatario principal.' });
-        return;
-    }
-    if (_destinatarios.find(d => d.numero === numero)) {
-        EventBus.emit('notificacion', { tipo: 'warn', mensaje: 'Este número ya está en la lista de secundarios.' });
+    const key = _waNumeroLimpio(numero);
+
+    if ((_abogadosPrincipales || []).some(a => _waNumeroLimpio(a.numero) === key)) {
+        EventBus.emit('notificacion', { tipo: 'warn', mensaje: 'Este número ya existe como abogado principal.' });
         return;
     }
 
-    _destinatarios.push({ nombre, numero, autoEnvio: true });
+    if (_destEditNumero) {
+        const idx = (_destinatarios || []).findIndex(d => _waNumeroLimpio(d.numero) === _destEditNumero);
+        if (idx < 0) {
+            _destEditNumero = null;
+        } else {
+            const ya = (_destinatarios || []).some((d, i) => i !== idx && _waNumeroLimpio(d.numero) === key);
+            if (ya) {
+                EventBus.emit('notificacion', { tipo: 'warn', mensaje: 'Este número ya está en la lista de reenvíos.' });
+                return;
+            }
+            _destinatarios[idx] = {
+                ..._destinatarios[idx],
+                nombre,
+                numero: key,
+                autoEnvio: _destinatarios[idx]?.autoEnvio !== false,
+                envioManual: _destinatarios[idx]?.envioManual !== false
+            };
+        }
+    }
+    if (!_destEditNumero) {
+        if (_destinatarios.find(d => _waNumeroLimpio(d.numero) === key)) {
+            EventBus.emit('notificacion', { tipo: 'warn', mensaje: 'Este número ya está en la lista de reenvíos.' });
+            return;
+        }
+        _destinatarios.push({ nombre, numero: key, autoEnvio: true, envioManual: true });
+    }
 
     await _guardarDestinatarios();
     _renderListaDestinatarios();
 
-    const dn = document.getElementById('wa-dest-nombre');
-    const dn2 = document.getElementById('wa-numero-alt');
-    if (dn) dn.value = '';
-    if (dn2) dn2.value = '';
+    waCancelarEdicionDestinatario();
 
-    EventBus.emit('notificacion', { tipo: 'ok', mensaje: `Destinatario secundario agregado: ${nombre || numero}` });
+    EventBus.emit('notificacion', { tipo: 'ok', mensaje: `Reenvío guardado: ${nombre || key}` });
+}
+
+function waEditarDestinatario(numero) {
+    const key = _waNumeroLimpio(numero);
+    const d = (_destinatarios || []).find(x => _waNumeroLimpio(x.numero) === key);
+    if (!d) return;
+    _destEditNumero = key;
+    const n = document.getElementById('wa-dest-nombre');
+    const u = document.getElementById('wa-numero-alt');
+    if (n) n.value = d.nombre || '';
+    if (u) u.value = d.numero || '';
+    _syncDestEdicionUI();
 }
 
 async function waEliminarDestinatario(numero) {
-    _destinatarios = _destinatarios.filter(d => d.numero !== numero);
+    const key = _waNumeroLimpio(numero);
+    _destinatarios = (_destinatarios || []).filter(d => _waNumeroLimpio(d?.numero) !== key);
+    if (_destEditNumero === key) {
+        waCancelarEdicionDestinatario();
+    }
     await _guardarDestinatarios();
     _renderListaDestinatarios();
     EventBus.emit('notificacion', { tipo: 'info', mensaje: 'Destinatario secundario eliminado.' });
+}
+
+async function waEliminarPrincipal(numero) {
+    const key = _waNumeroLimpio(numero);
+    _abogadosPrincipales = (_abogadosPrincipales || []).filter(a => _waNumeroLimpio(a?.numero) !== key);
+    if (_principalEditNumero === key) {
+        waCancelarEdicionPrincipal();
+    }
+    await _guardarDestinatarios();
+    _renderListaPrincipales();
+    EventBus.emit('notificacion', { tipo: 'info', mensaje: 'Abogado principal eliminado.' });
+}
+
+function waEditarPrincipal(numero) {
+    const key = _waNumeroLimpio(numero);
+    const a = (_abogadosPrincipales || []).find(x => _waNumeroLimpio(x.numero) === key);
+    if (!a) return;
+    _principalEditNumero = key;
+    const n = document.getElementById('wa-principal-nombre');
+    const u = document.getElementById('wa-principal-numero');
+    if (n) n.value = a.nombre || '';
+    if (u) u.value = a.numero || '';
+    _syncPrincipalEdicionUI();
 }
 
 // Alternar autoEnvio de un secundario
@@ -384,15 +678,61 @@ async function waToggleAutoEnvio(numero) {
     _renderListaDestinatarios();
 }
 
+async function waToggleEnvioManualDestinatario(numero) {
+    const key = _waNumeroLimpio(numero);
+    const d = (_destinatarios || []).find(x => _waNumeroLimpio(x?.numero) === key);
+    if (!d) return;
+    d.envioManual = !(d.envioManual !== false);
+    await _guardarDestinatarios();
+    _renderListaDestinatarios();
+}
+
+async function waToggleAutoEnvioPrincipal(numero) {
+    const key = _waNumeroLimpio(numero);
+    const a = (_abogadosPrincipales || []).find(x => _waNumeroLimpio(x?.numero) === key);
+    if (!a) return;
+    a.autoEnvio = !(a.autoEnvio !== false);
+    await _guardarDestinatarios();
+    _renderListaPrincipales();
+}
+
+async function waToggleEnvioManualPrincipal(numero) {
+    const key = _waNumeroLimpio(numero);
+    const a = (_abogadosPrincipales || []).find(x => _waNumeroLimpio(x?.numero) === key);
+    if (!a) return;
+    a.envioManual = !(a.envioManual !== false);
+    await _guardarDestinatarios();
+    _renderListaPrincipales();
+}
+
 async function _guardarDestinatarios() {
     try {
         const activo = document.getElementById('wa-activo')?.checked || false;
+
+        const principals = (_abogadosPrincipales || [])
+            .map(a => ({
+                nombre: (a?.nombre || '').toString(),
+                numero: _waNumeroLimpio(a?.numero),
+                autoEnvio: a?.autoEnvio !== false,
+                envioManual: a?.envioManual !== false
+            }))
+            .filter(a => !!a.numero);
+
+        const principalLegacy = principals[0] || { nombre: '', numero: '' };
+
         await window.electronAPI.whatsapp.guardarConfig({
-            destinoNombre:  _destino.nombre,
-            destinoNumero:  _destino.numero,
-            numeroDestino:  _destino.numero,
-            nombreAbogado:  _destino.nombre,
-            destinatarios:  _destinatarios,   // secundarios con { nombre, numero, autoEnvio }
+            abogadosPrincipales: principals,
+            // Legacy (mantener compat para IPC v3 actual)
+            destinoNombre:  principalLegacy.nombre,
+            destinoNumero:  principalLegacy.numero,
+            numeroDestino:  principalLegacy.numero,
+            nombreAbogado:  principalLegacy.nombre,
+            destinatarios:  (_destinatarios || []).map(d => ({
+                nombre: (d?.nombre || '').toString(),
+                numero: _waNumeroLimpio(d?.numero),
+                autoEnvio: d?.autoEnvio !== false,
+                envioManual: d?.envioManual !== false
+            })).filter(d => !!d.numero),
             activo
         });
     } catch (e) {
@@ -400,26 +740,51 @@ async function _guardarDestinatarios() {
     }
 }
 
-// Muestra/actualiza el bloque del número principal en el HTML
-function _renderPrincipal() {
-    const nombreEl = document.getElementById('wa-principal-nombre');
-    const numeroEl = document.getElementById('wa-principal-numero');
-    const card     = document.getElementById('wa-principal-activo');
-
-    if (card) {
-        if (_destino.numero) {
-            const n = document.getElementById('wa-principal-activo-nombre');
-            const u = document.getElementById('wa-principal-activo-numero');
-            if (n) n.textContent = _destino.nombre || '(Sin nombre)';
-            if (u) u.textContent = `+${_destino.numero}`;
-            card.style.display = 'flex';
-        } else {
-            card.style.display = 'none';
-        }
+function _renderListaPrincipales() {
+    const el = document.getElementById('wa-lista-principales');
+    if (!el) return;
+    if (!(_abogadosPrincipales || []).length) {
+        el.innerHTML = `
+            <div style="text-align:center; padding:12px; color:var(--text-3); font-size:0.78rem;">
+                <i class="fas fa-user-tie" style="display:block; font-size:1.4rem; margin-bottom:6px; opacity:0.4;"></i>
+                Sin abogados principales. Agrega uno arriba.
+            </div>`;
+        return;
     }
-    // Pre-rellenar inputs si están vacíos
-    if (nombreEl && !nombreEl.value && _destino.nombre) nombreEl.value = _destino.nombre;
-    if (numeroEl && !numeroEl.value && _destino.numero) numeroEl.value = _destino.numero;
+
+    el.innerHTML = (_abogadosPrincipales || []).map(a => `
+        <div style="display:flex; align-items:center; gap:10px; padding:8px 10px;
+                    border:1px solid var(--border); border-radius:8px;
+                    background:var(--bg-1);">
+            <label style="display:flex; align-items:center; cursor:pointer; flex-shrink:0;" title="Auto (alertas automáticas)">
+                <input type="checkbox" ${a.autoEnvio !== false ? 'checked' : ''}
+                       onchange="waToggleAutoEnvioPrincipal('${_waNumeroLimpio(a.numero)}')"
+                       style="width:16px; height:16px; accent-color:#25d366; cursor:pointer;" />
+            </label>
+            <label style="display:flex; align-items:center; cursor:pointer; flex-shrink:0;" title="Manual (envíos por botones)">
+                <input type="checkbox" ${a.envioManual !== false ? 'checked' : ''}
+                       onchange="waToggleEnvioManualPrincipal('${_waNumeroLimpio(a.numero)}')"
+                       style="width:16px; height:16px; accent-color:#0ea5e9; cursor:pointer;" />
+            </label>
+            <div style="width:30px; height:30px; border-radius:50%; background:#0891b218;
+                        display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                <i class="fas fa-user-tie" style="color:#0891b2; font-size:0.85rem;"></i>
+            </div>
+            <div style="flex:1; min-width:0;">
+                <div style="font-weight:600; font-size:0.82rem;">${escHtml(a.nombre || '(Sin nombre)')}</div>
+                <div style="font-size:0.72rem; color:var(--text-3); font-family:monospace;">+${escHtml(_waNumeroLimpio(a.numero))}</div>
+            </div>
+            <button onclick="waEditarPrincipal('${_waNumeroLimpio(a.numero)}')"
+                    style="background:transparent; border:none; color:var(--text-2); cursor:pointer; padding:4px 6px; border-radius:4px; font-size:0.75rem;"
+                    title="Editar">
+                <i class="fas fa-pen"></i>
+            </button>
+            <button onclick="waEliminarPrincipal('${_waNumeroLimpio(a.numero)}')"
+                    style="background:transparent; border:none; color:#dc2626; cursor:pointer; padding:4px 6px; border-radius:4px; font-size:0.75rem;"
+                    title="Eliminar">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>`).join('');
 }
 
 function _renderListaDestinatarios() {
@@ -435,7 +800,7 @@ function _renderListaDestinatarios() {
         return;
     }
 
-    const activos = _destinatarios.filter(d => d.autoEnvio).length;
+    const activos = _destinatarios.filter(d => d.autoEnvio !== false).length;
     el.innerHTML = _destinatarios.map(d => `
         <div style="display:flex; align-items:center; gap:10px; padding:8px 10px;
                     border:1px solid var(--border); border-radius:8px;
@@ -445,6 +810,11 @@ function _renderListaDestinatarios() {
                 <input type="checkbox" ${d.autoEnvio ? 'checked' : ''}
                        onchange="waToggleAutoEnvio('${d.numero}')"
                        style="width:16px; height:16px; accent-color:#25d366; cursor:pointer;" />
+            </label>
+            <label style="display:flex; align-items:center; cursor:pointer; flex-shrink:0;" title="Recibir envíos manuales">
+                <input type="checkbox" ${d.envioManual !== false ? 'checked' : ''}
+                       onchange="waToggleEnvioManualDestinatario('${d.numero}')"
+                       style="width:16px; height:16px; accent-color:#0ea5e9; cursor:pointer;" />
             </label>
             <div style="width:30px; height:30px; border-radius:50%; background:#25d36618;
                         display:flex; align-items:center; justify-content:center; flex-shrink:0;">
@@ -458,6 +828,11 @@ function _renderListaDestinatarios() {
                          background:${d.autoEnvio ? '#dcfce7' : '#f3f4f6'}; color:${d.autoEnvio ? '#166534' : '#6b7280'};">
                 ${d.autoEnvio ? '8AM ✓' : 'pausado'}
             </span>
+            <button onclick="waEditarDestinatario('${d.numero}')"
+                    style="background:transparent; border:none; color:var(--text-2); cursor:pointer; padding:4px 6px; border-radius:4px; font-size:0.75rem;"
+                    title="Editar">
+                <i class="fas fa-pen"></i>
+            </button>
             <button onclick="waEliminarDestinatario('${d.numero}')"
                     style="background:transparent; border:none; color:#dc2626; cursor:pointer; padding:4px 6px; border-radius:4px; font-size:0.75rem;"
                     title="Eliminar">
@@ -531,18 +906,18 @@ async function waEnviarResumen() {
         EventBus.emit('notificacion', { tipo: 'warn', mensaje: 'WhatsApp no está conectado' });
         return;
     }
-    if (!_destino.numero) {
-        EventBus.emit('notificacion', { tipo: 'warn', mensaje: 'Configura primero el número principal' });
+    if (!_getPrincipalLegacyCompat().numero) {
+        EventBus.emit('notificacion', { tipo: 'warn', mensaje: 'Configura al menos un abogado principal' });
         return;
     }
     const btn = document.getElementById('wa-btn-resumen');
     if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
     try {
-        const r = await window.electronAPI.whatsapp.enviarResumenPrincipal();
+        const r = await window.electronAPI.whatsapp.enviarResumen();
         EventBus.emit('notificacion', {
             tipo: r?.ok ? 'ok' : 'error',
             mensaje: r?.ok
-                ? `✅ Resumen enviado a ${_destino.nombre || _destino.numero}`
+                ? `✅ Resumen enviado a destinatarios manuales (${r?.destinatarios ?? '—'})`
                 : (r?.error || 'Error al enviar')
         });
     } catch(e) {
@@ -560,36 +935,37 @@ async function waEnviarAOtroNumero() {
         EventBus.emit('notificacion', { tipo: 'warn', mensaje: 'WhatsApp no está conectado' });
         return;
     }
-    const activos = _destinatarios.filter(d => d.autoEnvio);
-    if (activos.length === 0) {
-        EventBus.emit('notificacion', { tipo: 'warn', mensaje: 'Ningún destinatario secundario tiene el envío automático activado' });
+    const targets = [];
+    (_abogadosPrincipales || []).filter(a => a && a.envioManual !== false).forEach(a => {
+        const n = _waNumeroLimpio(a.numero);
+        if (!n) return;
+        targets.push({ nombre: a.nombre || 'Abogado principal', numero: n });
+    });
+    (_destinatarios || []).filter(d => d && d.envioManual !== false).forEach(d => {
+        const n = _waNumeroLimpio(d.numero);
+        if (!n) return;
+        if (targets.find(x => x.numero === n)) return;
+        targets.push({ nombre: d.nombre || 'Reenvío', numero: n });
+    });
+    if (targets.length === 0) {
+        EventBus.emit('notificacion', { tipo: 'warn', mensaje: 'Ningún contacto tiene habilitado Envío Manual' });
         return;
     }
     const btn = document.getElementById('wa-btn-enviar-alt');
     if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
-    let ok = 0; let fail = 0;
     try {
-        for (const d of activos) {
-            try {
-                await window.electronAPI.whatsapp.enviarAlertaA(d.numero,
-                    `📋 Reporte LEXIUM — enviado manualmente`);
-                ok++;
-            } catch(_) { fail++; }
-        }
-        // fallback: usar IPC genérico si enviarAlertaA no está disponible
-    } catch(_) {
-        try {
-            const r = await window.electronAPI.whatsapp.enviarResumen();
-            ok = r?.ok ? activos.length : 0;
-            fail = r?.ok ? 0 : activos.length;
-        } catch(e2) {
-            EventBus.emit('notificacion', { tipo: 'error', mensaje: e2.message });
-        }
+        const msg = `📋 Reporte LEXIUM — enviado manualmente`;
+        const settled = await Promise.allSettled(targets.map(t => {
+            console.log(`[WA] Enviando a ${t.nombre} (+${t.numero})...`);
+            return window.electronAPI.whatsapp.enviarAlertaA(t.numero, msg);
+        }));
+        const ok = settled.filter(x => x.status === 'fulfilled' && x.value?.ok).length;
+        const fail = targets.length - ok;
+        if (ok > 0) EventBus.emit('notificacion', { tipo: 'ok', mensaje: `Reporte enviado a ${ok} contacto${ok > 1 ? 's' : ''}${fail > 0 ? ` (${fail} fallaron)` : ''}` });
+        else        EventBus.emit('notificacion', { tipo: 'error', mensaje: 'No se pudo enviar a ningún contacto' });
     } finally {
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fab fa-whatsapp"></i> Reenviar a activos'; }
     }
-    if (ok > 0) EventBus.emit('notificacion', { tipo: 'ok', mensaje: `Reporte enviado a ${ok} destinatario${ok > 1 ? 's' : ''} secundario${ok > 1 ? 's' : ''}${fail > 0 ? ` (${fail} fallaron)` : ''}` });
-    else        EventBus.emit('notificacion', { tipo: 'error', mensaje: 'No se pudo enviar a ningún secundario' });
     actualizarStats();
     actualizarLog();
 }
@@ -641,15 +1017,19 @@ async function waReset() {
         const r = await window.electronAPI.whatsapp.reset();
         if (r?.ok) {
             _sesion = { nombre: '', numero: '', desde: null };
-            _destino = { nombre: '', numero: '' };
+            _abogadosPrincipales = [];
             _destinatarios = [];
             onDesconectado();
             ['wa-dest-nombre', 'wa-numero-alt', 'wa-principal-nombre', 'wa-principal-numero'].forEach(id => {
                 const el = document.getElementById(id); if (el) el.value = '';
             });
+            _principalEditNumero = null;
+            _destEditNumero = null;
+            _syncPrincipalEdicionUI();
+            _syncDestEdicionUI();
             const chk = document.getElementById('wa-activo');
             if (chk) chk.checked = false;
-            _renderPrincipal();
+            _renderListaPrincipales();
             _renderListaDestinatarios();
             document.getElementById('wa-stats-card')?.style.setProperty('display', 'none');
             document.getElementById('wa-log-card')?.style.setProperty('display', 'none');
@@ -690,10 +1070,10 @@ async function waTestEnviarMensaje() {
             _testMostrarResultado(r?.ok ? 'ok' : 'error',
                 r?.ok ? `✅ Mensaje enviado a <strong>+${numRaw}</strong>. Verifica el teléfono.`
                       : `❌ Error: ${r?.error || 'desconocido'}`);
-        } else if (_destino.numero) {
-            r = await window.electronAPI.whatsapp.enviarAlertaA(_destino.numero, msg);
+        } else if (_getPrincipalLegacyCompat().numero) {
+            r = await window.electronAPI.whatsapp.enviarAlertaA(_getPrincipalLegacyCompat().numero, msg);
             _testMostrarResultado(r?.ok ? 'ok' : 'error',
-                r?.ok ? `✅ Mensaje enviado al principal <strong>+${_destino.numero}</strong>. Verifica el teléfono.`
+                r?.ok ? `✅ Mensaje enviado a <strong>+${_getPrincipalLegacyCompat().numero}</strong>. Verifica el teléfono.`
                       : `❌ Error: ${r?.error || 'desconocido'}`);
         } else {
             _testMostrarResultado('error', '❌ Ingresa un número o configura el principal primero.');
@@ -704,12 +1084,12 @@ async function waTestEnviarMensaje() {
 
 async function waTestEnviarResumen() {
     if (!_conectado) { EventBus.emit('notificacion', { tipo: 'warn', mensaje: 'WhatsApp no conectado' }); return; }
-    if (!_destino.numero) { _testMostrarResultado('error', '❌ No hay número principal configurado.'); return; }
+    if (!_getPrincipalLegacyCompat().numero) { _testMostrarResultado('error', '❌ No hay abogado principal configurado.'); return; }
     _testMostrarResultado('cargando', '⏳ Enviando resumen al principal...');
     try {
         const r = await window.electronAPI.whatsapp.enviarResumenPrincipal();
         _testMostrarResultado(r?.ok ? 'ok' : 'error',
-            r?.ok ? `✅ Resumen enviado a <strong>${_destino.nombre || _destino.numero}</strong>. Verifica el teléfono.`
+            r?.ok ? `✅ Resumen enviado. Verifica el teléfono.`
                   : `❌ Error: ${r?.error || 'desconocido'}`);
     } catch(e) { _testMostrarResultado('error', `❌ ${e.message}`); }
     actualizarStats(); actualizarLog();
@@ -718,7 +1098,7 @@ async function waTestEnviarResumen() {
 async function waTestEnviarTodos() {
     if (!_conectado) { EventBus.emit('notificacion', { tipo: 'warn', mensaje: 'WhatsApp no conectado' }); return; }
     const activos = _destinatarios.filter(d => d.autoEnvio);
-    const principal = _destino.numero ? 1 : 0;
+    const principal = _getPrincipalLegacyCompat().numero ? 1 : 0;
     const total = principal + activos.length;
     if (total === 0) { _testMostrarResultado('error', '❌ No hay destinatarios configurados.'); return; }
     _testMostrarResultado('cargando', `⏳ Enviando a ${total} destinatario${total > 1 ? 's' : ''}...`);
@@ -747,11 +1127,20 @@ window.waGuardarPrincipal = waGuardarPrincipal;
 window.waGuardarDestino = waGuardarDestino;
 window.waEliminarDestinatario = waEliminarDestinatario;
 window.waToggleAutoEnvio = waToggleAutoEnvio;
+window.waToggleEnvioManualDestinatario = waToggleEnvioManualDestinatario;
+window.waToggleAutoEnvioPrincipal = waToggleAutoEnvioPrincipal;
+window.waToggleEnvioManualPrincipal = waToggleEnvioManualPrincipal;
 window.waLimpiarDestino = waLimpiarDestino;
 window.waEnviarResumen = waEnviarResumen;
 window.waEnviarAOtroNumero = waEnviarAOtroNumero;
 window.waLimpiarLogs = waLimpiarLogs;
 window.waValidarNumeroAlt = waValidarNumeroAlt;
+window.waRevisarCobrosAhora = waRevisarCobrosAhora;
+window.waEditarDestinatario = waEditarDestinatario;
+window.waCancelarEdicionDestinatario = waCancelarEdicionDestinatario;
+window.waEditarPrincipal = waEditarPrincipal;
+window.waEliminarPrincipal = waEliminarPrincipal;
+window.waCancelarEdicionPrincipal = waCancelarEdicionPrincipal;
 
 window.cerrarModalWA = function () {
     const m = document.getElementById('modal-wa-nombre');

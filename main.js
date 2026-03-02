@@ -341,6 +341,23 @@ ipcMain.handle('sistema:abrirCarpetaDatos', () => {
 ipcMain.handle('whatsapp:guardar-config', async (_e, config) => {
     const { validarNumero } = require('./whatsapp-service-v3');
 
+    // Validar array de abogados principales (nuevo)
+    if (Array.isArray(config.abogadosPrincipales)) {
+        const validados = [];
+        for (const a of config.abogadosPrincipales) {
+            if (!a?.numero) continue;
+            const v = validarNumero(String(a.numero));
+            if (!v.ok) return { error: `Número inválido (${a?.nombre || a?.numero}): ${v.error}` };
+            validados.push({
+                nombre: (a?.nombre || '').toString().substring(0, 60),
+                numero: v.numero,
+                autoEnvio: a?.autoEnvio !== false,
+                envioManual: a?.envioManual !== false
+            });
+        }
+        config.abogadosPrincipales = validados;
+    }
+
     // Validar numero legacy
     if (config.numeroDestino) {
         const v = validarNumero(config.numeroDestino);
@@ -358,7 +375,8 @@ ipcMain.handle('whatsapp:guardar-config', async (_e, config) => {
             validados.push({
                 nombre:    (dest.nombre || '').substring(0, 60),
                 numero:    v.numero,
-                autoEnvio: dest.autoEnvio !== false   // default true
+                autoEnvio: dest.autoEnvio !== false,  // default true
+                envioManual: dest.envioManual !== false
             });
         }
         config.destinatarios = validados;

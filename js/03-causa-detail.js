@@ -52,7 +52,6 @@
             if (tab === 'movimientos') dcRenderMovimientos(causaId);
             if (tab === 'tareas') dcRenderTareas(causaId);
             if (tab === 'partes') dcRenderPartes(causaId);
-            if (tab === 'economico') dcRenderEconomico(causaId);
             if (tab === 'docs-cliente')  dcRenderDocs(causaId, 'cliente');
             if (tab === 'docs-tribunal') dcRenderDocs(causaId, 'tribunal');
             if (tab === 'docs-tramites') dcRenderDocs(causaId, 'tramites');
@@ -241,10 +240,6 @@
                         <i class="fas fa-tasks"></i> Tareas
                         <span class="dc-tab-badge">${tareasPend > 0 ? `${tareasPend}/${tareasTotal}` : tareasTotal}</span>
                     </button>
-                    <button id="dctab-economico" class="dc-tab-btn"
-                        onclick="dcCambiarTab('economico',${causaId})">
-                        <i class="fas fa-coins"></i> Datos económicos
-                    </button>
                     <button id="dctab-partes" class="dc-tab-btn"
                         onclick="dcCambiarTab('partes',${causaId})">
                         <i class="fas fa-users"></i> Usuarios y partes
@@ -270,7 +265,6 @@
                 <!-- Tab panels -->
                 <div id="dcpanel-movimientos"   class="dc-tab-panel active"></div>
                 <div id="dcpanel-tareas"         class="dc-tab-panel"></div>
-                <div id="dcpanel-economico"      class="dc-tab-panel"></div>
                 <div id="dcpanel-partes"         class="dc-tab-panel"></div>
                 <div id="dcpanel-docs-cliente"   class="dc-tab-panel"></div>
                 <div id="dcpanel-docs-tribunal"  class="dc-tab-panel"></div>
@@ -280,10 +274,6 @@
         </div>
     `;
             abrirModal('modal-detalle');
-
-            // Si existe el selector global de honorarios (panel Control Financiero), preseleccionar esta causa
-            const selHon = document.getElementById('hr-causa-sel');
-            if (selHon) selHon.value = causaId;
 
             // Render tab inicial
             dcCambiarTab('movimientos', causaId);
@@ -498,116 +488,6 @@
         }
 
         // ════════════════════════════════════════════════════════
-        // TAB 3: DATOS ECONÓMICOS
-        // ════════════════════════════════════════════════════════
-        function dcRenderEconomico(causaId) {
-            const causa = DB.causas.find(c => c.id === causaId);
-            const el = document.getElementById('dcpanel-economico');
-            if (!causa || !el) return;
-
-            const hon = causa.honorarios || {};
-            const base = hon.montoBase || hon.base || 0;
-            const pagos = hon.pagos || [];
-            const pagado = pagos.reduce((s, p) => s + (p.monto || 0), 0);
-            const pend = base - pagado;
-            const pct = base > 0 ? Math.round(pagado / base * 100) : 0;
-            const cuantia = causa.cuantia || 0;
-
-            const lblBtnHon = base > 0 ? 'Modificar Honorarios' : 'Asignar Honorarios';
-
-            el.innerHTML = `
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px;">
-                <div style="font-size:0.7rem; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:#64748b;">
-                    <i class="fas fa-wallet"></i> Honorarios
-                </div>
-                <button type="button" class="dc-btn" style="font-size:0.76rem;" onclick="dcGestionarHonorarios()">
-                    <i class="fas fa-dollar-sign"></i> ${lblBtnHon}
-                </button>
-            </div>
-            <div class="dc-econ-grid">
-                <div class="dc-econ-kpi blue">
-                    <div class="dc-econ-label">Monto Base</div>
-                    <div class="dc-econ-val">$${base.toLocaleString('es-CL')}</div>
-                </div>
-                <div class="dc-econ-kpi green">
-                    <div class="dc-econ-label">Cobrado</div>
-                    <div class="dc-econ-val" style="color:#0d7a5f;">$${pagado.toLocaleString('es-CL')}</div>
-                </div>
-                <div class="dc-econ-kpi ${pend > 0 ? 'red' : 'green'}">
-                    <div class="dc-econ-label">Pendiente</div>
-                    <div class="dc-econ-val" style="color:${pend > 0 ? '#c0392b' : '#0d7a5f'};">$${pend.toLocaleString('es-CL')}</div>
-                </div>
-                <div class="dc-econ-kpi orange">
-                    <div class="dc-econ-label">% Cobrado</div>
-                    <div class="dc-econ-val" style="color:#b45309;">${pct}%</div>
-                </div>
-            </div>
-
-            ${base > 0 ? `
-            <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin-bottom:14px;">
-                <div style="font-size:0.7rem; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:#64748b; margin-bottom:10px;">
-                    Progreso de cobro
-                </div>
-                <div style="background:#f1f5f9; border-radius:6px; height:10px; overflow:hidden; margin-bottom:6px;">
-                    <div style="height:100%; width:${pct}%; background:linear-gradient(90deg,#1a3a6b,#2563a8); border-radius:6px; transition:width 0.7s;"></div>
-                </div>
-                <div style="font-size:0.72rem; color:#64748b;">${pct}% cobrado · ${100 - pct}% pendiente</div>
-            </div>` : ''}
-
-            <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:14px 16px;">
-                <div style="font-size:0.7rem; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:#64748b; margin-bottom:10px;">
-                    Historial de pagos ${pagos.length ? `(${pagos.length})` : ''}
-                </div>
-                <div class="dc-pagos-list">
-                    ${pagos.length ? pagos.map(p => `
-                        <div class="dc-pago-row">
-                            <span style="color:#0f172a; font-weight:600;">${p.concepto || 'Pago'}</span>
-                            <span style="color:#64748b; font-size:0.72rem; font-family:'IBM Plex Mono',monospace;">${p.fecha || '—'}</span>
-                            <span style="color:#0d7a5f; font-weight:700; font-family:'IBM Plex Mono',monospace;">+$${(p.monto || 0).toLocaleString('es-CL')}</span>
-                        </div>`).join('')
-                    : '<p style="font-size:0.8rem; color:#94a3b8; text-align:center; padding:12px 0;">Sin pagos registrados.</p>'}
-                </div>
-            </div>
-
-            ${cuantia ? `
-            <div style="margin-top:12px; background:#f8fafc; border:1px solid #e4eaf3; border-radius:8px; padding:12px 16px;">
-                <span style="font-size:0.72rem; color:#64748b; font-weight:700; text-transform:uppercase; letter-spacing:0.07em;">Cuantía en disputa</span>
-                <div style="font-size:1.2rem; font-weight:700; font-family:'IBM Plex Mono',monospace; color:#1a3a6b; margin-top:4px;">$${cuantia.toLocaleString('es-CL')}</div>
-            </div>` : ''}`;
-        }
-
-        function dcGestionarHonorarios() {
-            const causaId = (typeof window._dcCurrentCausaId === 'number' || typeof window._dcCurrentCausaId === 'string')
-                ? parseInt(window._dcCurrentCausaId)
-                : NaN;
-            if (!causaId) { showError('No se pudo determinar la causa actual.'); return; }
-
-            const causa = DB.causas.find(c => c.id === causaId);
-            if (!causa) { showError('Causa no encontrada.'); return; }
-
-            if (typeof migAbrir !== 'function') { showError('No está disponible el formulario de edición.'); return; }
-
-            const baseActual = causa.honorarios?.montoBase || causa.honorarios?.base || 0;
-
-            migAbrir({
-                titulo: '<i class="fas fa-wallet"></i> Honorarios — Monto Base',
-                btnOk: 'Guardar',
-                campos: [
-                    { id: 'montoBase', label: 'Monto Base ($)', valor: baseActual ? String(baseActual) : '', placeholder: 'Ej: 5000000', tipo: 'number', requerido: true }
-                ],
-                onOk: (vals) => {
-                    const monto = parseFloat((vals.montoBase || '').toString().replace(/\./g, '').replace(/,/g, '.'));
-                    if (!monto || monto <= 0) { showError('Ingrese un monto válido.'); return; }
-                    asignarHonorarios(causaId, monto);
-                    registrarEvento(`Honorarios asignados/modificados: $${monto.toLocaleString('es-CL')} — ${causa?.caratula}`);
-                    dcRenderEconomico(causaId);
-                    if (typeof renderAll === 'function') renderAll();
-                    showSuccess('Honorarios actualizados.');
-                }
-            });
-        }
-
-        // ════════════════════════════════════════════════════════
         // TAB 4: USUARIOS Y PARTES
         // ════════════════════════════════════════════════════════
         function dcRenderPartes(causaId) {
@@ -771,70 +651,6 @@
             causa.estadoGeneral = 'En tramitación'; causa.instancia = 'Segunda';
             if (typeof markAppDirty === "function") markAppDirty(); guardarDB(); registrarEvento(`Causa reactivada (2ª instancia): ${causa.caratula}`);
             renderAll(); abrirDetalleCausa(causaId);
-        }
-
-        // ─── 4. HONORARIOS REALES ────────────────────────────────────────
-        function uiAsignarHonorarios(causaIdOverride) {
-            const sel = document.getElementById('hr-causa-sel');
-            const fromSelect = sel ? parseInt(sel.value) : NaN;
-            const fromOverride = (typeof causaIdOverride === 'number' || typeof causaIdOverride === 'string')
-                ? parseInt(causaIdOverride)
-                : NaN;
-            const fromDetalle = (typeof window._dcCurrentCausaId === 'number' || typeof window._dcCurrentCausaId === 'string')
-                ? parseInt(window._dcCurrentCausaId)
-                : NaN;
-
-            const causaId = Number.isFinite(fromOverride) ? fromOverride : (Number.isFinite(fromSelect) ? fromSelect : fromDetalle);
-            const monto = parseFloat(document.getElementById('hr-monto').value);
-            if (!causaId) { showError('Seleccione una causa.'); return; }
-            if (!monto || monto <= 0) { showError('Ingrese un monto válido.'); return; }
-            asignarHonorarios(causaId, monto);
-            const causa = DB.causas.find(c => c.id === causaId);
-            registrarEvento(`Honorarios asignados: $${monto.toLocaleString('es-CL')} — ${causa?.caratula}`);
-            document.getElementById('hr-monto').value = '';
-            renderHonorariosResumen(); renderAll();
-        }
-
-        function uiRegistrarPago() {
-            const causaId = parseInt(document.getElementById('hr-pago-causa-sel').value);
-            const monto = parseFloat(document.getElementById('hr-pago-monto').value);
-            if (!causaId) { showError('Seleccione una causa.'); return; }
-            if (!monto || monto <= 0) { showError('Ingrese un monto válido.'); return; }
-            const causa = DB.causas.find(c => c.id === causaId);
-            if (!causa?.honorarios?.montoBase) { showError('Esta causa no tiene honorarios asignados. Asígnelos primero.'); return; }
-            registrarPago(causaId, monto);
-            registrarEvento(`Pago registrado: $${monto.toLocaleString('es-CL')} — ${causa?.caratula}`);
-            document.getElementById('hr-pago-monto').value = '';
-            renderHonorariosResumen(); renderAll();
-        }
-
-        function renderHonorariosResumen() {
-            const el = document.getElementById('hr-resumen');
-            if (!el) return;
-            const causasConHon = DB.causas.filter(c => c.honorarios?.montoBase);
-            if (!causasConHon.length) {
-                el.innerHTML = '<div class="empty-state"><i class="fas fa-wallet"></i><p>Sin honorarios asignados.</p></div>'; return;
-            }
-            el.innerHTML = causasConHon.map(c => {
-                const h = c.honorarios;
-                const pagado = h.montoBase - h.saldoPendiente;
-                const pct = Math.round((pagado / h.montoBase) * 100);
-                return `<div class="card" style="margin-bottom:12px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <strong style="font-size:0.88rem;">${escHtml(c.caratula)}</strong>
-                <span class="badge ${h.saldoPendiente <= 0 ? 'badge-s' : 'badge-w'}">${h.saldoPendiente <= 0 ? 'PAGADO' : 'PENDIENTE'}</span>
-            </div>
-            <div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${pct}%"></div></div>
-            <div style="display:flex; justify-content:space-between; font-size:0.78rem; color:var(--t2); margin-top:6px;">
-                <span>Base: $${h.montoBase.toLocaleString('es-CL')}</span>
-                <span>Pagado: <strong style="color:var(--s);">$${pagado.toLocaleString('es-CL')}</strong></span>
-                <span>Pendiente: <strong style="color:var(--d);">$${h.saldoPendiente.toLocaleString('es-CL')}</strong></span>
-            </div>
-            ${h.pagos?.length ? `<div style="margin-top:10px; border-top:1px solid #f1f5f9; padding-top:8px;">
-                ${h.pagos.map(p => `<div class="pago-item"><span>${new Date(p.fecha).toLocaleDateString('es-CL')}</span><span class="pago-monto">+$${p.monto.toLocaleString('es-CL')}</span></div>`).join('')}
-            </div>` : ''}
-        </div>`;
-            }).join('');
         }
 
         // ─── FASE 5: PESTAÑAS DOCUMENTALES ──────────────────────────────

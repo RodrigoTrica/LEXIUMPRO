@@ -113,6 +113,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
         limpiarLogs:     ()    => ipcRenderer.invoke('whatsapp:limpiar-logs'),
         reset:           ()    => ipcRenderer.invoke('whatsapp:reset'),
 
+        probarAlertasCobro: () => ipcRenderer.invoke('whatsapp:probar-alertas-cobro'),
+
         onEvento: (callback) => {
             [
                 'whatsapp:qr',

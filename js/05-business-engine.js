@@ -12,12 +12,69 @@ function uid() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
         return crypto.randomUUID();
     }
+
     // Fallback para navegadores muy antiguos
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
         const r = Math.random() * 16 | 0;
         return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
     });
 }
+
+function _addMonthsKeepDay(date, months) {
+    const d = new Date(date);
+    const day = d.getDate();
+    d.setMonth(d.getMonth() + months);
+    // Ajuste si el mes destino no tiene ese día (ej. 31)
+    while (d.getDate() < day) d.setDate(d.getDate() - 1);
+    return d;
+}
+
+function _sumPagosLegacy(pagos) {
+    return (Array.isArray(pagos) ? pagos : []).reduce((s, p) => s + (parseFloat(p?.monto) || 0), 0);
+}
+
+function _sumPlanPagosPagados(planPagos) {
+    return (Array.isArray(planPagos) ? planPagos : []).reduce((s, c) => s + (c?.estado === 'PAGADA' ? (parseFloat(c?.monto) || 0) : 0), 0);
+}
+
+/**
+ * Genera automáticamente un plan de pagos mensual.
+ *
+ * @param {string|number} causaId
+ * @param {number} montoTotal
+ * @param {number} numeroCuotas
+ * @param {string|Date} fechaInicio - fecha base del primer vencimiento
+ * @returns {Array<{numero:number,monto:number,fechaVencimiento:string,estado:'PENDIENTE'|'PAGADA',fechaPago:(string|null)}>} planPagos
+ */
+function generarPlanPagos(causaId, montoTotal, numeroCuotas, fechaInicio) {
+    const total = parseFloat(montoTotal) || 0;
+    const n = parseInt(numeroCuotas) || 0;
+    if (!causaId) throw new Error('causaId requerido');
+    if (!total || total <= 0) throw new Error('montoTotal inválido');
+    if (!n || n <= 0) throw new Error('numeroCuotas inválido');
+
+    const inicio = fechaInicio ? new Date(fechaInicio) : new Date();
+    if (Number.isNaN(inicio.getTime())) throw new Error('fechaInicio inválida');
+
+    // Distribuir enteros CLP con residuo en la última cuota
+    const totalInt = Math.round(total);
+    const base = Math.floor(totalInt / n);
+    const resto = totalInt - (base * n);
+
+    return Array.from({ length: n }).map((_, idx) => {
+        const numero = idx + 1;
+        const monto = base + (numero === n ? resto : 0);
+        const venc = _addMonthsKeepDay(inicio, idx);
+        return {
+            numero,
+            monto,
+            fechaVencimiento: venc.toISOString(),
+            estado: 'PENDIENTE',
+            fechaPago: null
+        };
+    });
+}
+
 function generarID() { return uid(); }
 function hoy() { return new Date(); }
 function diasEntre(fecha1, fecha2) {
@@ -336,20 +393,33 @@ function asignarHonorarios(causaId, montoBase) {
     const causa = DB.causas.find(c => c.id === causaId);
     if (!causa) return;
 
-    // Si no hay honorarios previos, crear estructura base
-    if (!causa.honorarios) {
-        causa.honorarios = { montoBase, pagos: [], saldoPendiente: montoBase };
-        if (typeof markAppDirty === "function") markAppDirty(); guardarDB();
-        return;
-    }
 
-    // Si ya hay honorarios, NO borrar pagos existentes
-    const pagos = Array.isArray(causa.honorarios.pagos) ? causa.honorarios.pagos : [];
-    const totalPagado = pagos.reduce((s, p) => s + (parseFloat(p?.monto) || 0), 0);
+    const montoTotal = parseFloat(montoBase) || 0;
+    if (!montoTotal || montoTotal <= 0) return;
 
-    causa.honorarios.montoBase = montoBase;
-    causa.honorarios.pagos = pagos;
-    causa.honorarios.saldoPendiente = Math.max(0, montoBase - totalPagado);
+    // Compatibilidad: asignarHonorarios se interpreta como modalidad CONTADO
+    // (en UI nueva se gestionará CUOTAS con generarPlanPagos).
+    if (!causa.honorarios) causa.honorarios = {};
+
+    const pagosLegacy = Array.isArray(causa.honorarios.pagos) ? causa.honorarios.pagos : [];
+    const totalPagadoLegacy = _sumPagosLegacy(pagosLegacy);
+
+    causa.honorarios.modalidad = 'CONTADO';
+    causa.honorarios.montoTotal = montoTotal;
+    causa.honorarios.planPagos = [
+        {
+            numero: 1,
+            monto: montoTotal,
+            fechaVencimiento: new Date().toISOString(),
+            estado: (totalPagadoLegacy >= montoTotal) ? 'PAGADA' : 'PENDIENTE',
+            fechaPago: (totalPagadoLegacy >= montoTotal) ? new Date().toISOString() : null
+        }
+    ];
+
+    // Legacy / compat: mantener pagos y campos usados por vistas existentes
+    causa.honorarios.pagos = pagosLegacy;
+    causa.honorarios.montoBase = montoTotal;
+    causa.honorarios.saldoPendiente = Math.max(0, montoTotal - totalPagadoLegacy);
 
     if (typeof markAppDirty === "function") markAppDirty();
     guardarDB();
@@ -358,9 +428,26 @@ function asignarHonorarios(causaId, montoBase) {
 function registrarPago(causaId, monto) {
     const causa = DB.causas.find(c => c.id === causaId);
     if (!causa?.honorarios) return;
+
+    // Mantener pagos legacy
+    if (!Array.isArray(causa.honorarios.pagos)) causa.honorarios.pagos = [];
     causa.honorarios.pagos.push({ monto, fecha: hoy() });
-    causa.honorarios.saldoPendiente = Math.max(0, causa.honorarios.saldoPendiente - monto);
-    if (typeof markAppDirty === "function") markAppDirty(); guardarDB();
+
+    // Si existe planPagos, intentar marcar la primera cuota pendiente como pagada.
+    if (Array.isArray(causa.honorarios.planPagos) && causa.honorarios.planPagos.length) {
+        const cuotaPend = causa.honorarios.planPagos.find(c => c.estado === 'PENDIENTE');
+        if (cuotaPend) {
+            cuotaPend.estado = 'PAGADA';
+            cuotaPend.fechaPago = new Date().toISOString();
+        }
+    }
+
+    const montoTotal = parseFloat(causa.honorarios.montoTotal || causa.honorarios.montoBase) || 0;
+    const totalPagado = _sumPagosLegacy(causa.honorarios.pagos);
+    causa.honorarios.saldoPendiente = Math.max(0, montoTotal - totalPagado);
+
+    if (typeof markAppDirty === "function") markAppDirty();
+    guardarDB();
 }
 
 function calcularIndicadoresEconomicos() {

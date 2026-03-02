@@ -482,19 +482,49 @@
                     <div class="card">
                         <h3><i class="fas fa-file-invoice-dollar"></i> Asignar Honorarios a Causa</h3>
                         <label>Causa</label>
-                        <select id="hr-causa-sel"></select>
-                        <label>Monto Base ($)</label>
-                        <input type="number" id="hr-monto" placeholder="Ej: 5000000">
-                        <button class="btn btn-s btn-full" onclick="uiAsignarHonorarios()">
-                            <i class="fas fa-save"></i> Asignar</button>
+                        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                            <select id="hr-causa-sel" style="flex:1; min-width:220px;"></select>
+                            <button type="button" class="btn btn-sm" onclick="uiTestAlertaCobro()" style="background:var(--bg-2); border:1px solid var(--border);">
+                                <i class="fas fa-vial"></i> Probar Alerta Cobro
+                            </button>
+                            <button type="button" class="btn btn-sm" onclick="uiProbarSchedulerCobros()" style="background:var(--bg-2); border:1px solid var(--border);">
+                                <i class="fas fa-bolt"></i> Ejecutar Auto ahora
+                            </button>
+                        </div>
+                        <div id="hr-asignado-summary" style="margin-top:14px;"></div>
+                        <button id="hr-btn-modificar" type="button" class="btn btn-sm" style="margin-top:10px; background:var(--bg-2); border:1px solid var(--border); display:none;">
+                            <i class="fas fa-pen"></i> Modificar
+                        </button>
+
+                        <div id="hr-asignar-form" style="margin-top:12px;">
+                            <label>Modalidad</label>
+                            <select id="hr-modalidad">
+                                <option value="CONTADO">CONTADO</option>
+                                <option value="CUOTAS">CUOTAS</option>
+                            </select>
+                            <label>Monto Base ($)</label>
+                            <input type="number" id="hr-monto" placeholder="Ej: 5000000">
+                            <div id="hr-cuotas-wrap" style="display:none;">
+                                <label>Número de cuotas</label>
+                                <input type="number" id="hr-cuotas-num" placeholder="Ej: 6" min="1" step="1">
+                                <label>Fecha primera cuota</label>
+                                <input type="date" id="hr-cuotas-fecha">
+                            </div>
+                            <button class="btn btn-s btn-full" onclick="uiAsignarHonorarios()">
+                                <i class="fas fa-save"></i> Asignar</button>
+                            <div id="hr-plan" style="margin-top:14px;"></div>
+                        </div>
                         <hr style="margin:18px 0; border:none; border-top:1px solid var(--border);">
                         <h3><i class="fas fa-money-bill-wave"></i> Registrar Pago</h3>
                         <label>Causa</label>
                         <select id="hr-pago-causa-sel"></select>
                         <label>Monto del Pago ($)</label>
                         <input type="number" id="hr-pago-monto" placeholder="Ej: 1000000">
+                        <label>Comprobante (PDF opcional)</label>
+                        <input type="file" id="hr-pago-comprobante" accept=".pdf,application/pdf">
                         <button class="btn btn-p btn-full" onclick="uiRegistrarPago()">
                             <i class="fas fa-check"></i> Registrar Pago</button>
+                        <div id="hr-pagos-list" style="margin-top:12px;"></div>
                     </div>
                     <div class="card">
                         <h3><i class="fas fa-chart-bar"></i> Estado de Honorarios por Causa</h3>
@@ -2034,64 +2064,114 @@
                             style="background:#25D366; color:white; border:none;">
                             <i class="fab fa-whatsapp"></i> Enviar resumen ahora
                         </button>
+                        <button id="wa-btn-revisar-cobros" onclick="waRevisarCobrosAhora()" class="btn"
+                            style="background:var(--bg-2); color:var(--text-1); border:1px solid var(--border);">
+                            <i class="fas fa-sync"></i> Revisar Cobros Ahora
+                        </button>
                     </div>
                 </div>
 
-                <!-- ── CARD 2: Reenvío automático a número destino ── -->
+                <!-- ── CARD 2: Equipo Interno (Admin + Reenvíos) ── -->
                 <div class="card-premium">
                     <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
                         <div
-                            style="width:32px; height:32px; border-radius:8px; background:#eff6ff; display:flex; align-items:center; justify-content:center; color:#3b82f6; font-size:1rem; flex-shrink:0;">
-                            <i class="fas fa-share"></i>
+                            style="width:32px; height:32px; border-radius:8px; background:#ecfeff; display:flex; align-items:center; justify-content:center; color:#0891b2; font-size:1rem; flex-shrink:0;">
+                            <i class="fas fa-users"></i>
                         </div>
                         <div>
-                            <h4 style="margin:0;">Reenvío automático de reportes</h4>
-                            <small style="color:var(--text-3); font-size:11px;">El dispositivo registrado reenviará los
-                                reportes a este número automáticamente</small>
+                            <h4 style="margin:0;">Equipo Interno (Alertas)</h4>
+                            <small style="color:var(--text-3); font-size:11px;">Estos números reciben alertas del sistema
+                                (vencimientos, reportes, etc.)</small>
                         </div>
                     </div>
 
-                    <div style="display:grid; gap:10px;">
-                        <div>
-                            <label
-                                style="font-size:11px; color:var(--text-3); display:block; margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px;">Nombre
-                                del destinatario</label>
-                            <input id="wa-dest-nombre" type="text" class="input-field" placeholder="Ej: Dr. Carlos Ruiz"
-                                maxlength="80" />
+                    <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:12px;">
+                        <div style="font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px;">
+                            Abogados principales
                         </div>
-                        <div>
-                            <label
-                                style="font-size:11px; color:var(--text-3); display:block; margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px;">Número
-                                destino (con código de país, sin +)</label>
-                            <input id="wa-numero-alt" type="tel" class="input-field" placeholder="56912345678"
-                                maxlength="15" oninput="waValidarNumeroAlt()" />
-                            <small id="wa-numero-alt-error"
-                                style="color:#ef4444; font-size:11px; display:none;"></small>
-                        </div>
-                    </div>
-
-                    <!-- Destino guardado (visible cuando hay uno configurado) -->
-                    <div id="wa-dest-activo"
-                        style="display:none; margin-top:12px; padding:10px 12px; background:#f0fdf4; border-radius:8px; border:1px solid #bbf7d0; display:flex; align-items:center; gap:10px;">
-                        <i class="fas fa-check-circle" style="color:#16a34a; font-size:1.1rem;"></i>
-                        <div style="flex:1; min-width:0;">
-                            <div style="font-size:12px; font-weight:600; color:#15803d;" id="wa-dest-activo-nombre">—
+                        <div style="display:grid; gap:10px;">
+                            <div>
+                                <label
+                                    style="font-size:11px; color:var(--text-3); display:block; margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px;">Nombre</label>
+                                <input id="wa-principal-nombre" type="text" class="input-field" placeholder="Ej: Abogado/a principal"
+                                    maxlength="80" />
                             </div>
-                            <div style="font-size:11px; color:#166534;" id="wa-dest-activo-numero">—</div>
+                            <div>
+                                <label
+                                    style="font-size:11px; color:var(--text-3); display:block; margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px;">Número (con código país, sin +)</label>
+                                <input id="wa-principal-numero" type="tel" class="input-field" placeholder="56912345678"
+                                    maxlength="15" />
+                            </div>
+                            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                                <button id="wa-btn-guardar-principal" onclick="waGuardarPrincipal()" class="btn btn-p"><i class="fas fa-save"></i> Guardar
+                                    abogado</button>
+                                <button id="wa-btn-cancelar-edicion-principal" onclick="waCancelarEdicionPrincipal()" class="btn"
+                                    style="background:transparent; border:1px solid var(--border); display:none;">
+                                    Cancelar
+                                </button>
+                            </div>
+                            <div id="wa-lista-principales" style="display:grid; gap:8px; margin-top:8px;"></div>
                         </div>
-                        <button onclick="waLimpiarDestino()" class="btn btn-sm"
-                            style="background:transparent; color:#dc2626; border:1px solid #fca5a5; font-size:11px; padding:3px 8px;">
-                            <i class="fas fa-times"></i> Quitar
-                        </button>
                     </div>
 
-                    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:14px;">
-                        <button onclick="waGuardarDestino()" class="btn btn-p"><i class="fas fa-save"></i> Guardar
-                            destino</button>
-                        <button id="wa-btn-enviar-alt" onclick="waEnviarAOtroNumero()" class="btn"
-                            style="background:#25D366; color:white; border:none;">
-                            <i class="fab fa-whatsapp"></i> Reenviar ahora
-                        </button>
+                    <div style="margin-top:14px; background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:12px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px;">
+                            <div>
+                                <div style="font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:.5px;">Reenvíos (Asistentes/Abogados)</div>
+                                <small id="wa-secundarios-activos" style="color:var(--text-3); font-size:11px;"></small>
+                            </div>
+                            <button onclick="waLimpiarDestino()" class="btn btn-sm"
+                                style="background:transparent; color:#dc2626; border:1px solid #fca5a5; font-size:11px; padding:3px 8px;">
+                                <i class="fas fa-trash"></i> Limpiar lista
+                            </button>
+                        </div>
+
+                        <div style="display:grid; gap:10px;">
+                            <div>
+                                <label
+                                    style="font-size:11px; color:var(--text-3); display:block; margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px;">Nombre</label>
+                                <input id="wa-dest-nombre" type="text" class="input-field" placeholder="Ej: Asistente 1"
+                                    maxlength="80" />
+                            </div>
+                            <div>
+                                <label
+                                    style="font-size:11px; color:var(--text-3); display:block; margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px;">Número (con código país, sin +)</label>
+                                <input id="wa-numero-alt" type="tel" class="input-field" placeholder="56912345678"
+                                    maxlength="15" oninput="waValidarNumeroAlt()" />
+                                <small id="wa-numero-alt-error"
+                                    style="color:#ef4444; font-size:11px; display:none;"></small>
+                            </div>
+                        </div>
+
+                        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
+                            <button id="wa-btn-guardar-dest" onclick="waGuardarDestino()" class="btn btn-p"><i class="fas fa-user-plus"></i> Agregar
+                                reenvío</button>
+                            <button id="wa-btn-cancelar-edicion-dest" onclick="waCancelarEdicionDestinatario()" class="btn"
+                                style="background:transparent; border:1px solid var(--border); display:none;">
+                                Cancelar
+                            </button>
+                        </div>
+
+                        <div id="wa-lista-destinatarios" style="display:grid; gap:8px; margin-top:12px;"></div>
+                    </div>
+                </div>
+
+                <!-- ── CARD 3: Clientes (Automático) ── -->
+                <div class="card-premium" style="background:#fff; border:1px solid var(--border);">
+                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+                        <div
+                            style="width:32px; height:32px; border-radius:8px; background:#fef3c7; display:flex; align-items:center; justify-content:center; color:#b45309; font-size:1rem; flex-shrink:0;">
+                            <i class="fas fa-user-tag"></i>
+                        </div>
+                        <div>
+                            <h4 style="margin:0;">Clientes (Automático)</h4>
+                            <small style="color:var(--text-3); font-size:11px;">No se configura aquí: se toma desde
+                                <strong>Clientes</strong>.</small>
+                        </div>
+                    </div>
+                    <div style="font-size:0.85rem; color:var(--text-2); line-height:1.35;">
+                        Se notificará automáticamente a los clientes con <strong>cuotas vencidas</strong>.
+                        Asegúrate de que tengan <strong>teléfono</strong> registrado en su ficha.
                     </div>
                 </div>
 
