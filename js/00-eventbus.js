@@ -83,6 +83,165 @@
         window.EventBus = EventBus;
 
         // ══════════════════════════════════════════════════════════════════════
+        // 1B. AUDIT — Logging estructurado (DB.logs) con retención combinada
+        // ══════════════════════════════════════════════════════════════════════
+        const Audit = (() => {
+            const DEFAULT_RETENTION = { maxLogs: 10000, maxDays: 180 };
+            let _reentrancyGuard = 0;
+            let _enforceEvery = 25;
+            let _countSinceEnforce = 0;
+
+            function _getRetention() {
+                try {
+                    const r = (typeof DB !== 'undefined') ? DB?.configuracion?.auditRetention : null;
+                    const maxLogs = Number.isFinite(Number(r?.maxLogs)) ? Number(r.maxLogs) : DEFAULT_RETENTION.maxLogs;
+                    const maxDays = Number.isFinite(Number(r?.maxDays)) ? Number(r.maxDays) : DEFAULT_RETENTION.maxDays;
+                    return { maxLogs: Math.max(0, maxLogs), maxDays: Math.max(0, maxDays) };
+                } catch (_) {
+                    return { ...DEFAULT_RETENTION };
+                }
+            }
+
+            function _redactValue(key, value) {
+                const k = String(key || '').toLowerCase();
+                if (
+                    k.includes('password') || k.includes('pass') || k.includes('token') || k.includes('apikey') ||
+                    k.includes('api_key') || k.includes('authorization') || k.includes('secret') ||
+                    k.includes('archivobase64') || k.includes('base64')
+                ) {
+                    return '[REDACTED]';
+                }
+                return value;
+            }
+
+            function redact(obj, depth = 0) {
+                try {
+                    if (obj == null) return obj;
+                    if (depth > 4) return '[TRUNCATED]';
+                    if (typeof obj === 'string') {
+                        // Evitar loguear blobs enormes (por si acaso)
+                        if (obj.length > 2000) return obj.slice(0, 2000) + '…';
+                        return obj;
+                    }
+                    if (typeof obj !== 'object') return obj;
+                    if (Array.isArray(obj)) return obj.slice(0, 50).map(x => redact(x, depth + 1));
+                    const out = {};
+                    Object.keys(obj).slice(0, 50).forEach(k => {
+                        out[k] = redact(_redactValue(k, obj[k]), depth + 1);
+                    });
+                    return out;
+                } catch (_) {
+                    return { error: 'redact_failed' };
+                }
+            }
+
+            function enforceRetention() {
+                try {
+                    if (typeof DB === 'undefined') return;
+                    if (!Array.isArray(DB.logs)) DB.logs = [];
+                    const { maxLogs, maxDays } = _getRetention();
+
+                    if (maxDays > 0) {
+                        const cutoff = Date.now() - (maxDays * 24 * 60 * 60 * 1000);
+                        DB.logs = DB.logs.filter(e => {
+                            const ts = Number(e?.ts || 0);
+                            return !ts || ts >= cutoff;
+                        });
+                    }
+
+                    if (maxLogs > 0 && DB.logs.length > maxLogs) {
+                        DB.logs = DB.logs.slice(-maxLogs);
+                    }
+                } catch (_) { /* ignore */ }
+            }
+
+            function _classifyEvent(eventName, payload) {
+                try {
+                    const ev = String(eventName || '');
+                    if (!ev || ev.startsWith('storage:')) return null;
+
+                    const [ns, action] = ev.split(':');
+                    const entidad = ns || 'sistema';
+                    const accion = (ns || 'EVENT').toUpperCase() + '_' + String(action || 'EMIT').toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+
+                    let referenciaId = null;
+                    if (payload && typeof payload === 'object') {
+                        referenciaId = payload.id || payload.causaId || payload.docId || payload.documentoId || payload.alertaId || null;
+                    }
+
+                    return { accion, entidad, referenciaId };
+                } catch (_) {
+                    return null;
+                }
+            }
+
+            function log(entry) {
+                try {
+                    if (_reentrancyGuard) return;
+                    if (typeof DB === 'undefined') return;
+                    if (!Array.isArray(DB.logs)) DB.logs = [];
+
+                    _reentrancyGuard++;
+                    const ts = Date.now();
+                    const base = {
+                        id: (typeof uid === 'function') ? uid() : (ts.toString(36) + Math.random().toString(36).slice(2)),
+                        ts,
+                        fechaISO: new Date(ts).toISOString(),
+                        usuario: DB.usuarioActual || null,
+                        rol: DB.rolActual || null,
+                        sesionId: DB.sesionId || null,
+                        accion: entry?.accion || 'EVENT',
+                        entidad: entry?.entidad || 'sistema',
+                        referenciaId: entry?.referenciaId || null,
+                        detalles: redact(entry?.detalles || null),
+                        ok: (entry?.ok !== undefined) ? !!entry.ok : true,
+                        error: entry?.error ? String(entry.error) : null,
+                        origen: entry?.origen || 'ui',
+                        versionApp: (DB?.configuracion?.versionApp || null)
+                    };
+                    DB.logs.push(base);
+
+                    _countSinceEnforce++;
+                    if (_countSinceEnforce >= _enforceEvery) {
+                        _countSinceEnforce = 0;
+                        enforceRetention();
+                    }
+                } catch (_) {
+                    // ignore
+                } finally {
+                    _reentrancyGuard = Math.max(0, _reentrancyGuard - 1);
+                }
+            }
+
+            function installEventBusInterceptor() {
+                if (EventBus.__auditInstalled) return;
+                EventBus.__auditInstalled = true;
+
+                const _origEmit = EventBus.emit;
+                EventBus.emit = function emitWithAudit(eventName, payload) {
+                    try {
+                        const meta = _classifyEvent(eventName, payload);
+                        if (meta) {
+                            log({
+                                accion: meta.accion,
+                                entidad: meta.entidad,
+                                referenciaId: meta.referenciaId,
+                                detalles: { event: String(eventName), payload: payload },
+                                origen: 'ui'
+                            });
+                        }
+                    } catch (_) { /* ignore */ }
+                    return _origEmit.apply(this, arguments);
+                };
+            }
+
+            return { log, redact, enforceRetention, installEventBusInterceptor };
+        })();
+
+        window.Audit = Audit;
+        try { Audit.installEventBusInterceptor(); } catch (_) {}
+
+        // ══════════════════════════════════════════════════════════════════════
         // 2. RENDER BUS — Renderizado selectivo por namespace
         // ══════════════════════════════════════════════════════════════════════
         /**

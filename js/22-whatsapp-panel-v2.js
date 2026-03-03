@@ -65,12 +65,14 @@ function initWhatsAppPanel() {
                     onConectado(data || {});
                 }
                 _reconexionAuto = false;
+                try { EventBus.emit('whatsapp:connected', { sesionNombre: data?.sesionNombre || null, sesionNumero: data?.sesionNumero || null }); } catch (_) {}
                 break;
             case 'reconectado-auto':
                 // Marcar flag ANTES de que llegue el 'ready'
                 _reconexionAuto = true;
                 onConectado(data || {});
                 EventBus.emit('notificacion', { tipo: 'ok', mensaje: '✅ WhatsApp reconectado automáticamente' });
+                try { EventBus.emit('whatsapp:reconnected', { sesionNombre: data?.sesionNombre || null, sesionNumero: data?.sesionNumero || null }); } catch (_) {}
                 break;
             case 'cargando':
                 setBadge(`Reconectando… ${data?.percent || 0}%`, '#f59e0b');
@@ -78,10 +80,12 @@ function initWhatsAppPanel() {
             case 'disconnected':
             case 'auth_failure':
                 onDesconectado();
+                try { EventBus.emit('whatsapp:disconnected', { reason: tipo }); } catch (_) {}
                 break;
             case 'alerta-enviada':
                 actualizarStats();
                 actualizarLog();
+                try { EventBus.emit('whatsapp:alert-sent', { ok: true }); } catch (_) {}
                 break;
         }
     });
@@ -883,17 +887,21 @@ async function waToggle() {
             const r = await window.electronAPI.whatsapp.conectar();
             if (r.ok) {
                 EventBus.emit('notificacion', { tipo: 'ok', mensaje: 'Iniciando conexión — escanea el QR con WhatsApp' });
+                try { EventBus.emit('whatsapp:connect-started', { ok: true }); } catch (_) {}
             } else {
                 EventBus.emit('notificacion', { tipo: 'error', mensaje: r.error || 'No se pudo iniciar WhatsApp' });
                 onDesconectado();
+                try { EventBus.emit('whatsapp:error', { accion: 'CONNECT', ok: false, error: r.error || 'No se pudo iniciar WhatsApp' }); } catch (_) {}
             }
         } else {
             await window.electronAPI.whatsapp.desconectar();
             onDesconectado();
             EventBus.emit('notificacion', { tipo: 'info', mensaje: 'WhatsApp desconectado' });
+            try { EventBus.emit('whatsapp:disconnect', { ok: true }); } catch (_) {}
         }
     } catch (e) {
         EventBus.emit('notificacion', { tipo: 'error', mensaje: e.message });
+        try { EventBus.emit('whatsapp:error', { accion: 'TOGGLE', ok: false, error: e?.message || String(e) }); } catch (_) {}
     } finally {
         if (btn) btn.disabled = false;
     }
@@ -920,8 +928,10 @@ async function waEnviarResumen() {
                 ? `✅ Resumen enviado a destinatarios manuales (${r?.destinatarios ?? '—'})`
                 : (r?.error || 'Error al enviar')
         });
+        try { EventBus.emit('whatsapp:sent', { modo: 'resumen', ok: !!r?.ok, destinatarios: r?.destinatarios ?? null, error: r?.ok ? null : (r?.error || null) }); } catch (_) {}
     } catch(e) {
         EventBus.emit('notificacion', { tipo: 'error', mensaje: e.message });
+        try { EventBus.emit('whatsapp:sent', { modo: 'resumen', ok: false, error: e?.message || String(e) }); } catch (_) {}
     } finally {
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fab fa-whatsapp"></i> Enviar resumen ahora'; }
     }
@@ -963,6 +973,7 @@ async function waEnviarAOtroNumero() {
         const fail = targets.length - ok;
         if (ok > 0) EventBus.emit('notificacion', { tipo: 'ok', mensaje: `Reporte enviado a ${ok} contacto${ok > 1 ? 's' : ''}${fail > 0 ? ` (${fail} fallaron)` : ''}` });
         else        EventBus.emit('notificacion', { tipo: 'error', mensaje: 'No se pudo enviar a ningún contacto' });
+        try { EventBus.emit('whatsapp:sent', { modo: 'manual', ok: ok > 0, enviados: ok, fallidos: fail, total: targets.length }); } catch (_) {}
     } finally {
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fab fa-whatsapp"></i> Reenviar a activos'; }
     }

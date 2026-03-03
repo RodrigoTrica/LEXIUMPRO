@@ -111,7 +111,7 @@ let _raw = (() => {
                 });
         });
     }
-    ['prospectos', 'propuestas', 'alertas', 'documentos', 'intentosLogin', 'bitacora', '_doctrina'].forEach(k => { if (!d[k]) d[k] = []; });
+    ['prospectos', 'propuestas', 'alertas', 'documentos', 'intentosLogin', 'bitacora', 'logs', '_doctrina'].forEach(k => { if (!d[k]) d[k] = []; });
 
     // Normalizar esquema de documentos (SID Fase 1)
     // - proveedorIA: identifica el proveedor que generó análisis/insights (openai/gemini/glm)
@@ -132,6 +132,7 @@ let _raw = (() => {
         }
     } catch (e) { console.warn('[Store] Migración doctrina falló (no crítico):', e); }
     if (!d.configuracion) d.configuracion = { ultimoResetDiario: null, modoEstudio: false };
+    if (!d.configuracion.auditRetention) d.configuracion.auditRetention = { maxLogs: 10000, maxDays: 180 };
     if (!d.loginBloqueado) d.loginBloqueado = { hasta: null, intentosFallidos: 0 };
     if (d.loginBloqueado.hasta && Date.now() >= d.loginBloqueado.hasta)
         d.loginBloqueado = { hasta: null, intentosFallidos: 0 };

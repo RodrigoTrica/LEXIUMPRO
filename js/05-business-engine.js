@@ -423,6 +423,17 @@ function asignarHonorarios(causaId, montoBase) {
 
     if (typeof markAppDirty === "function") markAppDirty();
     guardarDB();
+
+    try {
+        if (window.EventBus && typeof window.EventBus.emit === 'function') {
+            window.EventBus.emit('honorarios:assigned', {
+                causaId,
+                montoTotal: montoTotal,
+                modalidad: 'CONTADO'
+            });
+            window.EventBus.emit('honorarios:updated', { causaId });
+        }
+    } catch (_) {}
 }
 
 function registrarPago(causaId, monto) {
@@ -432,6 +443,7 @@ function registrarPago(causaId, monto) {
     // Mantener pagos legacy
     if (!Array.isArray(causa.honorarios.pagos)) causa.honorarios.pagos = [];
     causa.honorarios.pagos.push({ monto, fecha: hoy() });
+    const idxPago = causa.honorarios.pagos.length - 1;
 
     // Si existe planPagos, intentar marcar la primera cuota pendiente como pagada.
     if (Array.isArray(causa.honorarios.planPagos) && causa.honorarios.planPagos.length) {
@@ -448,6 +460,18 @@ function registrarPago(causaId, monto) {
 
     if (typeof markAppDirty === "function") markAppDirty();
     guardarDB();
+
+    try {
+        if (window.EventBus && typeof window.EventBus.emit === 'function') {
+            window.EventBus.emit('honorarios:pago-added', {
+                causaId,
+                monto,
+                pagoIndex: idxPago,
+                saldoPendiente: causa.honorarios.saldoPendiente
+            });
+            window.EventBus.emit('honorarios:updated', { causaId });
+        }
+    } catch (_) {}
 }
 
 function calcularIndicadoresEconomicos() {
@@ -705,6 +729,23 @@ function registrarIntentoLogin(usuario, exito) {
 function registrarEvento(descripcion) {
     DB.bitacora.push({ descripcion, fecha: hoy() });
     if (DB.bitacora.length > 500) DB.bitacora = DB.bitacora.slice(-500); // límite
+    try {
+        if (window.Audit && typeof window.Audit.log === 'function') {
+            window.Audit.log({
+                accion: 'BITACORA',
+                entidad: 'bitacora',
+                referenciaId: null,
+                detalles: { descripcion: String(descripcion || '') },
+                origen: 'ui',
+                ok: true
+            });
+        }
+    } catch (_) {}
+    try {
+        if (window.EventBus && typeof window.EventBus.emit === 'function') {
+            window.EventBus.emit('bitacora:updated', { descripcion: String(descripcion || '') });
+        }
+    } catch (_) {}
     if (typeof markAppDirty === "function") markAppDirty(); guardarDB();
 }
 

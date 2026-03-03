@@ -18,7 +18,7 @@
     <!-- ████████████████████████████████████████████████████████████
          HTML — BLOQUE 1: SIDEBAR (menú lateral de navegación)
     ████████████████████████████████████████████████████████████ -->
-    <aside id="side">
+    <aside id="side" style="display:none;">
         <div class="logo">
             <img src="assets/logo-lexium.png" alt="LEXIUM" style="width:48px; height:48px; border-radius:12px;">
             <div class="logo-brand">
@@ -94,6 +94,7 @@
                 <button onclick="tab('admin-usuarios',this)"><i class="fas fa-users-cog"></i> Usuarios</button>
                 <button onclick="tab('config-ia',this)"><i class="fas fa-robot"></i> Config. IA</button>
                 <button onclick="tab('bitacora',this)"><i class="fas fa-shield-alt"></i> Bitácora</button>
+                <button onclick="tab('audit-reportes',this)"><i class="fas fa-shield-halved"></i> Auditoría y Reportes</button>
                 <button onclick="tab('seccion-whatsapp', this)"><i class="fab fa-whatsapp"></i> WhatsApp</button>
             </div>
 
@@ -231,7 +232,6 @@
                     </div>
                 </div>
             </div>
-        </div>
         <!-- ─────────────────────────────────────────────────────────────
              SECCIONES DE CONTENIDO — dentro de #app para que hereden
              display:none en login y display:block tras autenticación
@@ -1088,6 +1088,63 @@
                             class="fas fa-trash"></i> Limpiar</button>
                 </div>
                 <div id="bitacoraSistema"></div>
+            </div>
+        </section>
+
+        <section id="audit-reportes" class="tabs">
+            <div class="card" style="max-width:1200px;">
+                <h3><i class="fas fa-shield-halved"></i> Auditoría y Reportes</h3>
+
+                <div class="audit-toolbar">
+                    <div class="audit-filters">
+                        <div class="audit-filter">
+                            <label>Rango</label>
+                            <select id="audit-rango">
+                                <option value="hoy">Hoy</option>
+                                <option value="7d">Últimos 7 días</option>
+                                <option value="mes">Este mes</option>
+                                <option value="todo" selected>Todo</option>
+                            </select>
+                        </div>
+                        <div class="audit-filter">
+                            <label>Tipo</label>
+                            <select id="audit-tipo">
+                                <option value="todo" selected>Todo</option>
+                                <option value="causas">Causas</option>
+                                <option value="documentos">Documentos</option>
+                                <option value="honorarios">Honorarios</option>
+                                <option value="whatsapp">WhatsApp</option>
+                                <option value="sistema">Sistema</option>
+                            </select>
+                        </div>
+                        <div class="audit-filter audit-filter--grow">
+                            <label>Búsqueda</label>
+                            <input id="audit-q" placeholder="Buscar en acción, usuario, referencia, detalles..." />
+                        </div>
+                    </div>
+                    <div class="audit-actions">
+                        <button class="btn btn-sm" id="audit-btn-refresh"><i class="fas fa-sync"></i> Actualizar</button>
+                        <button class="btn btn-sm" id="audit-btn-csv"><i class="fas fa-file-csv"></i> CSV</button>
+                        <button class="btn btn-sm" id="audit-btn-pdf"><i class="fas fa-file-pdf"></i> PDF</button>
+                    </div>
+                </div>
+
+                <div class="audit-meta" id="audit-meta"></div>
+
+                <div class="table-wrap audit-table-wrap">
+                    <table class="audit-table">
+                        <thead>
+                            <tr>
+                                <th style="width:170px;">Fecha/Hora</th>
+                                <th style="width:150px;">Usuario</th>
+                                <th style="width:180px;">Acción</th>
+                                <th>Detalles</th>
+                                <th style="width:160px;">Ref ID</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audit-tbody"></tbody>
+                    </table>
+                </div>
             </div>
         </section>
 
@@ -2324,6 +2381,19 @@
                 </div>
             </div>
         </div>
+
+        <div class="modal-overlay" id="modal-audit-detalle">
+            <div class="modal-box" style="max-width:900px; width:100%;">
+                <div class="modal-header">
+                    <h3 id="audit-detalle-title"><i class="fas fa-code"></i> Detalle de evento</h3>
+                    <button class="modal-close" id="audit-detalle-close">×</button>
+                </div>
+                <div class="modal-body" style="max-height:70vh; overflow:auto;">
+                    <pre id="audit-detalle-pre" class="audit-json-pre"></pre>
+                </div>
+            </div>
+        </div>
+        </div>
     </main>
 
     <!-- ══ MODAL GENÉRICO DE INPUT (reemplaza todos los prompt() nativos) ══ -->
@@ -2431,7 +2501,7 @@
     <!-- Cargar modales parciales antes del resto de la app -->
     <script src="js/utils/html-loader.js"></script>
     <!-- v13: EventBus + RenderBus + StorageGuard (debe ir PRIMERO) -->
-    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="js/00-disk-storage.js"></script>
+    <script src="js/00-disk-storage.js"></script>
     <script src="js/00b-config.js"></script>
     <script src="js/00-eventbus.js"></script>
     <script src="js/01-db-auth.js"></script>
@@ -2463,6 +2533,7 @@
     <script src="js/22-whatsapp-panel-v2.js"></script>
     <script src="js/23-causas-pro-docs.js"></script>
     <script src="js/24-honorarios-view.js"></script>
+    <script src="js/25-audit-reportes.js"></script>
 
     <!-- MODAL VERSIONES -->
     <div class="modal-overlay" id="modal-versiones" onclick="if(event.target===this)cerrarModal('modal-versiones')">

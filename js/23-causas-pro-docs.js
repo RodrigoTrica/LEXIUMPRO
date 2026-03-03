@@ -48,6 +48,17 @@ function crearCausa(datos) {
     DB.causas.push(nueva);
     if (typeof markAppDirty === 'function') markAppDirty();
     if (typeof save === 'function') save();
+    try {
+        if (window.EventBus && typeof window.EventBus.emit === 'function') {
+            window.EventBus.emit('causas:created', {
+                causaId: nueva.id,
+                caratula: nueva.caratula,
+                rama: nueva.rama,
+                tipoProcedimiento: nueva.tipoProcedimiento,
+            });
+            window.EventBus.emit('causas:updated', { id: nueva.id });
+        }
+    } catch (_) {}
     if (typeof showSuccess === 'function') showSuccess('Causa creada correctamente.');
     return nueva;
 }
@@ -98,6 +109,22 @@ function agregarDocumento(causaId, datos) {
     if (typeof markAppDirty === 'function') markAppDirty();
     if (typeof save === 'function') save();
 
+    try {
+        if (window.EventBus && typeof window.EventBus.emit === 'function') {
+            window.EventBus.emit('docs:uploaded', {
+                docId: doc.id,
+                causaId: causaId,
+                tipo: doc.tipo,
+                nombreOriginal: doc.nombreOriginal,
+                origen: doc.origen,
+                generaPlazo: !!doc.generaPlazo,
+                fechaVencimiento: doc.fechaVencimiento || null,
+            });
+            window.EventBus.emit('docs:updated', { id: doc.id, causaId: causaId });
+            window.EventBus.emit('causas:updated', { id: causaId });
+        }
+    } catch (_) {}
+
     // Crear alerta automática si genera plazo
     if (doc.generaPlazo && fechaVencimiento) {
         const causaNombre = causa ? causa.caratula : 'Causa desconocida';
@@ -113,6 +140,17 @@ function agregarDocumento(causaId, datos) {
         });
         if (typeof markAppDirty === 'function') markAppDirty();
         if (typeof save === 'function') save();
+        try {
+            if (window.EventBus && typeof window.EventBus.emit === 'function') {
+                window.EventBus.emit('alertas:created', {
+                    causaId: causaId,
+                    tipo: 'plazo',
+                    fechaObjetivo: fechaVencimiento,
+                    docId: doc.id,
+                });
+                window.EventBus.emit('alertas:updated', { causaId: causaId });
+            }
+        } catch (_) {}
     }
 
     if (typeof registrarEvento === 'function') {
@@ -331,6 +369,14 @@ async function _confirmarEliminarCausa() {
 
     if (typeof markAppDirty === 'function') markAppDirty();
     if (typeof save === 'function') save();
+    try {
+        if (window.EventBus && typeof window.EventBus.emit === 'function') {
+            window.EventBus.emit('causas:deleted', { causaId: causaId });
+            window.EventBus.emit('causas:updated', { id: causaId });
+            window.EventBus.emit('docs:updated', { causaId: causaId });
+            window.EventBus.emit('alertas:updated', { causaId: causaId });
+        }
+    } catch (_) {}
     if (typeof registrarEvento === 'function') registrarEvento('Causa eliminada: ID ' + causaId);
 
     _cerrarModalEliminarCausa();
@@ -345,6 +391,7 @@ async function _confirmarEliminarCausa() {
  */
 function eliminarDocumento(docId, causaId) {
     if (!confirm('¿Eliminar este documento del índice?')) return;
+    const docAntes = (DB.documentos || []).find(d => String(d.id) === String(docId)) || null;
     DB.documentos = DB.documentos.filter(d => d.id !== docId);
     const causa = DB.causas.find(c => c.id === causaId);
     if (causa && causa.documentos) {
@@ -352,6 +399,19 @@ function eliminarDocumento(docId, causaId) {
     }
     if (typeof markAppDirty === 'function') markAppDirty();
     if (typeof save === 'function') save();
+    try {
+        if (window.EventBus && typeof window.EventBus.emit === 'function') {
+            window.EventBus.emit('docs:deleted', {
+                docId: docId,
+                causaId: causaId,
+                tipo: docAntes?.tipo || null,
+                nombreOriginal: docAntes?.nombreOriginal || null,
+                origen: docAntes?.origen || null,
+            });
+            window.EventBus.emit('docs:updated', { id: docId, causaId: causaId });
+            window.EventBus.emit('causas:updated', { id: causaId });
+        }
+    } catch (_) {}
     renderDocumentos(causaId);
     if (typeof renderAll === 'function') renderAll();
 }
