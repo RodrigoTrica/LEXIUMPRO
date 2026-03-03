@@ -69,7 +69,7 @@
                 </div>`;
             });
 
-            el.innerHTML = html || '<div class="alert-empty"><i class="fas fa-check-circle" style="color:var(--success)"></i> Sin alertas activas.</div>';
+            el.innerHTML = html || '<div class="empty-state" style="padding:22px 14px;"><i class="fas fa-check-circle" style="color:var(--success-ink);"></i><p>Sin alertas activas.</p></div>';
         }
 
         function renderClientes() {
@@ -671,10 +671,10 @@
                 const plazos = Array.isArray(crit?.plazos) ? crit.plazos : [];
 
                 const riesgoColor = (String(riesgoNivel || '').toLowerCase() === 'alto')
-                    ? '#dc2626'
+                    ? 'var(--danger-ink)'
                     : (String(riesgoNivel || '').toLowerCase() === 'medio')
-                        ? '#d97706'
-                        : (riesgoNivel ? '#059669' : '#64748b');
+                        ? 'var(--warning-ink)'
+                        : (riesgoNivel ? 'var(--success-ink)' : 'var(--text-3)');
 
                 const li = (arr) => Array.isArray(arr) && arr.length
                     ? `<ul style="margin:8px 0 0 16px; padding:0;">${arr.map(x => `<li style=\"margin:4px 0;\">${escHtml(String(x))}</li>`).join('')}</ul>`
@@ -838,7 +838,7 @@
                                         ? `<button type="button" class="btn btn-xs" style="background:var(--bg-2); border:1px solid var(--border);" onclick="uiVerComprobanteCuota('${escHtml(String(causaId))}', ${cuota?.numero ?? 0})"><i class=\"fas fa-file-pdf\"></i></button>`
                                         : '<span style="color:var(--text-3); font-size:0.75rem;">—</span>';
                                     return `
-                                        <tr style="border-bottom:1px solid #eef2f7;">
+                                        <tr style="border-bottom:1px solid var(--border-1);">
                                             <td style="padding:8px 10px; font-family:monospace;">${cuota?.numero ?? ''}</td>
                                             <td style="padding:8px 10px; text-align:right; font-family:monospace;">$${(cuota?.monto || 0).toLocaleString('es-CL')}</td>
                                             <td style="padding:8px 10px;">${fmtFecha(cuota?.fechaVencimiento)}</td>
@@ -1129,7 +1129,7 @@
             };
 
             el.innerHTML = `
-                <div style="font-size:0.72rem; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:#64748b; margin:10px 0 8px;">
+                <div style="font-size:0.72rem; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-3); margin:10px 0 8px;">
                     <i class="fas fa-receipt"></i> Pagos registrados
                 </div>
                 <div style="overflow:auto; border:1px solid var(--border); border-radius:10px;">
@@ -1149,7 +1149,7 @@
                                     ? `<button type="button" class="btn btn-xs" style="background:var(--bg-2); border:1px solid var(--border);" onclick="uiVerComprobantePago('${escHtml(String(causaId))}', ${idx})"><i class=\"fas fa-file-pdf\"></i></button>`
                                     : '<span style="color:var(--text-3); font-size:0.75rem;">—</span>';
                                 return `
-                                    <tr style="border-bottom:1px solid #eef2f7;">
+                                    <tr style="border-bottom:1px solid var(--border-1);">
                                         <td style="padding:8px 10px;">${fmtFecha(p?.fecha)}</td>
                                         <td style="padding:8px 10px; text-align:right; font-family:monospace;">$${(p?.monto || 0).toLocaleString('es-CL')}</td>
                                         <td style="padding:8px 10px;">${escHtml(p?.concepto || '—')}</td>
@@ -1176,7 +1176,7 @@
             };
 
             cont.innerHTML = `
-                <div style="font-size:0.7rem; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:#64748b; margin-bottom:8px;">
+                <div style="font-size:0.7rem; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-3); margin-bottom:8px;">
                     <i class="fas fa-list"></i> Plan de pagos (${h.modalidad || '—'})
                 </div>
                 <div style="overflow:auto; border:1px solid var(--border); border-radius:10px;">
@@ -1206,7 +1206,7 @@
                                     ? `<button type="button" class="btn btn-xs btn-p" onclick="uiMarcarCuotaPagada('${causaId}', ${cuota.numero})">Marcar Pagada</button>`
                                     : `<button type="button" class="btn btn-xs btn-d" onclick="uiDeshacerCuotaPagada('${causaId}', ${cuota.numero})">Deshacer</button>`;
                                 return `
-                                    <tr style="border-bottom:1px solid #eef2f7;">
+                                    <tr style="border-bottom:1px solid var(--border-1);">
                                         <td style="padding:8px 10px; font-family:monospace;">${cuota.numero}</td>
                                         <td style="padding:8px 10px; text-align:right; font-family:monospace;">$${(cuota.monto || 0).toLocaleString('es-CL')}</td>
                                         <td style="padding:8px 10px;">${fmtFecha(cuota.fechaVencimiento)}</td>
@@ -1459,6 +1459,17 @@
         function deleteCause(id) {
             showConfirm("¿Archivar causa?", "¿Está seguro de que desea archivar esta causa? Podrá encontrarla en el histórico.", () => {
                 DB.causas = DB.causas.filter(c => c.id !== id);
+
+                // Cascade delete: al borrar causa, borrar también alertas y documentos asociados
+                try {
+                    if (Array.isArray(DB.alertas)) {
+                        DB.alertas = DB.alertas.filter(a => a?.causaId !== id);
+                    }
+                    if (Array.isArray(DB.documentos)) {
+                        DB.documentos = DB.documentos.filter(d => d?.causaId !== id);
+                    }
+                } catch (_) {}
+
                 DB.clientes.forEach(c => {
                     if ((c.estado || c.status) === 'activo' && !DB.causas.find(ca => ca.caratula === (c.nombre || c.nom))) {
                         c.estado = 'prospecto'; c.status = 'prospecto';

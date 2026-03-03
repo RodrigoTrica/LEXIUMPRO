@@ -56,6 +56,20 @@
             --info-bg: #ecfeff;
             --info-border: #a5f3fc;
 
+            --bg-0: var(--bg);
+            --bg-1: var(--bg-card);
+            --text-1: var(--text);
+            --border-1: var(--border);
+            --primary: var(--cyan);
+            --primary-hover: var(--cyan-hover);
+            --primary-bg: var(--cyan-light);
+            --success-ink: var(--success);
+            --warning-ink: var(--warning);
+            --danger-ink: var(--danger);
+            --info-ink: var(--info);
+            --overlay-1: rgba(0, 0, 0, 0.04);
+            --overlay-2: rgba(0, 0, 0, 0.08);
+
             /* â”€â”€â”€ Legacy aliases â”€â”€â”€ */
             --p: var(--navy);
             --p2: var(--navy-2);
@@ -141,6 +155,25 @@
             --db-donut-text: #f1f5f9;
             --db-donut-sub:  #94a3b8;
             --db-donut-empty: #334155;
+
+            /* â”€â”€â”€ Design Tokens (UI/UX) â”€â”€â”€ */
+            --bg-0: var(--bg);
+            --bg-1: var(--bg-card);
+            --bg-2: var(--bg-2);
+            --text-1: var(--text);
+            --text-2: var(--text-2);
+            --text-3: var(--text-3);
+            --border-1: var(--border);
+            --border-2: var(--border-2);
+            --primary: var(--cyan);
+            --primary-hover: var(--cyan-hover);
+            --primary-bg: rgba(6, 182, 212, 0.12);
+            --success-ink: var(--success);
+            --warning-ink: var(--warning);
+            --danger-ink: var(--danger);
+            --info-ink: var(--info);
+            --overlay-1: rgba(255, 255, 255, 0.06);
+            --overlay-2: rgba(255, 255, 255, 0.10);
         }
 
         /* â”€â”€â”€ Premium Scrollbar â”€â”€â”€ */
@@ -3281,6 +3314,7 @@
             color: var(--text);
             box-shadow: var(--sh-1);
             cursor: pointer;
+            appearance: none;
             -webkit-appearance: none;
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
             background-repeat: no-repeat;
@@ -3551,8 +3585,6 @@
         }
 
         /* Bars */
-        .db-bars-container {}
-
         .db-bar-row {
             display: flex;
             align-items: center;
@@ -3610,10 +3642,6 @@
             gap: 14px;
             margin-bottom: 16px;
         }
-
-        .db-semaforo-card {}
-
-        .db-alertas-card {}
 
         /* Semaforo list style */
         #semaforo-plazos .semaforo-wrap {
@@ -7043,31 +7071,26 @@
             z-index: 8000;
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 12px 18px;
-            background: linear-gradient(135deg, #7c3aed, #5b21b6);
-            color: #fff;
-            border: none;
-            border-radius: 50px;
-            font-size: 13px;
+            justify-content: center;
+            width: 44px;
+            height: 44px;
+            padding: 0;
+            background: var(--bg-1);
+            color: var(--text-2);
+            border: 1px solid var(--border-1);
+            border-radius: 999px;
+            font-size: 16px;
             font-weight: 700;
-            font-family: 'DM Sans', sans-serif;
+            font-family: inherit;
             cursor: pointer;
-            box-shadow: 0 4px 20px rgba(124, 58, 237, 0.5);
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
             transition: all 0.2s;
         }
 
         #cl-fab:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 28px rgba(124, 58, 237, 0.6);
-        }
-
-        .cl-fab-icon {
-            font-size: 16px;
-        }
-
-        .cl-fab-label {
-            letter-spacing: 0.02em;
+            background: var(--overlay-1);
+            box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
         }
 
         /* â”€â”€ Panel de chat â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */

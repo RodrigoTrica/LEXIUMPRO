@@ -784,11 +784,7 @@ function renderDashboardCausas() {
     if (!el) return;
 
     if (!DB.causas.length) {
-        el.innerHTML = `
-            <div style="text-align:center; padding:20px; color:var(--text-3); font-size:0.82rem;">
-                <i class="fas fa-folder-open" style="font-size:1.8rem; margin-bottom:8px; display:block; opacity:0.4;"></i>
-                Sin causas creadas aún
-            </div>`;
+        el.innerHTML = '<div class="empty-state" style="padding:20px 12px;"><i class="fas fa-folder-open"></i><p>Sin causas creadas aún</p></div>';
         return;
     }
 

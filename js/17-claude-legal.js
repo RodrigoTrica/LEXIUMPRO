@@ -150,7 +150,7 @@ function clInyectarBotonFlotante() {
     const fab = document.createElement('button');
     fab.id = 'cl-fab';
     fab.title = 'Abrir Bot AI — Asistente Jurídico IA';
-    fab.innerHTML = `<span class="cl-fab-icon">⚖</span><span class="cl-fab-label">Bot AI</span>`;
+    fab.innerHTML = `<i class="fas fa-scale-balanced" aria-hidden="true"></i>`;
     fab.onclick = () => clToggleChat();
     document.body.appendChild(fab);
 }
@@ -1680,7 +1680,7 @@ ${texto.substring(0, 14000)}
 /* ── Botón flotante Claude iframe ───────────────────────────── */
 #cl-fab-iframe {
     position: fixed;
-    bottom: 90px;
+    bottom: 80px;
     right: 24px;
     z-index: 9400;
     display: flex;
@@ -1700,8 +1700,8 @@ ${texto.substring(0, 14000)}
 }
 #cl-fab-iframe:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(124,58,237,0.5); }
 
-/* Mover FAB principal para no solapar */
-#cl-fab { bottom: 144px !important; }
+/* FAB principal (Bot AI) no debe solaparse con el de IA Web */
+#cl-fab { bottom: 24px !important; }
 
 /* ── Barra de herramientas IA en módulos ────────────────────── */
 .cl-ia-toolbar {

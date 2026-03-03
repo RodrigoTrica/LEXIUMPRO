@@ -95,7 +95,7 @@
                 <div style="font-weight:600; font-size:0.85rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escHtml(p.titulo)}</div>
                 <div style="font-size:0.73rem; opacity:0.75;">${escHtml(p.causa)} · ${p.fecha}</div>
             </div>
-            <div class="semaforo-dias" style="color:${p.dias < 0 ? '#fca5a5' : p.dias <= 3 ? 'var(--d)' : p.dias <= 10 ? 'var(--w)' : 'var(--s)'};">${label}</div>
+            <div class="semaforo-dias" style="color:${p.dias < 0 ? 'var(--danger-ink)' : p.dias <= 3 ? 'var(--d)' : p.dias <= 10 ? 'var(--w)' : 'var(--s)'};">${label}</div>
             <div class="semaforo-bar" style="width:${pct}%;"></div>
         </div>`;
             }).join('');
@@ -673,7 +673,7 @@
             if (!el) return;
             const { score, factores } = calcularSaludDespacho();
 
-            const color = score >= 75 ? '#10b981' : score >= 45 ? '#f59e0b' : '#ef4444';
+            const color = score >= 75 ? 'var(--success-ink)' : score >= 45 ? 'var(--warning-ink)' : 'var(--danger-ink)';
             const label = score >= 75 ? '🟢 Salud óptima' : score >= 45 ? '🟡 Riesgo operativo' : '🔴 Riesgo crítico';
             const r = 34, circ = 2 * Math.PI * r;
             const dash = (score / 100) * circ;
@@ -681,7 +681,7 @@
             el.innerHTML = `
         <div class="salud-dial">
             <svg width="80" height="80" viewBox="0 0 80 80">
-                <circle cx="40" cy="40" r="${r}" fill="none" stroke="#e2e8f0" stroke-width="6"/>
+                <circle cx="40" cy="40" r="${r}" fill="none" stroke="var(--border-1)" stroke-width="6"/>
                 <circle cx="40" cy="40" r="${r}" fill="none" stroke="${color}" stroke-width="6"
                     stroke-dasharray="${dash.toFixed(1)} ${circ.toFixed(1)}"
                     stroke-linecap="round" style="transition:stroke-dasharray 0.7s ease;"/>

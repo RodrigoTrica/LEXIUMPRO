@@ -390,6 +390,56 @@ const DB = Store._ref;
 function save() { Store.save(); }
 const guardarDB = save;
 
+function cleanupReferenciasHuerfanasDeCausas() {
+    try {
+        if (!DB || !Array.isArray(DB.causas)) return { ok: false, reason: 'db_no_disponible' };
+
+        const causasIds = new Set((DB.causas || []).map(c => c?.id).filter(Boolean));
+
+        const alertasAntes = Array.isArray(DB.alertas) ? DB.alertas.length : 0;
+        const docsAntes = Array.isArray(DB.documentos) ? DB.documentos.length : 0;
+
+        if (Array.isArray(DB.alertas)) {
+            DB.alertas = DB.alertas.filter(a => {
+                const cid = a?.causaId;
+                if (!cid) return true;
+                return causasIds.has(cid);
+            });
+        }
+
+        if (Array.isArray(DB.documentos)) {
+            DB.documentos = DB.documentos.filter(d => {
+                const cid = d?.causaId;
+                if (!cid) return true;
+                return causasIds.has(cid);
+            });
+        }
+
+        const alertasDespues = Array.isArray(DB.alertas) ? DB.alertas.length : 0;
+        const docsDespues = Array.isArray(DB.documentos) ? DB.documentos.length : 0;
+
+        const alertasBorradas = Math.max(0, alertasAntes - alertasDespues);
+        const docsBorrados = Math.max(0, docsAntes - docsDespues);
+
+        if (alertasBorradas > 0 || docsBorrados > 0) {
+            try { if (typeof markAppDirty === 'function') markAppDirty(); } catch (_) {}
+            try { save(); } catch (_) {}
+            console.info(`[Cleanup] Eliminadas referencias huérfanas: alertas=${alertasBorradas}, documentos=${docsBorrados}`);
+        }
+
+        return { ok: true, alertasBorradas, docsBorrados };
+    } catch (e) {
+        console.warn('[Cleanup] Error limpiando referencias huérfanas:', e?.message || e);
+        return { ok: false, error: e?.message || String(e) };
+    }
+}
+
+window.cleanupReferenciasHuerfanasDeCausas = cleanupReferenciasHuerfanasDeCausas;
+
+// Cleanup defensivo al inicio: evita “fantasmas” en alertas/semáforos.
+// Se ejecuta ANTES de los renders principales.
+try { cleanupReferenciasHuerfanasDeCausas(); } catch (_) {}
+
 // ── Migración Fase 3A: documentos a archivoDocId (cifrado en disco) ──────────
 const DOCS_MIGRATION_FLAG = 'docs_migracion_archivoDocId_2026_03_02';
 const DOCS_MIGRATION_FLAG_ALIAS = 'migracion_docs_v3_lista';

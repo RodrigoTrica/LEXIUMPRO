@@ -22,8 +22,8 @@ function donutSVG(svgId, segments, total) {
     if (!svg) return;
     const cx = 80, cy = 80, R = 60, r = 38;
     if (!total) {
-        svg.innerHTML = `<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="#e4eaf3" stroke-width="22"/>
-            <text x="${cx}" y="${cy + 5}" text-anchor="middle" fill="#94a3b8" font-size="12" font-family="IBM Plex Mono,monospace">–</text>`;
+        svg.innerHTML = `<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="var(--border-1)" stroke-width="22"/>
+            <text x="${cx}" y="${cy + 5}" text-anchor="middle" fill="var(--text-3)" font-size="12" font-family="IBM Plex Mono,monospace">–</text>`;
         return;
     }
     let angle = -Math.PI / 2;
@@ -46,15 +46,18 @@ function donutSVG(svgId, segments, total) {
         html += `<path d="M ${x1} ${y1} A ${R} ${R} 0 ${large} 1 ${x2} ${y2} L ${ix2} ${iy2} A ${r} ${r} 0 ${large} 0 ${ix1} ${iy1} Z" fill="${seg.color}"/>`;
         angle += frac * Math.PI * 2;
     });
-    html += `<text x="${cx}" y="${cy - 6}" text-anchor="middle" fill="#0f172a" font-size="20" font-weight="700" font-family="IBM Plex Mono,monospace">${total}</text>
-             <text x="${cx}" y="${cy + 12}" text-anchor="middle" fill="#64748b" font-size="9" font-family="IBM Plex Sans,sans-serif">TOTAL</text>`;
+    html += `<text x="${cx}" y="${cy - 6}" text-anchor="middle" fill="var(--text-1)" font-size="20" font-weight="700" font-family="IBM Plex Mono,monospace">${total}</text>
+             <text x="${cx}" y="${cy + 12}" text-anchor="middle" fill="var(--text-3)" font-size="9" font-family="IBM Plex Sans,sans-serif">TOTAL</text>`;
     svg.innerHTML = html;
 }
 
 function donutLegend(elId, segments, total) {
     const el = document.getElementById(elId);
     if (!el) return;
-    if (!total) { el.innerHTML = '<div style="color:#94a3b8;font-size:0.78rem;padding:8px 0;">Sin datos</div>'; return; }
+    if (!total) {
+        el.innerHTML = '<div class="empty-state" style="padding:14px 10px;"><i class="fas fa-chart-pie"></i><p>Sin datos</p></div>';
+        return;
+    }
     el.innerHTML = segments.filter(s => s.val > 0).map(s =>
         `<div class="db-donut-legend-item">
             <div class="db-donut-legend-dot" style="background:${s.color}"></div>
@@ -77,7 +80,10 @@ function barRama(causas) {
     });
     const items = Object.entries(ramas).sort((a, b) => (b[1].activas + b[1].fin) - (a[1].activas + a[1].fin));
     const maxVal = Math.max(...items.map(([, v]) => v.activas + v.fin), 1);
-    if (!items.length) { el.innerHTML = '<div style="color:#94a3b8;font-size:0.8rem;padding:20px 0;text-align:center;">Sin causas</div>'; return; }
+    if (!items.length) {
+        el.innerHTML = '<div class="empty-state" style="padding:20px 12px;"><i class="fas fa-gavel"></i><p>Sin causas</p></div>';
+        return;
+    }
     el.innerHTML = items.map(([rama, v]) => {
         const total = v.activas + v.fin;
         const wA = (v.activas / maxVal * 100).toFixed(1);
@@ -105,7 +111,8 @@ function barCuantia(causas) {
     const items = Object.entries(grupos).sort((a, b) => b[1] - a[1]);
     const maxVal = Math.max(...items.map(([, v]) => v), 1);
     if (!items.length || items.every(([, v]) => !v)) {
-        el.innerHTML = '<div style="color:#94a3b8;font-size:0.78rem;padding:10px 0;text-align:center;">Sin honorarios registrados</div>'; return;
+        el.innerHTML = '<div class="empty-state" style="padding:20px 12px;"><i class="fas fa-wallet"></i><p>Sin honorarios registrados</p></div>';
+        return;
     }
     el.innerHTML = items.map(([estado, monto]) => {
         const w = (monto / maxVal * 100).toFixed(1);
