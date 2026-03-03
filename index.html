@@ -96,6 +96,7 @@
                 <button onclick="tab('bitacora',this)"><i class="fas fa-shield-alt"></i> Bitácora</button>
                 <button onclick="tab('audit-reportes',this)"><i class="fas fa-shield-halved"></i> Auditoría y Reportes</button>
                 <button onclick="tab('seccion-whatsapp', this)"><i class="fab fa-whatsapp"></i> WhatsApp</button>
+                <button onclick="tab('whatsapp-chat', this)"><i class="fas fa-comments"></i> Chat WhatsApp</button>
             </div>
 
             <div class="nav-divider"></div>
@@ -2370,6 +2371,35 @@
             </div>
         </section>
 
+        <section id="whatsapp-chat" class="tabs">
+            <div class="card-premium" style="padding:12px;">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px;">
+                    <h3 style="margin:0;"><i class="fas fa-comments" style="color:#0891b2;"></i> Chat WhatsApp</h3>
+                    <span id="wa-chat-status" class="badge badge-a" style="font-size:11px;">Actualizando…</span>
+                </div>
+                <div class="wa-chat-layout">
+                    <aside class="wa-chat-sidebar">
+                        <div class="wa-chat-search-wrap">
+                            <input id="wa-chat-search" class="wa-chat-search" type="text" placeholder="Buscar chat..." oninput="waChatFiltrarLista()">
+                        </div>
+                        <div id="wa-chat-list" class="wa-chat-list">
+                            <div class="wa-chat-empty">Sin chats cargados.</div>
+                        </div>
+                    </aside>
+                    <section class="wa-chat-main">
+                        <div id="wa-chat-header" class="wa-chat-header">Selecciona un chat</div>
+                        <div id="wa-chat-messages" class="wa-chat-messages">
+                            <div class="wa-chat-empty">Selecciona una conversación para ver mensajes.</div>
+                        </div>
+                        <div class="wa-chat-input-row">
+                            <input id="wa-chat-input" type="text" placeholder="Escribe un mensaje..." onkeydown="waChatOnInputKey(event)">
+                            <button class="btn btn-p" onclick="waChatEnviar()"><i class="fas fa-paper-plane"></i> Enviar</button>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </section>
+
         <!-- ── Modal: Nombre de sesión (aparece tras escanear QR) ── -->
         <div class="modal" id="modal-wa-nombre" onclick="if(event.target===this) cerrarModalWA()">
             <div class="modal-content" style="max-width:420px;">
@@ -2610,6 +2640,7 @@
     <script src="js/23-prospectos-crm.js"></script>
     <script src="js/24-honorarios-view.js"></script>
     <script src="js/25-audit-reportes.js"></script>
+    <script src="js/26-whatsapp-chat-ui.js"></script>
 
     <!-- MODAL VERSIONES -->
     <div class="modal-overlay" id="modal-versiones" onclick="if(event.target===this)cerrarModal('modal-versiones')">

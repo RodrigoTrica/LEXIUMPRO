@@ -122,6 +122,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
         probarAlertasCobro: () => ipcRenderer.invoke('whatsapp:probar-alertas-cobro'),
 
+        getChats: () => ipcRenderer.invoke('whatsapp:get-chats'),
+        getChatMessages: (chatId) => {
+            if (typeof chatId !== 'string' || !chatId.trim()) throw new Error('chatId vacío');
+            return ipcRenderer.invoke('whatsapp:get-chat-messages', chatId);
+        },
+        sendReply: (chatId, msg) => {
+            if (typeof chatId !== 'string' || !chatId.trim()) throw new Error('chatId vacío');
+            if (typeof msg !== 'string' || !msg.trim()) throw new Error('Mensaje vacío');
+            return ipcRenderer.invoke('whatsapp:send-reply', chatId, msg);
+        },
+
         onEvento: (callback) => {
             [
                 'whatsapp:qr',
@@ -130,7 +141,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
                 'whatsapp:auth_failure',
                 'whatsapp:alerta-enviada',
                 'whatsapp:reconectado-auto',
-                'whatsapp:cargando'
+                'whatsapp:cargando',
+                'whatsapp:chat-updated'
             ].forEach(ev =>
                 ipcRenderer.on(ev, (_e, data) =>
                     callback(ev.replace('whatsapp:', ''), data)

@@ -39,6 +39,134 @@ function _getTemplates(config) {
     return merged;
 }
 
+const CHAT_MAX_MENSAJES = 200;
+const _chatCache = new Map();
+
+function _chatIdNormalizado(chatId) {
+    const raw = String(chatId || '').trim();
+    if (!raw) return '';
+    if (raw.includes('@')) return raw;
+    const limpio = raw.replace(/[^\d]/g, '');
+    if (!limpio) return '';
+    return `${limpio}@c.us`;
+}
+
+function _chatTimestampMs(ts) {
+    const n = Number(ts || 0);
+    if (!Number.isFinite(n) || n <= 0) return Date.now();
+    return n > 1e12 ? n : (n * 1000);
+}
+
+function _chatSoloTexto(msg) {
+    const tipo = String(msg?.type || 'chat').toLowerCase();
+    if (tipo !== 'chat') return '';
+    const body = String(msg?.body || '').trim();
+    return body;
+}
+
+function _upsertMensajeChat({ chatId, nombre, body, fromMe, timestamp, messageId }) {
+    const id = _chatIdNormalizado(chatId);
+    const texto = String(body || '').trim();
+    if (!id || !texto) return;
+
+    const entry = _chatCache.get(id) || {
+        chatId: id,
+        nombre: String(nombre || '').trim() || id.replace('@c.us', ''),
+        lastMessage: '',
+        timestamp: 0,
+        unread: 0,
+        messages: []
+    };
+
+    const msgTs = _chatTimestampMs(timestamp);
+    const msg = {
+        id: String(messageId || `${id}-${msgTs}-${Math.random().toString(36).slice(2, 7)}`),
+        chatId: id,
+        body: texto,
+        fromMe: !!fromMe,
+        timestamp: msgTs
+    };
+
+    entry.messages.push(msg);
+    if (entry.messages.length > CHAT_MAX_MENSAJES) {
+        entry.messages = entry.messages.slice(entry.messages.length - CHAT_MAX_MENSAJES);
+    }
+
+    entry.lastMessage = texto;
+    entry.timestamp = msgTs;
+    if (!fromMe) entry.unread = Math.max(0, Number(entry.unread || 0) + 1);
+    if (nombre && String(nombre).trim()) entry.nombre = String(nombre).trim();
+
+    _chatCache.set(id, entry);
+
+    mainWin?.webContents.send('whatsapp:chat-updated', {
+        chatId: id,
+        lastMessage: entry.lastMessage,
+        timestamp: entry.timestamp,
+        unread: entry.unread,
+        nombre: entry.nombre
+    });
+}
+
+function _getChatsSerializados() {
+    return Array.from(_chatCache.values())
+        .map(c => ({
+            chatId: c.chatId,
+            nombre: c.nombre,
+            lastMessage: c.lastMessage,
+            timestamp: c.timestamp,
+            unread: c.unread || 0
+        }))
+        .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+}
+
+function _getMensajesChatSerializados(chatId, limite = 50) {
+    const id = _chatIdNormalizado(chatId);
+    const c = _chatCache.get(id);
+    if (!c) return [];
+    const n = Number(limite) || 50;
+    return c.messages.slice(-Math.max(1, Math.min(200, n)));
+}
+
+async function _hidratarChatsDesdeCliente() {
+    if (!waClient || !waReady) return;
+    if (_chatCache.size > 0) return;
+
+    try {
+        const chats = await waClient.getChats();
+        for (const c of chats || []) {
+            const chatId = _chatIdNormalizado(c?.id?._serialized || c?.id?.user);
+            if (!chatId) continue;
+
+            const nombre = String(c?.name || c?.formattedTitle || c?.id?.user || chatId).trim();
+            const ts = _chatTimestampMs(c?.timestamp || Date.now());
+            const lastBody = String(c?.lastMessage?.body || '').trim();
+
+            if (lastBody && String(c?.lastMessage?.type || 'chat').toLowerCase() === 'chat') {
+                _upsertMensajeChat({
+                    chatId,
+                    nombre,
+                    body: lastBody,
+                    fromMe: !!c?.lastMessage?.fromMe,
+                    timestamp: ts,
+                    messageId: c?.lastMessage?.id?._serialized
+                });
+            } else if (!_chatCache.has(chatId)) {
+                _chatCache.set(chatId, {
+                    chatId,
+                    nombre,
+                    lastMessage: '',
+                    timestamp: ts,
+                    unread: Number(c?.unreadCount || 0),
+                    messages: []
+                });
+            }
+        }
+    } catch (e) {
+        waLogger.logWarn('chat-hidratacion-fallida', { error: e.message });
+    }
+}
+
 function _esErrorNoReintentable(err) {
     const msg = String(err?.message || '').toLowerCase();
     if (!msg) return false;
@@ -374,6 +502,28 @@ function initWhatsApp(browserWindow) {
         waReady = false;
         waLogger.logError('auth-failure', { msg });
         mainWin?.webContents.send('whatsapp:auth_failure');
+    });
+
+    waClient.on('message', async (msg) => {
+        try {
+            const body = _chatSoloTexto(msg);
+            if (!body) return; // ignorar media/no texto en esta versión
+
+            const chatId = _chatIdNormalizado(msg?.from || msg?.to || '');
+            if (!chatId) return;
+
+            const nombre = String(msg?._data?.notifyName || msg?._data?.pushname || '').trim() || chatId.replace('@c.us', '');
+            _upsertMensajeChat({
+                chatId,
+                nombre,
+                body,
+                fromMe: !!msg?.fromMe,
+                timestamp: _chatTimestampMs(msg?.timestamp),
+                messageId: msg?.id?._serialized
+            });
+        } catch (e) {
+            waLogger.logWarn('chat-recepcion-fallida', { error: e.message });
+        }
     });
 
     waClient.initialize().catch(e => waLogger.logError('init-error', { error: e.message }));
@@ -867,6 +1017,64 @@ async function _ejecutarCriticos(config) {
 
 // ── IPC Handlers ───────────────────────────────────────────────
 function registrarHandlers(getConfig) {
+    ipcMain.handle('whatsapp:get-chats', async () => {
+        await _hidratarChatsDesdeCliente();
+        return { ok: true, chats: _getChatsSerializados() };
+    });
+
+    ipcMain.handle('whatsapp:get-chat-messages', async (_e, chatId) => {
+        const id = _chatIdNormalizado(chatId);
+        if (!id) return { ok: false, error: 'chatId inválido', messages: [] };
+
+        if (!_chatCache.has(id) && waClient && waReady) {
+            try {
+                const chat = await waClient.getChatById(id);
+                const msgs = await chat.fetchMessages({ limit: 50 });
+                for (const m of msgs || []) {
+                    const body = _chatSoloTexto(m);
+                    if (!body) continue;
+                    _upsertMensajeChat({
+                        chatId: id,
+                        nombre: String(chat?.name || chat?.formattedTitle || id.replace('@c.us', '')).trim(),
+                        body,
+                        fromMe: !!m?.fromMe,
+                        timestamp: _chatTimestampMs(m?.timestamp),
+                        messageId: m?.id?._serialized
+                    });
+                }
+            } catch (e) {
+                waLogger.logWarn('chat-fetch-mensajes-fallido', { chatId: id, error: e.message });
+            }
+        }
+
+        const c = _chatCache.get(id);
+        if (c) c.unread = 0;
+        return { ok: true, messages: _getMensajesChatSerializados(id, 50) };
+    });
+
+    ipcMain.handle('whatsapp:send-reply', async (_e, chatId, mensaje) => {
+        const id = _chatIdNormalizado(chatId);
+        if (!id) return { ok: false, error: 'chatId inválido' };
+        const vMsg = validarMensaje(mensaje);
+        if (!vMsg.ok) return { ok: false, error: vMsg.error };
+        if (!waClient || !waReady) return { ok: false, error: 'WhatsApp no está conectado' };
+
+        try {
+            await waClient.sendMessage(id, String(mensaje).trim());
+            _upsertMensajeChat({
+                chatId: id,
+                nombre: id.replace('@c.us', ''),
+                body: String(mensaje).trim(),
+                fromMe: true,
+                timestamp: Date.now(),
+                messageId: `chat-reply-${Date.now()}`
+            });
+            return { ok: true };
+        } catch (e) {
+            return { ok: false, error: e.message };
+        }
+    });
+
     ipcMain.handle('whatsapp:estado', () => {
         const cfg = getConfig();
 
