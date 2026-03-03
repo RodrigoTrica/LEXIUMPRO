@@ -2290,15 +2290,18 @@
                                     <div id="wa-branding-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:12px;">
                                         <div>
                                             <label style="font-size:11px; color:var(--text-3); display:block; margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px;">Web / Link de contacto</label>
-                                            <input id="wa-brand-weblink" type="text" class="input-field" placeholder="Ej: https://lexium.cl" oninput="waTemplatesOnChange()" />
+                                            <input id="wa-brand-weblink" type="text" class="input-field" placeholder="Ej: https://lexium.cl" oninput="waBrandingOnWebInput()" />
                                             <small style="color:var(--text-3); font-size:10px; margin-top:4px; display:block;">Se agregará automáticamente en la firma de mensajes</small>
+                                            <div style="margin-top:8px;">
+                                                <button class="btn btn-sm btn-p" onclick="waBrandingGuardar()"><i class="fas fa-save"></i> Guardar Branding</button>
+                                            </div>
                                         </div>
                                         <div style="grid-column:1 / -1;">
                                             <label style="font-size:11px; color:var(--text-3); display:block; margin-bottom:6px; text-transform:uppercase; letter-spacing:.4px;">Subir Logo del Estudio</label>
                                             <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:10px; border:1px dashed var(--border); border-radius:10px; background:var(--bg-card);">
                                                 <input id="wa-brand-logo" type="file" accept="image/png,image/jpeg" onchange="waBrandingOnLogoChange(event)" />
                                                 <button class="btn" style="padding:6px 10px;" onclick="waBrandingClearLogo()">Quitar logo</button>
-                                                <small id="wa-brand-logo-hint" style="color:var(--text-3); font-size:11px;">Máximo 500KB · PNG/JPG</small>
+                                                <small id="wa-brand-logo-hint" style="color:var(--text-3); font-size:11px;">Máximo 2MB · PNG/JPG</small>
                                             </div>
                                             <div style="margin-top:10px; display:flex; align-items:center; gap:10px; min-height:52px;">
                                                 <img id="wa-brand-logo-preview" alt="Logo" style="display:none; width:64px; height:64px; object-fit:contain; border-radius:10px; border:1px solid var(--border); background:var(--bg-card); padding:6px;" />

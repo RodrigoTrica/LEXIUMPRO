@@ -434,14 +434,14 @@ ipcMain.handle('whatsapp:guardar-config', async (_e, config) => {
     if (config.waBranding && typeof config.waBranding === 'object') {
         const logoBase64 = (config.waBranding?.logoBase64 || '').toString();
         const logoTrim = logoBase64.substring(0, 2_000_000); // guardrail
-        // Validar tamaño real del base64 (<= 500KB)
+        // Validar tamaño real del base64 (<= 2MB)
         if (logoTrim) {
             const parts = logoTrim.split(',');
             const b64 = (parts.length > 1 ? parts[1] : parts[0]).replace(/\s+/g, '');
             const pad = b64.endsWith('==') ? 2 : (b64.endsWith('=') ? 1 : 0);
             const bytes = Math.floor((b64.length * 3) / 4) - pad;
-            if (bytes > 500 * 1024) {
-                return { error: 'El logo excede 500KB. Comprímelo o usa una imagen más pequeña.' };
+            if (bytes > 2 * 1024 * 1024) {
+                return { error: 'El logo excede 2MB. Comprímelo o usa una imagen más pequeña.' };
             }
         }
 

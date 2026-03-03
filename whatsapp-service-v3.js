@@ -38,17 +38,12 @@ function _appendBranding(config, mensaje) {
         const b = (config && typeof config === 'object') ? config.waBranding : null;
         if (!b || typeof b !== 'object') return mensaje;
         if (b.autoAppend === false) return mensaje;
-        const nombreEstudio = (b.nombreEstudio || '').toString().trim();
         const webLink = (b.webLink || '').toString().trim();
-        if (!nombreEstudio && !webLink) return mensaje;
-
-        const firma = webLink
-            ? `Atte. ${nombreEstudio || 'Estudio'} | ${webLink}`
-            : `Atte. ${nombreEstudio}`;
+        if (!webLink) return mensaje;
 
         const base = String(mensaje || '').trimEnd();
-        if (nombreEstudio && base.includes(nombreEstudio)) return mensaje;
-        return `${base}\n\n${firma}`.trim();
+        if (base.includes(webLink)) return mensaje;
+        return `${base}\n\n${webLink}`.trim();
     } catch (_) {
         return mensaje;
     }

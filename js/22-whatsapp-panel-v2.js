@@ -25,6 +25,8 @@ let _reconexionAuto = false;  // true cuando reconecta desde sesión guardada (s
 let _waTemplates = {};
 let _waBranding = { webLink: '', logoBase64: '', autoAppend: true };
 let _waTplSelectedKey = null;
+let _waBrandingTouchedAt = 0;
+let _waBrandingHydrated = false;
 
 const WA_TPL_KEYS = [
     { key: 'RECORDATORIO_PAGO', label: 'RECORDATORIO_PAGO (Cuotas)' },
@@ -44,6 +46,32 @@ function _waTplNormalizeCurly(s) {
     return String(s || '')
         .replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, '{$1}')
         .replace(/\{\s*([a-zA-Z0-9_]+)\s*\}/g, '{$1}');
+}
+
+function waBrandingOnWebInput() {
+    try {
+        _waBrandingTouchedAt = Date.now();
+        _waBranding.webLink = (document.getElementById('wa-brand-weblink')?.value || '').trim();
+        waTemplatesOnChange();
+    } catch (_) {}
+}
+
+async function waBrandingGuardar() {
+    try {
+        _waBrandingTouchedAt = Date.now();
+        _waBranding = {
+            webLink: (document.getElementById('wa-brand-weblink')?.value || '').trim(),
+            logoBase64: (_waBranding?.logoBase64 || ''),
+            autoAppend: true
+        };
+
+        const r = await window.electronAPI.whatsapp.guardarConfig({ waBranding: _waBranding });
+        if (r?.error) throw new Error(r.error);
+        _waBrandingHydrated = true;
+        EventBus.emit('notificacion', { tipo: 'ok', mensaje: 'Branding guardado correctamente.' });
+    } catch (e) {
+        EventBus.emit('notificacion', { tipo: 'error', mensaje: e?.message || 'No se pudo guardar Branding.' });
+    }
 }
 
 function waTplInsertVar(varName) {
@@ -75,25 +103,30 @@ function _waBrandingSetLogoPreview(dataUrl) {
 
 function waBrandingClearLogo() {
     try {
+        _waBrandingTouchedAt = Date.now();
         _waBranding.logoBase64 = '';
         const inp = document.getElementById('wa-brand-logo');
         if (inp) inp.value = '';
         _waBrandingSetLogoPreview('');
         waTemplatesOnChange();
+        waBrandingGuardar();
     } catch (_) {}
 }
 
 async function waBrandingOnLogoChange(ev) {
     try {
+        _waBrandingTouchedAt = Date.now();
         const file = ev?.target?.files?.[0];
         if (!file) return;
-        const maxBytes = 500 * 1024;
+        const maxBytes = 2 * 1024 * 1024;
         if (file.size > maxBytes) {
-            EventBus.emit('notificacion', { tipo: 'warn', mensaje: 'El logo excede 500KB. Usa una imagen más liviana.' });
+            EventBus.emit('notificacion', { tipo: 'warn', mensaje: 'El logo excede 2MB. Usa una imagen más liviana.' });
             waBrandingClearLogo();
             return;
         }
-        if (!/^image\/(png|jpeg)$/.test(file.type)) {
+        const typeOk = /^image\/(png|jpeg|jpg|pjpeg|x-png)$/i.test(file.type || '');
+        const nameOk = /\.(png|jpe?g)$/i.test(file.name || '');
+        if (!typeOk && !nameOk) {
             EventBus.emit('notificacion', { tipo: 'warn', mensaje: 'Formato no soportado. Usa PNG o JPG.' });
             waBrandingClearLogo();
             return;
@@ -108,6 +141,7 @@ async function waBrandingOnLogoChange(ev) {
         _waBranding.logoBase64 = String(dataUrl);
         _waBrandingSetLogoPreview(_waBranding.logoBase64);
         waTemplatesOnChange();
+        await waBrandingGuardar();
     } catch (e) {
         EventBus.emit('notificacion', { tipo: 'error', mensaje: e?.message || String(e) });
         waBrandingClearLogo();
@@ -133,16 +167,16 @@ function _waTplRenderUI(templateUI, vars) {
 function _waBrandingFirmaUI() {
     const web = (document.getElementById('wa-brand-weblink')?.value || '').trim();
     if (!web) return '';
-    const nombreEstudio = _getNombreEstudioActivo();
-    const firma = `Atte. ${nombreEstudio} | ${web}`;
-    return `\n\n${firma}`;
+    return `\n\n${web}`;
 }
 
 function _getNombreEstudioActivo() {
     try {
         const usuarios = (typeof AppConfig !== 'undefined' && AppConfig.get) ? (AppConfig.get('usuarios') || []) : [];
         const activo = usuarios.find(u => u && u.activo);
-        return (activo?.nombre || 'Estudio').trim();
+        const nombre = (activo?.nombre || 'Estudio').trim();
+        if (!nombre || /^administrador$/i.test(nombre)) return 'Estudio';
+        return nombre;
     } catch (_) {
         return 'Estudio';
     }
@@ -227,13 +261,6 @@ async function waTemplatesGuardar() {
         const rawUI = ta.value || '';
         _waTemplates[_waTplSelectedKey] = _waTplNormalizeCurly(rawUI);
 
-        // Branding
-        _waBranding = {
-            webLink: (document.getElementById('wa-brand-weblink')?.value || '').trim(),
-            logoBase64: (_waBranding?.logoBase64 || ''),
-            autoAppend: true
-        };
-
         // Persistir: convertir a {{var}} para motor
         const engineTemplates = {};
         for (const k of Object.keys(_waTemplates || {})) {
@@ -242,8 +269,7 @@ async function waTemplatesGuardar() {
         }
 
         await window.electronAPI.whatsapp.guardarConfig({
-            waTemplates: engineTemplates,
-            waBranding: _waBranding
+            waTemplates: engineTemplates
         });
 
         EventBus.emit('notificacion', { tipo: 'ok', mensaje: `Plantilla guardada: ${_waTplSelectedKey}` });
@@ -731,9 +757,16 @@ async function actualizarEstado() {
 
             const b = (e.waBranding && typeof e.waBranding === 'object') ? e.waBranding : {};
             const bw = document.getElementById('wa-brand-weblink');
-            if (bw) bw.value = b.webLink || '';
-            _waBranding = { webLink: b.webLink || '', logoBase64: b.logoBase64 || '', autoAppend: true };
-            _waBrandingSetLogoPreview(b.logoBase64 || '');
+            const activo = document.activeElement;
+            const editandoWeb = !!(activo && activo.id === 'wa-brand-weblink');
+            const tocadoReciente = (Date.now() - _waBrandingTouchedAt) < 15000;
+            const puedeHidratar = !_waBrandingHydrated || (!editandoWeb && !tocadoReciente);
+            if (puedeHidratar) {
+                if (bw) bw.value = b.webLink || '';
+                _waBranding = { webLink: b.webLink || '', logoBase64: b.logoBase64 || '', autoAppend: true };
+                _waBrandingSetLogoPreview(b.logoBase64 || '');
+                _waBrandingHydrated = true;
+            }
             waTemplatesOnChange();
         } catch (_) {}
 
@@ -1402,6 +1435,8 @@ window.waTemplatesSelect = waTemplatesSelect;
 window.waTemplatesOnChange = waTemplatesOnChange;
 window.waTplInsertVar = waTplInsertVar;
 window.waTemplatesGuardar = waTemplatesGuardar;
+window.waBrandingOnWebInput = waBrandingOnWebInput;
+window.waBrandingGuardar = waBrandingGuardar;
 window.waTemplatesRestaurarDefaults = waTemplatesRestaurarDefaults;
 window.waBrandingOnLogoChange = waBrandingOnLogoChange;
 window.waBrandingClearLogo = waBrandingClearLogo;
