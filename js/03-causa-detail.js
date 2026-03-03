@@ -82,6 +82,8 @@
             const hon = causa.honorarios || {};
             const etapas = causa.etapasProcesales || [];
             const docs = causa.documentos || [];
+            const causaIdJs = JSON.stringify(String(causaId));
+            const esTramiteAdmin = /tramite/i.test(String(causa.tipoProcedimiento || ''));
 
             // Contadores para badges
             const tareasPend = causa.tareas.filter(t => !t.done).length;
@@ -127,7 +129,7 @@
                         </div>
                         <div class="dc-meta-item">
                             <div class="dc-meta-label">Procedimiento</div>
-                            <div class="dc-meta-value">${escHtml(causa.tipoProcedimiento || '—')}</div>
+                            <div class="dc-meta-value">${escHtml(causa.tipoProcedimiento || '—')} ${esTramiteAdmin ? '<span class="badge badge-w" style="margin-left:6px; font-size:10px;">TRÁMITE</span>' : ''}</div>
                         </div>
                         <div class="dc-meta-item">
                             <div class="dc-meta-label">Instancia</div>
@@ -147,9 +149,9 @@
 
                 <div class="dc-actions">
                     ${causa.estadoGeneral !== 'Finalizada'
-                    ? `<button class="dc-btn danger" onclick="uiCerrarCausa(${causaId})"><i class="fas fa-lock"></i> Cerrar</button>`
-                    : `<button class="dc-btn success" onclick="uiReactivarCausa(${causaId})"><i class="fas fa-lock-open"></i> Reactivar</button>`}
-                    <button class="dc-btn" onclick="exportarPDFCausa(${causaId})"><i class="fas fa-file-pdf"></i> PDF</button>
+                    ? `<button class="dc-btn danger" onclick="uiCerrarCausa(${causaIdJs})"><i class="fas fa-lock"></i> Cerrar</button>`
+                    : `<button class="dc-btn success" onclick="uiReactivarCausa(${causaIdJs})"><i class="fas fa-lock-open"></i> Reactivar</button>`}
+                    <button class="dc-btn" onclick="exportarPDFCausa(${causaIdJs})"><i class="fas fa-file-pdf"></i> PDF</button>
                     <button class="dc-btn" onclick="_abrirModalAdjuntos('${causaId}')" title="Archivos adjuntos">
                         <i class="fas fa-paperclip"></i> Adjuntos
                         <span style="background:rgba(255,255,255,0.3);border-radius:10px;padding:1px 6px;font-size:10px;margin-left:4px;">${(causa.adjuntos||[]).length || 0}</span>
@@ -180,9 +182,11 @@
                         <span><i class="fas fa-list-check"></i> Etapas</span>
                     </div>
                     <div class="dc-sidebar-body">
-                        ${etapas.length ? etapas.map((e, i) => `
+                        ${esTramiteAdmin
+                        ? '<p style="font-size:0.78rem; color:var(--text-3);">Trámite administrativo: no requiere etapas procesales judiciales.</p>'
+                        : (etapas.length ? etapas.map((e, i) => `
                             <div class="dc-etapa-item ${e.completada ? 'done' : ''}"
-                                 onclick="uiMarcarEtapa(${causaId},${i})" style="cursor:pointer;">
+                                 onclick="uiMarcarEtapa(${causaIdJs},${i})" style="cursor:pointer;">
                                 <div class="dc-etapa-check ${e.completada ? 'done' : ''}">
                                     ${e.completada ? '<i class="fas fa-check" style="font-size:0.55rem;"></i>' : ''}
                                 </div>
@@ -191,7 +195,7 @@
                                     ${e.fecha ? `<div style="font-size:0.65rem; color:var(--text-3); font-family:'IBM Plex Mono',monospace; margin-top:1px;">${new Date(e.fecha).toLocaleDateString('es-CL')}</div>` : ''}
                                 </div>
                             </div>`).join('')
-                    : '<p style="font-size:0.78rem; color:var(--text-3);">Sin etapas definidas.</p>'}
+                    : '<p style="font-size:0.78rem; color:var(--text-3);">Sin etapas definidas.</p>')}
                     </div>
                 </div>
 
@@ -216,11 +220,11 @@
                     <div class="dc-sidebar-header"><span><i class="fas fa-bolt"></i> Acciones</span></div>
                     <div class="dc-sidebar-body" style="display:flex; flex-direction:column; gap:6px;">
                         <button class="dc-btn" style="justify-content:flex-start; font-size:0.76rem;"
-                            onclick="uiAbrirBuscarJuris(${causaId})">
+                            onclick="uiAbrirBuscarJuris(${causaIdJs})">
                             <i class="fas fa-book"></i> Asociar jurisprudencia
                         </button>
                         <button class="dc-btn" style="justify-content:flex-start; font-size:0.76rem;"
-                            onclick="uiDuplicarCausa(${causaId})">
+                            onclick="uiDuplicarCausa(${causaIdJs})">
                             <i class="fas fa-copy"></i> Duplicar causa
                         </button>
                     </div>
@@ -232,37 +236,37 @@
                 <!-- Tabs bar -->
                 <div class="dc-tabs-bar">
                     <button id="dctab-movimientos" class="dc-tab-btn active"
-                        onclick="dcCambiarTab('movimientos',${causaId})">
+                        onclick="dcCambiarTab('movimientos',${causaIdJs})">
                         <i class="fas fa-exchange-alt"></i> Movimientos
                         <span class="dc-tab-badge">${movCount}</span>
                     </button>
                     <button id="dctab-tareas" class="dc-tab-btn"
-                        onclick="dcCambiarTab('tareas',${causaId})">
+                        onclick="dcCambiarTab('tareas',${causaIdJs})">
                         <i class="fas fa-tasks"></i> Tareas
                         <span class="dc-tab-badge">${tareasPend > 0 ? `${tareasPend}/${tareasTotal}` : tareasTotal}</span>
                     </button>
                     <button id="dctab-partes" class="dc-tab-btn"
-                        onclick="dcCambiarTab('partes',${causaId})">
+                        onclick="dcCambiarTab('partes',${causaIdJs})">
                         <i class="fas fa-users"></i> Usuarios y partes
                     </button>
                     <button id="dctab-docs-cliente" class="dc-tab-btn"
-                        onclick="dcCambiarTab('docs-cliente',${causaId})">
+                        onclick="dcCambiarTab('docs-cliente',${causaIdJs})">
                         <i class="fas fa-folder"></i> Docs Cliente
                     </button>
                     <button id="dctab-docs-tribunal" class="dc-tab-btn"
-                        onclick="dcCambiarTab('docs-tribunal',${causaId})">
+                        onclick="dcCambiarTab('docs-tribunal',${causaIdJs})">
                         <i class="fas fa-gavel"></i> Docs Tribunal
                     </button>
                     <button id="dctab-docs-contraparte" class="dc-tab-btn"
-                        onclick="dcCambiarTab('docs-contraparte',${causaId})">
+                        onclick="dcCambiarTab('docs-contraparte',${causaIdJs})">
                         <i class="fas fa-user-shield"></i> Contraparte
                     </button>
                     <button id="dctab-docs-tramites" class="dc-tab-btn"
-                        onclick="dcCambiarTab('docs-tramites',${causaId})">
+                        onclick="dcCambiarTab('docs-tramites',${causaIdJs})">
                         <i class="fas fa-wrench"></i> Otros Trámites
                     </button>
                     <button id="dctab-proceso" class="dc-tab-btn"
-                        onclick="dcCambiarTab('proceso',${causaId})">
+                        onclick="dcCambiarTab('proceso',${causaIdJs})">
                         <i class="fas fa-sitemap"></i> Proceso
                     </button>
                 </div>

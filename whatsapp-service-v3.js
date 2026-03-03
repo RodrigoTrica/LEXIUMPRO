@@ -19,6 +19,8 @@ const DEFAULT_WA_TEMPLATES = {
     alerta_critica: `🚨 *LEXIUM – ALERTA CRÍTICA*\n\n{{listaCriticas}}\n_Requiere acción inmediata – LEXIUM_`,
     cobro_cliente: `Estimado/a {{clienteNombre}}, le recordamos que su cuota Nº {{cuotaNumero}} de $ {{monto}} vence {{venceTxt}}.`,
     cobro_equipo: `ALERTA: Cuota Nº {{cuotaNumero}} de cliente {{clienteNombre}} por $ {{monto}} vence {{venceTxt}}.`,
+    cobro_hoy_cliente: `Estimado/a {{clienteNombre}}, su cuota Nº {{cuotaNumero}} de $ {{monto}} vence hoy. Si ya pagó, por favor ignorar este mensaje.`,
+    cobro_hoy_equipo: `ALERTA HOY: Cuota Nº {{cuotaNumero}} de cliente {{clienteNombre}} por $ {{monto}} vence hoy.`,
     cobro_vencida_cliente: `Estimado/a {{clienteNombre}}, le recordamos que su cuota Nº {{cuotaNumero}} de $ {{monto}} venció {{venceTxt}}.`,
     cobro_vencida_equipo: `ALERTA VENCIDA: Cuota Nº {{cuotaNumero}} de cliente {{clienteNombre}} por $ {{monto}} venció {{venceTxt}}.`
 };
@@ -29,8 +31,23 @@ function _getTemplates(config) {
     // Aliases solicitados por UI (Branding Profesional)
     if (merged.RECORDATORIO_PAGO && !merged.cobro_cliente) merged.cobro_cliente = merged.RECORDATORIO_PAGO;
     if (merged.RECORDATORIO_PAGO && !merged.cobro_equipo) merged.cobro_equipo = merged.RECORDATORIO_PAGO;
+    if (merged.VENCE_HOY && !merged.cobro_hoy_cliente) merged.cobro_hoy_cliente = merged.VENCE_HOY;
+    if (merged.VENCE_HOY && !merged.cobro_hoy_equipo) merged.cobro_hoy_equipo = merged.VENCE_HOY;
+    if (merged.PAGO_VENCIDO && !merged.cobro_vencida_cliente) merged.cobro_vencida_cliente = merged.PAGO_VENCIDO;
+    if (merged.PAGO_VENCIDO && !merged.cobro_vencida_equipo) merged.cobro_vencida_equipo = merged.PAGO_VENCIDO;
     if (merged.ALERTA_VENCIMIENTO && !merged.alerta_critica) merged.alerta_critica = merged.ALERTA_VENCIMIENTO;
     return merged;
+}
+
+function _esErrorNoReintentable(err) {
+    const msg = String(err?.message || '').toLowerCase();
+    if (!msg) return false;
+    return (
+        msg.includes('no lid for user') ||
+        msg.includes('invalid wid') ||
+        msg.includes('not a whatsapp user') ||
+        msg.includes('invalid contact')
+    );
 }
 
 function _appendBranding(config, mensaje) {
@@ -131,6 +148,11 @@ async function _ejecutarAlertasCobroVencidas(config) {
                 }
 
                 if (venceISO >= hoyISO) continue;
+
+                const dV = new Date(`${venceISO}T00:00:00`);
+                const dH = new Date(`${hoyISO}T00:00:00`);
+                const diasVencida = Math.floor((dH - dV) / (24 * 60 * 60 * 1000));
+                if (diasVencida !== 2 && diasVencida !== 5) continue;
 
                 cuotasVencidas++;
 
@@ -394,11 +416,20 @@ async function enviarMensaje(numero, mensaje, tipo = 'manual', opts = {}) {
         waLogger.logError('envio-fallido', { messageId, tipo, error: e.message });
         mainWin?.webContents.send('whatsapp:alerta-enviada', { tipo, ok: false, error: e.message, numero: vNum.numero, mensaje });
 
-        waLogger.encolarReintento(
-            messageId,
-            { numero: vNum.numero, mensaje, tipo },
-            (num, msg) => waClient.sendMessage(`${num}@c.us`, msg)
-        );
+        if (_esErrorNoReintentable(e)) {
+            waLogger.logWarn('envio-no-reintentable', {
+                messageId,
+                tipo,
+                error: e.message,
+                numero: vNum.numero.replace(/\d(?=\d{4})/g, '*')
+            });
+        } else {
+            waLogger.encolarReintento(
+                messageId,
+                { numero: vNum.numero, mensaje, tipo },
+                (num, msg) => waClient.sendMessage(`${num}@c.us`, msg)
+            );
+        }
         throw e;
     }
 }
@@ -639,8 +670,10 @@ async function _ejecutarAlertasCobro(config, diasAntes = 0) {
                     monto: Number(monto).toLocaleString('es-CL'),
                     venceTxt: fechaTxt,
                 };
-                const msgCliente = _tpl(templates.cobro_cliente, vars);
-                const msgEquipo = _tpl(templates.cobro_equipo, vars);
+                const tplCli = (diasAntes === 0) ? templates.cobro_hoy_cliente : templates.cobro_cliente;
+                const tplEq = (diasAntes === 0) ? templates.cobro_hoy_equipo : templates.cobro_equipo;
+                const msgCliente = _tpl(tplCli, vars);
+                const msgEquipo = _tpl(tplEq, vars);
 
                 const msgClienteFinal = _appendBranding(config, msgCliente);
                 const msgEquipoFinal = _appendBranding(config, msgEquipo);

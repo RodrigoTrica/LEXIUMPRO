@@ -30,13 +30,17 @@ let _waBrandingHydrated = false;
 
 const WA_TPL_KEYS = [
     { key: 'RECORDATORIO_PAGO', label: 'RECORDATORIO_PAGO (Cuotas)' },
-    { key: 'ALERTA_VENCIMIENTO', label: 'ALERTA_VENCIMIENTO (Plazos críticos)' },
+    { key: 'VENCE_HOY', label: 'VENCE_HOY (Cuotas que vencen hoy)' },
+    { key: 'PAGO_VENCIDO', label: 'PAGO_VENCIDO (Cuotas vencidas)' },
+    { key: 'ALERTA_VENCIMIENTO', label: 'ALERTA_VENCIMIENTO (Plazos críticos legales)' },
     { key: 'BIENVENIDA_CLIENTE', label: 'BIENVENIDA_CLIENTE (Nuevo cliente)' },
     { key: 'MENSAJE_LIBRE', label: 'MENSAJE_LIBRE (Envíos manuales)' },
 ];
 
 const WA_TPL_DEFAULTS_UI = {
     RECORDATORIO_PAGO: 'Estimado/a {nombre_cliente}, le recordamos que su cuota de $ {monto} vence {fecha_venc}.',
+    VENCE_HOY: 'Estimado/a {nombre_cliente}, su cuota de $ {monto} vence hoy. Si ya pagó, por favor ignorar este mensaje.',
+    PAGO_VENCIDO: 'Estimado/a {nombre_cliente}, su cuota de $ {monto} venció el {fecha_venc}. Favor regularizar a la brevedad.',
     ALERTA_VENCIMIENTO: '🚨 *ALERTA DE VENCIMIENTO*\n\n{detalle}',
     BIENVENIDA_CLIENTE: 'Hola {nombre_cliente}, bienvenido/a. Quedamos atentos a ayudarte. ',
     MENSAJE_LIBRE: 'Hola {nombre_cliente},\n\n{mensaje}',

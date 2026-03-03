@@ -914,6 +914,7 @@
         function tramiteAbrirModal(id) {
             const t = id ? TramitesDB.porId(id) : null;
             const causas = (typeof Store !== 'undefined' ? Store.causas() : []);
+            const clientes = (typeof DB !== 'undefined' && Array.isArray(DB.clientes)) ? DB.clientes : [];
 
             const orgOptions = Object.entries(TRAMITES_CATALOGO).map(([k, v]) =>
                 `<option value="${k}" ${t?.organismo === k ? 'selected' : ''}>${v.label}</option>`
@@ -925,6 +926,15 @@
 
             const causaOptions = `<option value="">Sin causa vinculada</option>` +
                 causas.map(c => `<option value="${c.id}" ${t?.causaId === c.id ? 'selected' : ''}>${c.caratula}</option>`).join('');
+
+            const clienteSel = (t?.clienteId || '');
+            const clienteOptions = `<option value="">Seleccionar cliente</option>` +
+                clientes.map(c => {
+                    const idCli = String(c.id || '');
+                    const nomCli = (c.nombre || c.nom || '').toString();
+                    const sel = clienteSel && String(clienteSel) === idCli ? 'selected' : '';
+                    return `<option value="${idCli}" ${sel}>${escHtml(nomCli)}</option>`;
+                }).join('');
 
             const html = `
             <div class="tr-modal-overlay" id="tr-modal-overlay" onclick="tramiteCerrarModal(event)">
@@ -944,6 +954,7 @@
                             <div class="tr-form-group" style="flex:2;">
                                 <label>Tipo de trámite *</label>
                                 <select id="tr-f-tipo"></select>
+                                <input type="text" id="tr-f-tipo-custom" placeholder="Escribe nuevo tipo de trámite" style="display:none; margin-top:6px;" />
                             </div>
                         </div>
                         <div class="tr-form-row">
@@ -959,7 +970,8 @@
                         <div class="tr-form-row">
                             <div class="tr-form-group">
                                 <label>Cliente / Requirente</label>
-                                <input type="text" id="tr-f-cliente" placeholder="Nombre del cliente" value="${t?.cliente||''}">
+                                <select id="tr-f-cliente-id" onchange="tramiteSyncClienteNombre()">${clienteOptions}</select>
+                                <input type="text" id="tr-f-cliente" placeholder="Nombre del cliente" value="${t?.cliente||''}" style="margin-top:6px;">
                             </div>
                             <div class="tr-form-group">
                                 <label>Vinculada a causa</label>
@@ -1007,16 +1019,27 @@
 
             document.body.insertAdjacentHTML('beforeend', html);
             tramiteActualizarTipos(t?.tipo);
+            tramiteSyncClienteNombre();
         }
 
         function tramiteActualizarTipos(seleccionado) {
             const org = document.getElementById('tr-f-organismo')?.value || 'CBR';
             const cat = TRAMITES_CATALOGO[org] || TRAMITES_CATALOGO.OTRO;
             const sel = document.getElementById('tr-f-tipo');
+            const custom = document.getElementById('tr-f-tipo-custom');
             if (!sel) return;
-            sel.innerHTML = cat.tipos.map(ti =>
+            const tipos = Array.isArray(cat.tipos) ? [...cat.tipos] : [];
+            if (seleccionado && !tipos.includes(seleccionado)) tipos.unshift(seleccionado);
+            sel.innerHTML = tipos.map(ti =>
                 `<option value="${ti}" ${seleccionado === ti ? 'selected' : ''}>${ti}</option>`
-            ).join('');
+            ).join('') + `<option value="__nuevo__">+ Crear tipo nuevo...</option>`;
+
+            const toggleCustom = () => {
+                const isNuevo = sel.value === '__nuevo__';
+                if (custom) custom.style.display = isNuevo ? 'block' : 'none';
+            };
+            sel.onchange = () => toggleCustom();
+            toggleCustom();
 
             // Campos extra por organismo
             const extra = document.getElementById('tr-f-campos-extra');
@@ -1073,9 +1096,12 @@
 
         function tramiteGuardar(id) {
             const org = document.getElementById('tr-f-organismo')?.value;
-            const tipo = document.getElementById('tr-f-tipo')?.value;
+            const tipoSel = document.getElementById('tr-f-tipo')?.value;
+            const tipoCustom = document.getElementById('tr-f-tipo-custom')?.value?.trim();
+            const tipo = (tipoSel === '__nuevo__') ? tipoCustom : tipoSel;
             const caratula = document.getElementById('tr-f-caratula')?.value?.trim();
             const estado = document.getElementById('tr-f-estado')?.value || 'pendiente';
+            const clienteId = document.getElementById('tr-f-cliente-id')?.value?.trim() || '';
             const cliente = document.getElementById('tr-f-cliente')?.value?.trim();
             const causaId = document.getElementById('tr-f-causaid')?.value || '';
             const fechaIngreso = document.getElementById('tr-f-fechaingreso')?.value || '';
@@ -1086,6 +1112,7 @@
             const observaciones = document.getElementById('tr-f-obs')?.value?.trim();
 
             if (!org || !tipo) return mostrarToast('Selecciona organismo y tipo', 'warning');
+            if (!clienteId && !cliente) return mostrarToast('Selecciona o ingresa cliente solicitante', 'warning');
 
             const camposExtra = {};
             if (org === 'CBR') {
@@ -1109,7 +1136,7 @@
             }
 
             const datos = {
-                organismo: org, tipo, caratula, estado, cliente, causaId,
+                organismo: org, tipo, caratula, estado, clienteId, cliente, causaId,
                 fechaIngreso: fechaIngreso ? new Date(fechaIngreso).toISOString() : '',
                 fechaLimite: fechaLimite ? new Date(fechaLimite).toISOString() : '',
                 responsable, oficina, observaciones,
@@ -1133,6 +1160,18 @@
         function tramiteCerrarModal(e) {
             if (e && e.target.id !== 'tr-modal-overlay') return;
             document.getElementById('tr-modal-overlay')?.remove();
+        }
+
+        function tramiteSyncClienteNombre() {
+            try {
+                const sel = document.getElementById('tr-f-cliente-id');
+                const inp = document.getElementById('tr-f-cliente');
+                if (!sel || !inp) return;
+                const opt = sel.options[sel.selectedIndex];
+                if (!opt) return;
+                const txt = (opt.textContent || '').trim();
+                if (sel.value && txt) inp.value = txt;
+            } catch (_) {}
         }
 
         // ── Helper toast (si no existe globalmente) ───────────────────────

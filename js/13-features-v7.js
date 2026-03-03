@@ -900,6 +900,14 @@
             if (!modal) return;
 
             const causas = DB.causas.filter(c => c.clienteId === clienteId);
+            const tramitesCliente = (() => {
+                try {
+                    const lista = (typeof AppConfig !== 'undefined' && AppConfig.get) ? (AppConfig.get('tramites') || []) : [];
+                    return (lista || []).filter(t => String(t?.clienteId || '') === String(clienteId));
+                } catch (_) {
+                    return [];
+                }
+            })();
             const totalAdjuntos = causas.reduce((s, c) => s + (c.adjuntos?.length || 0), 0);
             const totalPagado = causas.reduce((s, c) =>
                 s + (c.honorarios?.totalPagado || 0), 0);
@@ -924,13 +932,30 @@
 
             // Lista de causas
             const causasEl = document.getElementById('mpc-causas-lista');
+            const tramitesHtml = tramitesCliente.length
+                ? `<div class="mpc-causa-card" style="border-left:3px solid #0ea5e9;">
+                        <div class="mpc-causa-header">
+                            <div>
+                                <div class="mpc-causa-caratula"><i class="fas fa-building"></i> Trámites administrativos</div>
+                                <div class="mpc-causa-meta">
+                                    <span class="badge badge-w" style="font-size:10px;">${tramitesCliente.length} trámite(s)</span>
+                                </div>
+                            </div>
+                            <button class="btn btn-xs" onclick="cerrarModal('modal-perfil-cliente'); tab('tramites', null);">Ver →</button>
+                        </div>
+                        <div style="font-size:12px; color:var(--text-2); margin-top:6px;">
+                            ${tramitesCliente.slice(0, 4).map(t => `<div>• ${escHtml(t.tipo || 'Trámite')} — ${escHtml(t.estado || 'pendiente')}</div>`).join('')}
+                            ${tramitesCliente.length > 4 ? `<div style="color:var(--text-3); margin-top:4px;">+${tramitesCliente.length - 4} más</div>` : ''}
+                        </div>
+                   </div>`
+                : '';
             if (!causas.length) {
-                causasEl.innerHTML = `<div class="mpc-empty">Sin causas asociadas.
+                causasEl.innerHTML = `${tramitesHtml}<div class="mpc-empty">Sin causas asociadas.
                     <button class="btn btn-xs btn-p" onclick="plantillaCausaAbrir('${clienteId}')">
                         <i class="fas fa-plus"></i> Crear causa
                     </button></div>`;
             } else {
-                causasEl.innerHTML = causas.map(c => {
+                causasEl.innerHTML = `${tramitesHtml}` + causas.map(c => {
                     const pagos = c.honorarios?.pagos || [];
                     const alertasActivas = DB.alertas.filter(a => a.causaId === c.id && a.estado === 'activa').length;
 

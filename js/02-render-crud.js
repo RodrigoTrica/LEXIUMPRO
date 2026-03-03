@@ -137,16 +137,17 @@
 
             const defaults = {
                 RECORDATORIO_PAGO: 'Estimado/a {{nombre_cliente}}, le recordamos que su cuota de $ {{monto}} vence {{fecha_venc}}.',
+                VENCE_HOY: 'Estimado/a {{nombre_cliente}}, su cuota de $ {{monto}} vence hoy. Si ya pagó, por favor ignorar este mensaje.',
+                PAGO_VENCIDO: 'Estimado/a {{nombre_cliente}}, su cuota de $ {{monto}} venció el {{fecha_venc}}. Favor regularizar a la brevedad.',
                 ALERTA_VENCIMIENTO: '🚨 *ALERTA DE VENCIMIENTO*\n\n{{detalle}}',
                 BIENVENIDA_CLIENTE: 'Hola {{nombre_cliente}}, bienvenido/a. Quedamos atentos a ayudarte.',
                 MENSAJE_LIBRE: 'Hola {{nombre_cliente}},\n\n{{mensaje}}'
             };
-
-            let mensaje = String(tpl[key] || defaults[key] || '').trim();
             
             // Extraer monto y fecha de cuota pendiente real
             let montoPendiente = 0;
             let fechaVenc = new Date().toLocaleDateString('es-CL');
+            let fechaVencISO = '';
             const causas = (DB.causas || []).filter(c => String(c?.clienteId) === String(clienteId));
             for (const causa of causas) {
                 const h = causa?.honorarios;
@@ -155,12 +156,21 @@
                     if (!cuota || String(cuota.estado || '').toUpperCase() === 'PAGADA') continue;
                     montoPendiente = parseFloat(cuota.monto || 0);
                     if (cuota.fechaVencimiento) {
+                        fechaVencISO = String(cuota.fechaVencimiento).slice(0, 10);
                         fechaVenc = new Date(cuota.fechaVencimiento).toLocaleDateString('es-CL');
                     }
                     break; // primera cuota pendiente
                 }
                 if (montoPendiente > 0) break;
             }
+
+            if (tipoMsg === 'vencimiento') {
+                const hoyISO = new Date().toISOString().slice(0, 10);
+                if (fechaVencISO && fechaVencISO < hoyISO) key = 'PAGO_VENCIDO';
+                else key = 'VENCE_HOY';
+            }
+
+            let mensaje = String(tpl[key] || defaults[key] || '').trim();
 
             const vars = {
                 nombre_cliente: cli.nombre || cli.nom || 'Cliente',
@@ -178,8 +188,12 @@
 
             // Confirmación obligatoria si es envío manual fuera de ventana de aviso automática
             if ((tipoMsg === 'recordatorio' || tipoMsg === 'vencimiento') && !_waClienteEnVentanaAutomatica(clienteId, tipoMsg)) {
+                const plantillaInfo = (tipoMsg === 'vencimiento')
+                    ? `\nPlantilla seleccionada automáticamente: ${key}.\n`
+                    : '';
                 const okFueraPlazo = confirm(
                     'Este mensaje se enviará MANUALMENTE fuera de plazo automático.\n\n' +
+                    plantillaInfo +
                     '¿Confirmas que deseas enviarlo de todas formas?'
                 );
                 if (!okFueraPlazo) return;
@@ -453,15 +467,22 @@
                 const rProb = c.riesgo?.probatorio || 'Medio';
                 const rProc = c.riesgo?.procesal || 'Bajo';
                 const estado = c.estadoGeneral || 'En tramitación';
+                const esTramite = /tramite/i.test(String(c.tipoProcedimiento || ''));
+                const tipoLabel = esTramite ? 'TRÁMITE' : 'CAUSA JUDICIAL';
+                const tipoClass = esTramite ? 'badge-tramite' : 'badge-judicial';
+                const stripeColor = esTramite ? 'var(--success)' : 'var(--cyan)';
                 return `
-                <div class="db-kpi" style="padding:20px; cursor:pointer;" onclick="tab('causa-detail'); viewCausa('${c.id}');">
+                <div class="db-kpi" style="padding:20px; cursor:pointer; border-left:4px solid ${stripeColor};" onclick="tab('causa-detail'); viewCausa('${c.id}');">
                     <div class="icon-box-premium" style="background:var(--cyan-light); color:var(--cyan);">
                         <i class="fas fa-gavel"></i>
                     </div>
                     <div class="db-kpi-data">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                             <div class="db-kpi-val" style="font-size:1.1rem; letter-spacing:-0.2px;">${escHtml(c.caratula)}</div>
-                            <span class="badge ${estado === 'Finalizada' ? 'badge-s' : 'badge-a'}" style="font-size:9px;">${estado.toUpperCase()}</span>
+                            <div style="display:flex; gap:6px; align-items:center;">
+                                <span class="badge ${tipoClass}" style="font-size:9px;">${tipoLabel}</span>
+                                <span class="badge ${estado === 'Finalizada' ? 'badge-s' : 'badge-a'}" style="font-size:9px;">${estado.toUpperCase()}</span>
+                            </div>
                         </div>
                         <div style="font-size:11px; color:var(--text-3); font-family:'IBM Plex Mono',monospace;">ID: ${c.id} · ${escHtml(c.tipoProcedimiento || '')}</div>
                         
@@ -476,7 +497,6 @@
                             </div>
                         </div>
                     </div>
-                    ${estado !== 'Finalizada' ? `<div style="position:absolute; top:0; left:0; bottom:0; width:4px; background:var(--cyan);"></div>` : ''}
                 </div>`;
             }).join('');
         }
@@ -2154,8 +2174,9 @@
         }
 
         function uiRenderEstrategiaPro() {
-            const id = parseInt(document.getElementById('ep-causa-sel').value);
-            if (!id) { document.getElementById('analisisEstrategico').innerHTML = ''; return; }
+            const idRaw = (document.getElementById('ep-causa-sel')?.value || '').toString().trim();
+            if (!idRaw) { document.getElementById('analisisEstrategico').innerHTML = ''; return; }
+            const id = /^\d+$/.test(idRaw) ? parseInt(idRaw, 10) : idRaw;
             evaluarImpactoJurisprudencial(id);
             renderAnalisisEstrategico(id);
         }
