@@ -363,6 +363,15 @@ ipcMain.handle('sistema:abrirCarpetaDatos', () => {
 ipcMain.handle('whatsapp:guardar-config', async (_e, config) => {
     const { validarNumero } = require('./whatsapp-service-v3');
 
+    // Merge seguro: si viene un patch parcial (p.ej. solo waTemplates/waBranding),
+    // no debemos pisar la configuración existente (abogados/destinatarios/sesión).
+    try {
+        const prev = getWhatsAppConfig();
+        if (prev && typeof prev === 'object') {
+            config = { ...prev, ...(config && typeof config === 'object' ? config : {}) };
+        }
+    } catch (_) { }
+
     // Validar array de abogados principales (nuevo)
     if (Array.isArray(config.abogadosPrincipales)) {
         const validados = [];
@@ -409,6 +418,42 @@ ipcMain.handle('whatsapp:guardar-config', async (_e, config) => {
         const v = validarNumero(config.destinoNumero);
         if (!v.ok) return { error: `Número principal inválido: ${v.error}` };
         config.destinoNumero = v.numero;
+    }
+
+    if (config.waTemplates && typeof config.waTemplates === 'object') {
+        const out = {};
+        const keys = Object.keys(config.waTemplates).slice(0, 50);
+        for (const k of keys) {
+            const v = config.waTemplates[k];
+            if (typeof v !== 'string') continue;
+            out[String(k).substring(0, 60)] = v.substring(0, 4096);
+        }
+        config.waTemplates = out;
+    }
+
+    if (config.waBranding && typeof config.waBranding === 'object') {
+        const logoBase64 = (config.waBranding?.logoBase64 || '').toString();
+        const logoTrim = logoBase64.substring(0, 2_000_000); // guardrail
+        // Validar tamaño real del base64 (<= 500KB)
+        if (logoTrim) {
+            const parts = logoTrim.split(',');
+            const b64 = (parts.length > 1 ? parts[1] : parts[0]).replace(/\s+/g, '');
+            const pad = b64.endsWith('==') ? 2 : (b64.endsWith('=') ? 1 : 0);
+            const bytes = Math.floor((b64.length * 3) / 4) - pad;
+            if (bytes > 500 * 1024) {
+                return { error: 'El logo excede 500KB. Comprímelo o usa una imagen más pequeña.' };
+            }
+        }
+
+        config.waBranding = {
+            nombreEstudio: (config.waBranding?.nombreEstudio || '').toString().substring(0, 80),
+            telefono:      (config.waBranding?.telefono      || '').toString().substring(0, 40),
+            horario:       (config.waBranding?.horario       || '').toString().substring(0, 60),
+            webLink:       (config.waBranding?.webLink       || '').toString().substring(0, 160),
+            disclaimer:    (config.waBranding?.disclaimer    || '').toString().substring(0, 600),
+            logoBase64:    logoTrim,
+            autoAppend:    config.waBranding?.autoAppend !== false
+        };
     }
 
     try {

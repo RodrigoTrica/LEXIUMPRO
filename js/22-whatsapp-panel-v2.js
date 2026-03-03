@@ -22,6 +22,231 @@ let _destinatarios = []; // lista de destinatarios (nuevo sistema)
 let _destEditNumero = null; // numero (limpio) en edición
 let _reconexionAuto = false;  // true cuando reconecta desde sesión guardada (sin QR)
 
+let _waTemplates = {};
+let _waBranding = { nombreEstudio: '', telefono: '', horario: '', disclaimer: '', webLink: '', logoBase64: '', autoAppend: true };
+let _waTplSelectedKey = null;
+
+const WA_TPL_KEYS = [
+    { key: 'RECORDATORIO_PAGO', label: 'RECORDATORIO_PAGO (Cuotas)' },
+    { key: 'ALERTA_VENCIMIENTO', label: 'ALERTA_VENCIMIENTO (Plazos críticos)' },
+    { key: 'BIENVENIDA_CLIENTE', label: 'BIENVENIDA_CLIENTE (Nuevo cliente)' },
+    { key: 'MENSAJE_LIBRE', label: 'MENSAJE_LIBRE (Envíos manuales)' },
+];
+
+const WA_TPL_DEFAULTS_UI = {
+    RECORDATORIO_PAGO: 'Estimado/a {nombre_cliente}, le recordamos que su cuota de $ {monto} vence {fecha_venc}.',
+    ALERTA_VENCIMIENTO: '🚨 *ALERTA DE VENCIMIENTO*\n\n{detalle}',
+    BIENVENIDA_CLIENTE: 'Hola {nombre_cliente}, bienvenido/a. Quedamos atentos a ayudarte. ',
+    MENSAJE_LIBRE: 'Hola {nombre_cliente},\n\n{mensaje}',
+};
+
+function _waTplNormalizeCurly(s) {
+    return String(s || '')
+        .replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, '{$1}')
+        .replace(/\{\s*([a-zA-Z0-9_]+)\s*\}/g, '{$1}');
+}
+
+function _waBrandingSetLogoPreview(dataUrl) {
+    try {
+        const img = document.getElementById('wa-brand-logo-preview');
+        if (!img) return;
+        const ok = !!(dataUrl && String(dataUrl).startsWith('data:image/'));
+        img.src = ok ? String(dataUrl) : '';
+        img.style.display = ok ? 'block' : 'none';
+    } catch (_) {}
+}
+
+function waBrandingClearLogo() {
+    try {
+        _waBranding.logoBase64 = '';
+        const inp = document.getElementById('wa-brand-logo');
+        if (inp) inp.value = '';
+        _waBrandingSetLogoPreview('');
+        waTemplatesOnChange();
+    } catch (_) {}
+}
+
+async function waBrandingOnLogoChange(ev) {
+    try {
+        const file = ev?.target?.files?.[0];
+        if (!file) return;
+        const maxBytes = 500 * 1024;
+        if (file.size > maxBytes) {
+            EventBus.emit('notificacion', { tipo: 'warn', mensaje: 'El logo excede 500KB. Usa una imagen más liviana.' });
+            waBrandingClearLogo();
+            return;
+        }
+        if (!/^image\/(png|jpeg)$/.test(file.type)) {
+            EventBus.emit('notificacion', { tipo: 'warn', mensaje: 'Formato no soportado. Usa PNG o JPG.' });
+            waBrandingClearLogo();
+            return;
+        }
+        const dataUrl = await new Promise((resolve, reject) => {
+            const r = new FileReader();
+            r.onload = () => resolve(String(r.result || ''));
+            r.onerror = () => reject(new Error('No se pudo leer el archivo'));
+            r.readAsDataURL(file);
+        });
+        if (!String(dataUrl).startsWith('data:image/')) throw new Error('dataUrl inválido');
+        _waBranding.logoBase64 = String(dataUrl);
+        _waBrandingSetLogoPreview(_waBranding.logoBase64);
+        waTemplatesOnChange();
+    } catch (e) {
+        EventBus.emit('notificacion', { tipo: 'error', mensaje: e?.message || String(e) });
+        waBrandingClearLogo();
+    }
+}
+
+function _waTplToEngine(s) {
+    // UI usa {var}; motor en main usa {{var}}
+    return String(s || '').replace(/\{\s*([a-zA-Z0-9_]+)\s*\}/g, '{{$1}}');
+}
+
+function _waTplRenderUI(templateUI, vars) {
+    try {
+        return String(templateUI || '').replace(/\{\s*([a-zA-Z0-9_]+)\s*\}/g, (_m, k) => {
+            const v = vars && Object.prototype.hasOwnProperty.call(vars, k) ? vars[k] : '';
+            return (v === null || v === undefined) ? '' : String(v);
+        });
+    } catch (_) {
+        return String(templateUI || '');
+    }
+}
+
+function _waBrandingFirmaUI() {
+    const nombre = (document.getElementById('wa-brand-nombre')?.value || '').trim();
+    const web = (document.getElementById('wa-brand-weblink')?.value || '').trim();
+    if (!nombre && !web) return '';
+    const firma = web
+        ? `Atte. ${nombre || 'Estudio'} | ${web}`
+        : `Atte. ${nombre}`;
+    return `\n\n${firma}`;
+}
+
+function _waTplBuildFinalUI(baseTextUI) {
+    const base = String(baseTextUI || '').trimEnd();
+    const firma = _waBrandingFirmaUI();
+    return `${base}${firma}`.trim();
+}
+
+function _waTemplatesEnsureDefaults() {
+    _waTemplates = { ...WA_TPL_DEFAULTS_UI, ...(_waTemplates || {}) };
+    for (const k of Object.keys(_waTemplates)) {
+        _waTemplates[k] = _waTplNormalizeCurly(_waTemplates[k]);
+    }
+}
+
+function _waTemplatesSelect(key) {
+    _waTplSelectedKey = key;
+    const inputName = document.getElementById('wa-tpl-nombre');
+    const ta = document.getElementById('wa-tpl-texto');
+    if (inputName) inputName.value = key || '';
+    if (ta) ta.value = _waTemplates?.[key] || '';
+    waTemplatesOnChange();
+
+    try {
+        const list = document.getElementById('wa-templates-list');
+        if (list) {
+            Array.from(list.querySelectorAll('[data-wa-tpl]')).forEach(btn => {
+                btn.style.borderColor = (btn.getAttribute('data-wa-tpl') === key) ? '#25D366' : 'var(--border)';
+            });
+        }
+    } catch (_) {}
+}
+
+function _waTemplatesRenderList() {
+    const el = document.getElementById('wa-templates-list');
+    if (!el) return;
+    el.innerHTML = WA_TPL_KEYS.map(x => {
+        const active = x.key === _waTplSelectedKey;
+        return `
+            <button data-wa-tpl="${x.key}" onclick="waTemplatesSelect('${x.key}')"
+                class="btn" style="text-align:left; justify-content:flex-start; background:transparent; border:1px solid ${active ? '#25D366' : 'var(--border)'}; padding:8px 10px;">
+                <div style="display:flex; flex-direction:column; gap:2px; width:100%;">
+                    <div style="font-weight:700; font-size:12px;">${escHtml(x.label)}</div>
+                    <div style="font-size:11px; color:var(--text-3); font-family:monospace;">${escHtml(x.key)}</div>
+                </div>
+            </button>
+        `;
+    }).join('');
+}
+
+function waTemplatesOnChange() {
+    const ta = document.getElementById('wa-tpl-texto');
+    const preview = document.getElementById('wa-tpl-preview');
+    if (!ta || !preview) return;
+
+    const vars = {
+        nombre_cliente: 'Juan Pérez',
+        monto: '250.000',
+        fecha_venc: '31-03-2026',
+        nombre_estudio: (document.getElementById('wa-brand-nombre')?.value || 'LEXIUM').trim(),
+        telefono_estudio: (document.getElementById('wa-brand-telefono')?.value || '+56 9 1234 5678').trim(),
+        horario_estudio: (document.getElementById('wa-brand-horario')?.value || 'Lun–Vie 09:00–18:00').trim(),
+        detalle: '*Causa:* Pérez c/ López\n*Vence:* mañana',
+        mensaje: 'Te escribimos para coordinar el envío de antecedentes.'
+    };
+
+    const base = ta.value || '';
+    const finalUI = _waTplBuildFinalUI(base);
+    preview.textContent = _waTplRenderUI(finalUI, vars);
+}
+
+async function waTemplatesGuardar() {
+    try {
+        if (!_waTplSelectedKey) {
+            EventBus.emit('notificacion', { tipo: 'warn', mensaje: 'Selecciona una plantilla.' });
+            return;
+        }
+        const ta = document.getElementById('wa-tpl-texto');
+        if (!ta) return;
+
+        const rawUI = ta.value || '';
+        _waTemplates[_waTplSelectedKey] = _waTplNormalizeCurly(rawUI);
+
+        // Branding
+        _waBranding = {
+            nombreEstudio: (document.getElementById('wa-brand-nombre')?.value || '').trim(),
+            telefono: (document.getElementById('wa-brand-telefono')?.value || '').trim(),
+            horario: (document.getElementById('wa-brand-horario')?.value || '').trim(),
+            webLink: (document.getElementById('wa-brand-weblink')?.value || '').trim(),
+            disclaimer: (document.getElementById('wa-brand-disclaimer')?.value || '').trim(),
+            logoBase64: (_waBranding?.logoBase64 || ''),
+            autoAppend: true
+        };
+
+        // Persistir: convertir a {{var}} para motor
+        const engineTemplates = {};
+        for (const k of Object.keys(_waTemplates || {})) {
+            const baseFinalUI = _waTplBuildFinalUI(_waTemplates[k]);
+            engineTemplates[k] = _waTplToEngine(_waTplNormalizeCurly(baseFinalUI));
+        }
+
+        await window.electronAPI.whatsapp.guardarConfig({
+            waTemplates: engineTemplates,
+            waBranding: _waBranding
+        });
+
+        EventBus.emit('notificacion', { tipo: 'ok', mensaje: `Plantilla guardada: ${_waTplSelectedKey}` });
+    } catch (e) {
+        EventBus.emit('notificacion', { tipo: 'error', mensaje: e?.message || String(e) });
+    }
+}
+
+async function waTemplatesRestaurarDefaults() {
+    try {
+        _waTemplates = { ...WA_TPL_DEFAULTS_UI };
+        _waTemplatesEnsureDefaults();
+        _waTemplatesRenderList();
+        _waTemplatesSelect(WA_TPL_KEYS[0]?.key || 'RECORDATORIO_PAGO');
+        EventBus.emit('notificacion', { tipo: 'ok', mensaje: 'Plantillas restauradas.' });
+    } catch (_) {}
+}
+
+function waTemplatesSelect(key) {
+    _waTemplatesSelect(key);
+}
+
 function _esPanelVisible() {
     const sec = document.getElementById('seccion-whatsapp');
     return sec && sec.classList.contains('active');
@@ -85,7 +310,7 @@ function initWhatsAppPanel() {
             case 'alerta-enviada':
                 actualizarStats();
                 actualizarLog();
-                try { EventBus.emit('whatsapp:alert-sent', { ok: true }); } catch (_) {}
+                try { EventBus.emit('whatsapp:alert-sent', { ok: data?.ok !== false, tipo: data?.tipo || null, numero: data?.numero || null, mensaje: data?.mensaje || null, error: data?.error || null }); } catch (_) {}
                 break;
         }
     });
@@ -473,6 +698,34 @@ async function actualizarEstado() {
             _renderListaDestinatarios();
         }
 
+        try {
+            _waTemplates = (e.waTemplates && typeof e.waTemplates === 'object') ? e.waTemplates : {};
+            // Convertir de {{var}} (engine) a {var} (UI)
+            const uiT = {};
+            for (const k of Object.keys(_waTemplates || {})) {
+                uiT[k] = _waTplNormalizeCurly(String(_waTemplates[k] || ''));
+            }
+            _waTemplates = uiT;
+            _waTemplatesEnsureDefaults();
+            _waTemplatesRenderList();
+            if (!_waTplSelectedKey) _waTemplatesSelect(WA_TPL_KEYS[0]?.key || 'RECORDATORIO_PAGO');
+
+            const b = (e.waBranding && typeof e.waBranding === 'object') ? e.waBranding : {};
+            const bn = document.getElementById('wa-brand-nombre');
+            const bt = document.getElementById('wa-brand-telefono');
+            const bh = document.getElementById('wa-brand-horario');
+            const bw = document.getElementById('wa-brand-weblink');
+            const bd = document.getElementById('wa-brand-disclaimer');
+            if (bn) bn.value = b.nombreEstudio || '';
+            if (bt) bt.value = b.telefono || '';
+            if (bh) bh.value = b.horario || '';
+            if (bw) bw.value = b.webLink || '';
+            if (bd) bd.value = b.disclaimer || '';
+            _waBranding = { ..._waBranding, ...b };
+            _waBrandingSetLogoPreview(b.logoBase64 || '');
+            waTemplatesOnChange();
+        } catch (_) {}
+
         if (e.conectado) onConectado(e);
         else onDesconectado();
     } catch (_) { }
@@ -722,7 +975,7 @@ async function _guardarDestinatarios() {
             }))
             .filter(a => !!a.numero);
 
-        const principalLegacy = principals[0] || { nombre: '', numero: '' };
+        const principalLegacy = principals.find(p => p && p.envioManual !== false) || principals[0] || { nombre: '', numero: '' };
 
         await window.electronAPI.whatsapp.guardarConfig({
             abogadosPrincipales: principals,
@@ -928,10 +1181,10 @@ async function waEnviarResumen() {
                 ? `✅ Resumen enviado a destinatarios manuales (${r?.destinatarios ?? '—'})`
                 : (r?.error || 'Error al enviar')
         });
-        try { EventBus.emit('whatsapp:sent', { modo: 'resumen', ok: !!r?.ok, destinatarios: r?.destinatarios ?? null, error: r?.ok ? null : (r?.error || null) }); } catch (_) {}
+        try { EventBus.emit('whatsapp:sent', { modo: 'resumen', ok: !!r?.ok, destinatarios: r?.destinatarios ?? null, error: r?.ok ? null : (r?.error || null), mensaje: r?.mensaje || null }); } catch (_) {}
     } catch(e) {
         EventBus.emit('notificacion', { tipo: 'error', mensaje: e.message });
-        try { EventBus.emit('whatsapp:sent', { modo: 'resumen', ok: false, error: e?.message || String(e) }); } catch (_) {}
+        try { EventBus.emit('whatsapp:sent', { modo: 'resumen', ok: false, error: e?.message || String(e), mensaje: null }); } catch (_) {}
     } finally {
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fab fa-whatsapp"></i> Enviar resumen ahora'; }
     }
@@ -973,7 +1226,7 @@ async function waEnviarAOtroNumero() {
         const fail = targets.length - ok;
         if (ok > 0) EventBus.emit('notificacion', { tipo: 'ok', mensaje: `Reporte enviado a ${ok} contacto${ok > 1 ? 's' : ''}${fail > 0 ? ` (${fail} fallaron)` : ''}` });
         else        EventBus.emit('notificacion', { tipo: 'error', mensaje: 'No se pudo enviar a ningún contacto' });
-        try { EventBus.emit('whatsapp:sent', { modo: 'manual', ok: ok > 0, enviados: ok, fallidos: fail, total: targets.length }); } catch (_) {}
+        try { EventBus.emit('whatsapp:sent', { modo: 'manual', ok: ok > 0, enviados: ok, fallidos: fail, total: targets.length, mensaje: msg }); } catch (_) {}
     } finally {
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fab fa-whatsapp"></i> Reenviar a activos'; }
     }
@@ -1133,6 +1386,13 @@ window.waTestEnviarResumen = waTestEnviarResumen;
 window.waTestEnviarTodos   = waTestEnviarTodos;
 window.waToggle = waToggle;
 window.waReset = waReset;
+
+window.waTemplatesSelect = waTemplatesSelect;
+window.waTemplatesOnChange = waTemplatesOnChange;
+window.waTemplatesGuardar = waTemplatesGuardar;
+window.waTemplatesRestaurarDefaults = waTemplatesRestaurarDefaults;
+window.waBrandingOnLogoChange = waBrandingOnLogoChange;
+window.waBrandingClearLogo = waBrandingClearLogo;
 window.waConfirmarSesion = waConfirmarSesion;
 window.waGuardarPrincipal = waGuardarPrincipal;
 window.waGuardarDestino = waGuardarDestino;

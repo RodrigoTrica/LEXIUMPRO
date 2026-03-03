@@ -2065,7 +2065,7 @@
         </section>
 
         <section id="seccion-whatsapp" class="tabs">
-            <div style="max-width:640px; margin:0 auto; display:grid; gap:16px;">
+            <div id="wa-panel-wrap" style="display:grid; gap:16px;">
 
                 <!-- ── CARD 1: Conexión + usuario activo ── -->
                 <div class="card-premium">
@@ -2222,7 +2222,7 @@
                 </div>
 
                 <!-- ── CARD 3: Clientes (Automático) ── -->
-                <div class="card-premium" style="background:#fff; border:1px solid var(--border);">
+                <div class="card-premium" style="border:1px solid var(--border);">
                     <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
                         <div
                             style="width:32px; height:32px; border-radius:8px; background:#fef3c7; display:flex; align-items:center; justify-content:center; color:#b45309; font-size:1rem; flex-shrink:0;">
@@ -2238,6 +2238,97 @@
                         Se notificará automáticamente a los clientes con <strong>cuotas vencidas</strong>.
                         Asegúrate de que tengan <strong>teléfono</strong> registrado en su ficha.
                     </div>
+                </div>
+
+                <!-- ── CARD: Biblioteca de Plantillas (Branding) ── -->
+                <div class="card-premium" style="border:1px solid var(--border);">
+                    <details id="wa-templates-details" style="cursor:pointer;">
+                        <summary style="list-style:none; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <div style="width:32px; height:32px; border-radius:8px; background:#eef2ff; display:flex; align-items:center; justify-content:center; color:#3730a3; font-size:1rem; flex-shrink:0;">
+                                    <i class="fas fa-book"></i>
+                                </div>
+                                <div>
+                                    <h4 style="margin:0;">Biblioteca de Plantillas</h4>
+                                    <small style="color:var(--text-3); font-size:11px;">Branding profesional + variables dinámicas</small>
+                                </div>
+                            </div>
+                            <span style="color:var(--text-3); font-size:11px;">Abrir/Cerrar</span>
+                        </summary>
+
+                        <div style="margin-top:12px; display:grid; gap:12px;">
+                            <div style="font-size:0.86rem; color:var(--text-2); line-height:1.45; background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:12px 14px;">
+                                <strong>Variables:</strong> Usa: <code>{nombre_cliente}</code>, <code>{monto}</code>, <code>{fecha_venc}</code>, <code>{nombre_estudio}</code>
+                            </div>
+
+                            <div id="wa-templates-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:14px; align-items:start;">
+                                <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:12px; min-height:320px; display:flex; flex-direction:column;">
+                                    <div style="font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px;">Plantillas</div>
+                                    <div id="wa-templates-list" style="display:grid; gap:8px;"></div>
+                                    <button id="wa-templates-restaurar" onclick="waTemplatesRestaurarDefaults()" class="btn btn-sm" style="margin-top:10px; background:transparent; border:1px solid var(--border);">
+                                        <i class="fas fa-rotate-left"></i> Restaurar defaults
+                                    </button>
+                                </div>
+
+                                <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:12px; display:grid; gap:10px; min-height:320px;">
+                                    <div style="font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:.5px;">Editor</div>
+                                    <input id="wa-tpl-nombre" class="input-field" placeholder="Nombre interno (solo lectura)" disabled />
+                                    <textarea id="wa-tpl-texto" class="input-field" rows="12" placeholder="Escribe tu plantilla aquí..." oninput="waTemplatesOnChange()" style="min-height:210px; resize:vertical;"></textarea>
+                                    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                                        <button id="wa-tpl-guardar" onclick="waTemplatesGuardar()" class="btn btn-p"><i class="fas fa-save"></i> Guardar plantilla</button>
+                                    </div>
+                                </div>
+
+                                <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:12px; min-height:320px; display:grid; grid-template-rows:auto 1fr; gap:8px;">
+                                    <div style="font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px;">Preview (tiempo real)</div>
+                                    <pre id="wa-tpl-preview" style="white-space:pre-wrap; word-break:break-word; font-size:12px; margin:0; font-family:'IBM Plex Mono',monospace; color:var(--text-1); border:1px solid var(--border); border-radius:10px; padding:10px; background:var(--bg-card); min-height:210px;"></pre>
+                                </div>
+
+                                <div id="wa-branding-card" style="grid-column:1 / -1; background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:12px;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px;">
+                                        <div>
+                                            <div style="font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:.5px;">Configuración de Firma (Branding)</div>
+                                            <small style="color:var(--text-3); font-size:11px;">Se agrega automáticamente al final al guardar</small>
+                                        </div>
+                                    </div>
+                                    <div id="wa-branding-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:12px;">
+                                        <div>
+                                            <label style="font-size:11px; color:var(--text-3); display:block; margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px;">Nombre del Estudio</label>
+                                            <input id="wa-brand-nombre" type="text" class="input-field" placeholder="Ej: Estudio Jurídico Lexium" oninput="waTemplatesOnChange()" />
+                                        </div>
+                                        <div>
+                                            <label style="font-size:11px; color:var(--text-3); display:block; margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px;">Teléfono de Contacto</label>
+                                            <input id="wa-brand-telefono" type="text" class="input-field" placeholder="Ej: +56 9 1234 5678" oninput="waTemplatesOnChange()" />
+                                        </div>
+                                        <div>
+                                            <label style="font-size:11px; color:var(--text-3); display:block; margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px;">Horario de Atención</label>
+                                            <input id="wa-brand-horario" type="text" class="input-field" placeholder="Ej: Lun–Vie 09:00–18:00" oninput="waTemplatesOnChange()" />
+                                        </div>
+                                        <div>
+                                            <label style="font-size:11px; color:var(--text-3); display:block; margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px;">Web / Link de contacto</label>
+                                            <input id="wa-brand-weblink" type="text" class="input-field" placeholder="Ej: https://lexium.cl" oninput="waTemplatesOnChange()" />
+                                        </div>
+                                        <div style="grid-column:1 / -1;">
+                                            <label style="font-size:11px; color:var(--text-3); display:block; margin-bottom:6px; text-transform:uppercase; letter-spacing:.4px;">Subir Logo del Estudio</label>
+                                            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:10px; border:1px dashed var(--border); border-radius:10px; background:var(--bg-card);">
+                                                <input id="wa-brand-logo" type="file" accept="image/png,image/jpeg" onchange="waBrandingOnLogoChange(event)" />
+                                                <button class="btn" style="padding:6px 10px;" onclick="waBrandingClearLogo()">Quitar logo</button>
+                                                <small id="wa-brand-logo-hint" style="color:var(--text-3); font-size:11px;">Máximo 500KB · PNG/JPG</small>
+                                            </div>
+                                            <div style="margin-top:10px; display:flex; align-items:center; gap:10px; min-height:52px;">
+                                                <img id="wa-brand-logo-preview" alt="Logo" style="display:none; width:64px; height:64px; object-fit:contain; border-radius:10px; border:1px solid var(--border); background:var(--bg-card); padding:6px;" />
+                                                <div style="min-width:0; color:var(--text-3); font-size:11px;">El logo se enviará como imagen solo en la plantilla de Bienvenida.</div>
+                                            </div>
+                                        </div>
+                                        <div style="grid-column:1 / -1;">
+                                            <label style="font-size:11px; color:var(--text-3); display:block; margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px;">Disclaimer de confidencialidad</label>
+                                            <textarea id="wa-brand-disclaimer" class="input-field" rows="3" placeholder="Ej: Mensaje confidencial: si usted no es el destinatario..." oninput="waTemplatesOnChange()"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </details>
                 </div>
 
                 <!-- ── CARD 3: Estadísticas ── -->

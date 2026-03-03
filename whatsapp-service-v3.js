@@ -14,12 +14,76 @@ const cron         = require('node-cron');
 const alertService = require('./alert-service-v3');
 const waLogger     = require('./wa-logger-v3');
 
-let Client, LocalAuth, qrcode;
+const DEFAULT_WA_TEMPLATES = {
+    resumen_diario: `⚖️ *LEXIUM – Reporte Diario*\n📅 {{hoy}}\n{{abogadoLinea}}{{separador}}\n\n{{seccionCriticas}}{{seccionAltas}}{{seccionInactivas}}{{seccionHonorarios}}{{seccionCobrosHoy}}{{seccionSinAlertas}}{{separador}}\n📊 {{statsLinea}}\n_Enviado por LEXIUM_`,
+    alerta_critica: `🚨 *LEXIUM – ALERTA CRÍTICA*\n\n{{listaCriticas}}\n_Requiere acción inmediata – LEXIUM_`,
+    cobro_cliente: `Estimado/a {{clienteNombre}}, le recordamos que su cuota Nº {{cuotaNumero}} de $ {{monto}} vence {{venceTxt}}.`,
+    cobro_equipo: `ALERTA: Cuota Nº {{cuotaNumero}} de cliente {{clienteNombre}} por $ {{monto}} vence {{venceTxt}}.`,
+    cobro_vencida_cliente: `Estimado/a {{clienteNombre}}, le recordamos que su cuota Nº {{cuotaNumero}} de $ {{monto}} venció {{venceTxt}}.`,
+    cobro_vencida_equipo: `ALERTA VENCIDA: Cuota Nº {{cuotaNumero}} de cliente {{clienteNombre}} por $ {{monto}} venció {{venceTxt}}.`
+};
+
+function _getTemplates(config) {
+    const t = (config && typeof config === 'object') ? config.waTemplates : null;
+    const merged = { ...DEFAULT_WA_TEMPLATES, ...(t && typeof t === 'object' ? t : {}) };
+    // Aliases solicitados por UI (Branding Profesional)
+    if (merged.RECORDATORIO_PAGO && !merged.cobro_cliente) merged.cobro_cliente = merged.RECORDATORIO_PAGO;
+    if (merged.RECORDATORIO_PAGO && !merged.cobro_equipo) merged.cobro_equipo = merged.RECORDATORIO_PAGO;
+    if (merged.ALERTA_VENCIMIENTO && !merged.alerta_critica) merged.alerta_critica = merged.ALERTA_VENCIMIENTO;
+    return merged;
+}
+
+function _appendBranding(config, mensaje) {
+    try {
+        const b = (config && typeof config === 'object') ? config.waBranding : null;
+        if (!b || typeof b !== 'object') return mensaje;
+        if (b.autoAppend === false) return mensaje;
+        const nombreEstudio = (b.nombreEstudio || '').toString().trim();
+        const webLink = (b.webLink || '').toString().trim();
+        if (!nombreEstudio && !webLink) return mensaje;
+
+        const firma = webLink
+            ? `Atte. ${nombreEstudio || 'Estudio'} | ${webLink}`
+            : `Atte. ${nombreEstudio}`;
+
+        const base = String(mensaje || '').trimEnd();
+        if (nombreEstudio && base.includes(nombreEstudio)) return mensaje;
+        return `${base}\n\n${firma}`.trim();
+    } catch (_) {
+        return mensaje;
+    }
+}
+
+function _tpl(str, vars) {
+    try {
+        const s = String(str || '');
+        return s.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_m, k) => {
+            const v = vars && Object.prototype.hasOwnProperty.call(vars, k) ? vars[k] : '';
+            return (v === null || v === undefined) ? '' : String(v);
+        });
+    } catch (_) {
+        return String(str || '');
+    }
+}
+
+let Client, LocalAuth, MessageMedia, qrcode;
 try {
-    ({ Client, LocalAuth } = require('whatsapp-web.js'));
+    ({ Client, LocalAuth, MessageMedia } = require('whatsapp-web.js'));
     qrcode = require('qrcode');
 } catch(e) {
     console.warn('[WhatsApp] Instalar: npm install whatsapp-web.js qrcode node-cron');
+}
+
+function _parseDataUrlImage(dataUrl) {
+    try {
+        const s = String(dataUrl || '');
+        if (!s.startsWith('data:image/')) return null;
+        const m = s.match(/^data:(image\/(png|jpeg));base64,(.+)$/i);
+        if (!m) return null;
+        return { mime: m[1], data: m[3] };
+    } catch (_) {
+        return null;
+    }
 }
 
 async function _ejecutarAlertasCobroVencidas(config) {
@@ -84,16 +148,25 @@ async function _ejecutarAlertasCobroVencidas(config) {
                 const monto = (cuota.monto || 0);
                 const fechaTxt = `el ${new Date(cuota.fechaVencimiento).toLocaleDateString('es-CL')}`;
                 cuotasDetectadas++;
+                const templates = _getTemplates(config);
+                const vars = {
+                    clienteNombre,
+                    cuotaNumero: cuota.numero,
+                    monto: Number(monto).toLocaleString('es-CL'),
+                    venceTxt: fechaTxt,
+                };
+                const msgCliente = _tpl(templates.cobro_vencida_cliente, vars);
+                const msgEquipo = _tpl(templates.cobro_vencida_equipo, vars);
 
-                const msgCliente = `Estimado/a ${clienteNombre}, le recordamos que su cuota Nº ${cuota.numero} de $${Number(monto).toLocaleString('es-CL')} venció ${fechaTxt}.`;
-                const msgEquipo = `ALERTA VENCIDA: Cuota Nº ${cuota.numero} de cliente ${clienteNombre} por $${Number(monto).toLocaleString('es-CL')} venció ${fechaTxt}.`;
+                const msgClienteFinal = _appendBranding(config, msgCliente);
+                const msgEquipoFinal = _appendBranding(config, msgEquipo);
 
                 const tasks = [];
 
                 if (clienteTel && !cuota._waAlertas.cliente?.[marca] && validarNumero(clienteTel).ok) {
                     enviadosTotal++;
                     tasks.push(
-                        enviarMensaje(clienteTel, msgCliente, 'alerta-cobro-vencida-cliente')
+                        enviarMensaje(clienteTel, msgClienteFinal, 'alerta-cobro-cliente')
                             .then(r => {
                                 if (r?.ok !== false) {
                                     cuota._waAlertas.cliente[marca] = true;
@@ -101,14 +174,14 @@ async function _ejecutarAlertasCobroVencidas(config) {
                                     enviadosOk++;
                                 }
                             })
-                            .catch(e => waLogger.logError('cobro-vencida-cliente-envio-fallido', { error: e.message, clienteTel }))
+                            .catch(e => waLogger.logError('cobro-cliente-envio-fallido', { error: e.message, clienteTel }))
                     );
                 }
 
                 if (destinatariosEquipo.length > 0 && !cuota._waAlertas.equipo?.[marca]) {
                     const settled = await Promise.allSettled(destinatariosEquipo.map(d => {
                         enviadosTotal++;
-                        return enviarMensaje(d.numero, msgEquipo, 'alerta-cobro-vencida-equipo');
+                        return enviarMensaje(d.numero, msgEquipoFinal, 'alerta-cobro-vencida-equipo');
                     }));
                     const okEquipo = settled.filter(x => x.status === 'fulfilled').length;
                     if (okEquipo > 0) {
@@ -290,7 +363,7 @@ function initWhatsApp(browserWindow) {
 }
 
 // ── Envío con reintentos ───────────────────────────────────────
-async function enviarMensaje(numero, mensaje, tipo = 'manual') {
+async function enviarMensaje(numero, mensaje, tipo = 'manual', opts = {}) {
     const vNum = validarNumero(numero);
     if (!vNum.ok) throw new Error(`Número inválido: ${vNum.error}`);
 
@@ -303,16 +376,28 @@ async function enviarMensaje(numero, mensaje, tipo = 'manual') {
     const messageId = `${tipo}-${Date.now()}`;
 
     try {
-        await waClient.sendMessage(chatId, mensaje);
+        // Envío híbrido: bienvenida como media (logo) con caption
+        if (opts && opts.logoDataUrl && (tipo === 'bienvenida-cliente' || opts.templateKey === 'BIENVENIDA_CLIENTE')) {
+            const parsed = _parseDataUrlImage(opts.logoDataUrl);
+            if (parsed && MessageMedia) {
+                const media = new MessageMedia(parsed.mime, parsed.data, 'logo');
+                await waClient.sendMessage(chatId, media, { caption: mensaje });
+            } else {
+                await waClient.sendMessage(chatId, mensaje);
+            }
+        } else {
+            await waClient.sendMessage(chatId, mensaje);
+        }
         waLogger.logOk('mensaje-enviado', {
             messageId,
             tipo,
             numero: vNum.numero.replace(/\d(?=\d{4})/g, '*')
         });
-        mainWin?.webContents.send('whatsapp:alerta-enviada', { tipo, ok: true });
+        mainWin?.webContents.send('whatsapp:alerta-enviada', { tipo, ok: true, numero: vNum.numero, mensaje });
+        return { ok: true };
     } catch(e) {
         waLogger.logError('envio-fallido', { messageId, tipo, error: e.message });
-        mainWin?.webContents.send('whatsapp:alerta-enviada', { tipo, ok: false, error: e.message });
+        mainWin?.webContents.send('whatsapp:alerta-enviada', { tipo, ok: false, error: e.message, numero: vNum.numero, mensaje });
 
         waLogger.encolarReintento(
             messageId,
@@ -326,56 +411,75 @@ async function enviarMensaje(numero, mensaje, tipo = 'manual') {
 // ── Formatear ──────────────────────────────────────────────────
 function formatearResumen(resumen, config) {
     const hoy = new Date().toLocaleDateString('es-CL');
-    let msg   = `⚖️ *LEXIUM – Reporte Diario*\n📅 ${hoy}\n`;
-    if (config.nombreAbogado) msg += `👤 ${config.nombreAbogado}\n`;
-    msg += `${'─'.repeat(28)}\n\n`;
-
     const { alertas, honorarios, stats } = resumen;
 
+    const templates = _getTemplates(config);
+    const abogadoLinea = (config && (config.nombreAbogado || config.destinoNombre))
+        ? `👤 ${(config.nombreAbogado || config.destinoNombre)}\n`
+        : '';
+    const separador = `${'─'.repeat(28)}`;
+
+    let seccionCriticas = '';
     if (alertas.criticas.length > 0) {
-        msg += `🚨 *PLAZOS CRÍTICOS (${alertas.criticas.length})*\n`;
+        seccionCriticas += `🚨 *PLAZOS CRÍTICOS (${alertas.criticas.length})*\n`;
         alertas.criticas.forEach(a => {
-            msg += `• *${a._caratula}*\n  ${a.mensaje}`;
-            if (a._fechaVencFormatted) msg += ` – Vence: ${a._fechaVencFormatted}`;
-            msg += '\n';
+            seccionCriticas += `• *${a._caratula}*\n  ${a.mensaje}`;
+            if (a._fechaVencFormatted) seccionCriticas += ` – Vence: ${a._fechaVencFormatted}`;
+            seccionCriticas += '\n';
         });
-        msg += '\n';
+        seccionCriticas += '\n';
     }
 
+    let seccionAltas = '';
     if (alertas.altas.length > 0) {
-        msg += `⚠️ *ALERTAS IMPORTANTES (${alertas.altas.length})*\n`;
-        alertas.altas.forEach(a => msg += `• ${a._caratula}: ${a.mensaje}\n`);
-        msg += '\n';
+        seccionAltas += `⚠️ *ALERTAS IMPORTANTES (${alertas.altas.length})*\n`;
+        alertas.altas.forEach(a => { seccionAltas += `• ${a._caratula}: ${a.mensaje}\n`; });
+        seccionAltas += '\n';
     }
 
+    let seccionInactivas = '';
     if (alertas.inactivas.length > 0) {
-        msg += `😴 *SIN MOVIMIENTO (${alertas.inactivas.length})*\n`;
-        alertas.inactivas.forEach(a => msg += `• ${a._caratula}\n`);
-        msg += '\n';
+        seccionInactivas += `😴 *SIN MOVIMIENTO (${alertas.inactivas.length})*\n`;
+        alertas.inactivas.forEach(a => { seccionInactivas += `• ${a._caratula}\n`; });
+        seccionInactivas += '\n';
     }
 
+    let seccionHonorarios = '';
     if (honorarios.causas.length > 0) {
-        msg += `💰 *HONORARIOS PENDIENTES*\n`;
-        msg += `• ${honorarios.causas.length} causa(s) · Total: $${honorarios.total.toLocaleString('es-CL')}\n\n`;
+        seccionHonorarios += `💰 *HONORARIOS PENDIENTES*\n`;
+        seccionHonorarios += `• ${honorarios.causas.length} causa(s) · Total: $${honorarios.total.toLocaleString('es-CL')}\n\n`;
     }
 
     const cobrosHoy = alertas.cobrosHoy || [];
+    let seccionCobrosHoy = '';
     if (cobrosHoy.length > 0) {
-        msg += `💳 *COBROS VENCEN HOY (${cobrosHoy.length})*\n`;
+        seccionCobrosHoy += `💳 *COBROS VENCEN HOY (${cobrosHoy.length})*\n`;
         cobrosHoy.forEach(c => {
-            msg += `• *${c.caratula}*\n  💰 $${c.monto.toLocaleString('es-CL')} – 📅 ${c.fecha}\n`;
+            seccionCobrosHoy += `• *${c.caratula}*\n  💰 $${c.monto.toLocaleString('es-CL')} – 📅 ${c.fecha}\n`;
         });
-        msg += '\n';
+        seccionCobrosHoy += '\n';
     }
 
+    let seccionSinAlertas = '';
     if (!alertas.criticas.length && !alertas.altas.length && !alertas.inactivas.length && !honorarios.causas.length && !cobrosHoy.length) {
-        msg += `✅ *Sin alertas activas hoy*\n\n`;
+        seccionSinAlertas = `✅ *Sin alertas activas hoy*\n\n`;
     }
 
-    msg += `${'─'.repeat(28)}\n`;
-    msg += `📊 ${stats.causasActivas} activa(s) · ${stats.totalAlertas} alerta(s)\n`;
-    msg += `_Enviado por LEXIUM_`;
-    return msg;
+    const statsLinea = `${stats.causasActivas} activa(s) · ${stats.totalAlertas} alerta(s)`;
+
+    const msg = _tpl(templates.resumen_diario, {
+        hoy,
+        abogadoLinea,
+        separador,
+        seccionCriticas,
+        seccionAltas,
+        seccionInactivas,
+        seccionHonorarios,
+        seccionCobrosHoy,
+        seccionSinAlertas,
+        statsLinea
+    });
+    return _appendBranding(config, msg);
 }
 
 // ── Schedulers ─────────────────────────────────────────────────
@@ -533,8 +637,18 @@ async function _ejecutarAlertasCobro(config, diasAntes = 0) {
 
                 cuotasDetectadas++;
 
-                const msgCliente = `Estimado/a ${clienteNombre}, le recordamos que su cuota Nº ${cuota.numero} de $${Number(monto).toLocaleString('es-CL')} vence ${fechaTxt}.`;
-                const msgEquipo = `ALERTA: Cuota Nº ${cuota.numero} de cliente ${clienteNombre} por $${Number(monto).toLocaleString('es-CL')} vence ${fechaTxt}.`;
+                const templates = _getTemplates(config);
+                const vars = {
+                    clienteNombre,
+                    cuotaNumero: cuota.numero,
+                    monto: Number(monto).toLocaleString('es-CL'),
+                    venceTxt: fechaTxt,
+                };
+                const msgCliente = _tpl(templates.cobro_cliente, vars);
+                const msgEquipo = _tpl(templates.cobro_equipo, vars);
+
+                const msgClienteFinal = _appendBranding(config, msgCliente);
+                const msgEquipoFinal = _appendBranding(config, msgEquipo);
 
                 const tasks = [];
 
@@ -542,7 +656,7 @@ async function _ejecutarAlertasCobro(config, diasAntes = 0) {
                 if (clienteTel && !cuota._waAlertas.cliente?.[marca] && validarNumero(clienteTel).ok) {
                     enviadosTotal++;
                     tasks.push(
-                        enviarMensaje(clienteTel, msgCliente, 'alerta-cobro-cliente')
+                        enviarMensaje(clienteTel, msgClienteFinal, 'alerta-cobro-cliente')
                             .then(r => {
                                 if (r?.ok !== false) {
                                     cuota._waAlertas.cliente[marca] = true;
@@ -560,7 +674,7 @@ async function _ejecutarAlertasCobro(config, diasAntes = 0) {
                 if (destinatariosEquipo.length > 0 && !cuota._waAlertas.equipo?.[marca]) {
                     const settled = await Promise.allSettled(destinatariosEquipo.map(d => {
                         enviadosTotal++;
-                        return enviarMensaje(d.numero, msgEquipo, 'alerta-cobro-equipo');
+                        return enviarMensaje(d.numero, msgEquipoFinal, 'alerta-cobro-equipo');
                     }));
                     const okEquipo = settled.filter(x => x.status === 'fulfilled').length;
                     if (okEquipo > 0) {
@@ -705,16 +819,18 @@ async function _ejecutarCriticos(config) {
         );
         if (criticas.length === 0) return;
 
-        let msg = `🚨 *LEXIUM – ALERTA CRÍTICA*\n\n`;
+        const templates = _getTemplates(config);
+        let listaCriticas = '';
         criticas.forEach(a => {
-            msg += `⚠️ *${a._caratula}*\n${a.mensaje}`;
-            if (a._fechaVencFormatted) msg += ` – Vence: ${a._fechaVencFormatted}`;
-            msg += '\n\n';
+            listaCriticas += `⚠️ *${a._caratula}*\n${a.mensaje}`;
+            if (a._fechaVencFormatted) listaCriticas += ` – Vence: ${a._fechaVencFormatted}`;
+            listaCriticas += '\n\n';
         });
-        msg += `_Requiere acción inmediata – LEXIUM_`;
+        const msg = _tpl(templates.alerta_critica, { listaCriticas });
 
         const targets = _getDestinatarios(config, 'auto');
-        await Promise.allSettled(targets.map(dest => enviarMensaje(dest.numero, msg, 'alerta-critica')));
+        const msgFinal = _appendBranding(config, msg);
+        await Promise.allSettled(targets.map(dest => enviarMensaje(dest.numero, msgFinal, 'alerta-critica')));
         criticas.forEach(a => alertService.marcarAlertaNotificada(a.id));
     } catch(e) {
         waLogger.logError('criticos-error', { error: e.message });
@@ -749,6 +865,10 @@ function registrarHandlers(getConfig) {
             sesionDesde:    cfg.sesionDesde    || null,
             // Abogados principales (nuevo)
             abogadosPrincipales: Array.isArray(cfg.abogadosPrincipales) ? cfg.abogadosPrincipales : [],
+            // Plantillas WhatsApp
+            waTemplates:    (cfg && typeof cfg.waTemplates === 'object') ? cfg.waTemplates : {},
+            // Branding WhatsApp
+            waBranding:     (cfg && typeof cfg.waBranding === 'object') ? cfg.waBranding : {},
             // Número principal
             destinoNombre:  cfg.destinoNombre  || cfg.nombreAbogado  || '',
             destinoNumero:  cfg.destinoNumero  || cfg.numeroDestino  || '',
@@ -767,7 +887,12 @@ function registrarHandlers(getConfig) {
         const config = getConfig();
         const destinatarios = _getDestinatarios(config, 'manual');
         if (destinatarios.length === 0) return { error: 'Sin destinatarios configurados' };
-        try { await _ejecutarResumen(config, 'manual'); return { ok: true, destinatarios: destinatarios.length }; }
+        try {
+            const resumen = alertService.getResumenParaWhatsApp();
+            const mensaje = formatearResumen(resumen, config);
+            await Promise.allSettled(destinatarios.map(dest => enviarMensaje(dest.numero, mensaje, 'resumen-diario')));
+            return { ok: true, destinatarios: destinatarios.length, mensaje };
+        }
         catch(e) { return { error: e.message }; }
     });
 
@@ -780,7 +905,7 @@ function registrarHandlers(getConfig) {
             const resumen = alertService.getResumenParaWhatsApp();
             const mensaje = formatearResumen(resumen, config);
             await enviarMensaje(principal.numero, mensaje, 'resumen-principal');
-            return { ok: true, destinatario: principal.nombre || principal.numero };
+            return { ok: true, destinatario: principal.nombre || principal.numero, mensaje };
         } catch(e) { return { error: e.message }; }
     });
 
@@ -793,7 +918,7 @@ function registrarHandlers(getConfig) {
         if (!v.ok) return { error: v.error };
         try {
             await Promise.allSettled(destinatarios.map(dest => enviarMensaje(dest.numero, mensaje, 'manual')));
-            return { ok: true, destinatarios: destinatarios.length };
+            return { ok: true, destinatarios: destinatarios.length, mensaje };
         }
         catch(e) { return { error: e.message }; }
     });
@@ -806,7 +931,21 @@ function registrarHandlers(getConfig) {
         if (!v2.ok) return { error: v2.error };
         try {
             await enviarMensaje(v1.numero, mensaje, 'manual-individual');
-            return { ok: true };
+            return { ok: true, numero: v1.numero, mensaje };
+        } catch(e) { return { error: e.message }; }
+    });
+
+    // Enviar Bienvenida (híbrido con logo si está configurado)
+    ipcMain.handle('whatsapp:enviar-bienvenida', async (_e, numero, mensaje) => {
+        const config = getConfig();
+        const v1 = validarNumero(numero);
+        if (!v1.ok) return { error: v1.error };
+        const v2 = validarMensaje(mensaje);
+        if (!v2.ok) return { error: v2.error };
+        const logoDataUrl = config?.waBranding?.logoBase64 || '';
+        try {
+            await enviarMensaje(v1.numero, mensaje, 'bienvenida-cliente', { logoDataUrl, templateKey: 'BIENVENIDA_CLIENTE' });
+            return { ok: true, numero: v1.numero, mensaje };
         } catch(e) { return { error: e.message }; }
     });
 
