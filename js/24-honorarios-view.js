@@ -25,7 +25,7 @@
      */
     function _datosHonorarios(causa) {
         const h = causa.honorarios || {};
-        const base = h.montoBase || h.base || 0;
+        const base = h.montoTotal || h.montoBase || h.base || 0;
         const pagos = h.pagos || [];
         const pagado = pagos.reduce((s, p) => s + (p.monto || 0), 0);
         const pendiente = Math.max(0, base - pagado);
@@ -60,7 +60,7 @@
         if (!container) return;
 
         const causasConHon = (DB.causas || []).filter(c =>
-            (c.honorarios?.montoBase || c.honorarios?.base) > 0
+            (c.honorarios?.montoTotal || c.honorarios?.montoBase || c.honorarios?.base) > 0
         );
 
         if (!causasConHon.length) {
@@ -95,7 +95,7 @@
 
             const rowClass = _claseFila(d.pendiente, d.diasDesdeUltimoPago);
             return `
-                <tr class="${rowClass}" data-causa-id="${c.id}" onclick="typeof abrirDetalleCausa==='function' && abrirDetalleCausa(${c.id});" style="cursor:pointer;">
+                <tr class="${rowClass}" data-causa-id="${_esc(String(c.id))}" onclick="typeof abrirDetalleCausa==='function' && abrirDetalleCausa('${_esc(String(c.id))}');" style="cursor:pointer;">
                     <td>${_esc(nombreCliente)}</td>
                     <td>${_esc(c.caratula)}</td>
                     <td style="text-align:right; font-family:'IBM Plex Mono',monospace;">$${_fmtCLP(d.base)}</td>

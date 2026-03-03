@@ -1106,6 +1106,68 @@ async function renderGestionUsuarios() {
                     <td style="text-align:center; ${cl(p.readonly)}">${ic(p.readonly)}</td>
                 </tr>`;
     }).join('');
+
+    const tools = document.getElementById('admin-clave-temp-tools');
+    if (tools) {
+        const cfg = DB.configuracion || {};
+        const expTs = parseInt(cfg.adminClaveTemporalExp || 0, 10) || 0;
+        const activa = !!cfg.adminClaveTemporalHash && expTs > Date.now();
+        const expTxt = activa ? new Date(expTs).toLocaleString('es-CL') : 'No activa';
+        tools.innerHTML = `
+            <div class="card" style="border:1px dashed var(--border); background:var(--bg-2);">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+                    <div>
+                        <div style="font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--text-3);">Clave temporal de administrador</div>
+                        <div style="font-size:12px; color:var(--text-2); margin-top:4px;">Estado: <strong>${activa ? 'Activa' : 'Inactiva'}</strong> · Expira: ${escHtml(expTxt)}</div>
+                    </div>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                        <button class="btn btn-sm" style="background:#0f766e; color:#fff; border:none;" onclick="uiGenerarClaveTemporalAdmin()"><i class="fas fa-key"></i> Generar clave temporal</button>
+                        <button class="btn btn-sm" style="background:#7f1d1d; color:#fff; border:none;" onclick="uiRevocarClaveTemporalAdmin()"><i class="fas fa-ban"></i> Revocar</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+}
+
+async function uiGenerarClaveTemporalAdmin() {
+    const u = DB.usuarioActual || {};
+    if ((u.rol || '') !== 'admin') { showError('Solo el administrador puede generar claves temporales.'); return; }
+
+    const mins = parseInt(prompt('Duración de la clave temporal (minutos):', '60') || '0', 10) || 0;
+    if (mins <= 0) { showError('Duración inválida.'); return; }
+
+    const plain = prompt('Ingrese la clave temporal a delegar (mínimo 6 caracteres):', '');
+    if (!plain || plain.length < 6) { showError('Clave temporal inválida (mínimo 6 caracteres).'); return; }
+
+    try {
+        const hash = await _hash(plain);
+        if (!DB.configuracion) DB.configuracion = {};
+        DB.configuracion.adminClaveTemporalHash = hash;
+        DB.configuracion.adminClaveTemporalExp = Date.now() + (mins * 60 * 1000);
+        if (typeof markAppDirty === 'function') markAppDirty();
+        save();
+        registrarEvento(`Clave temporal admin generada por ${u.nombre || u.usuario || 'admin'} (${mins} min)`);
+        showSuccess('Clave temporal generada y activada.');
+        renderGestionUsuarios();
+    } catch (e) {
+        showError(e?.message || 'No se pudo generar la clave temporal.');
+    }
+}
+
+function uiRevocarClaveTemporalAdmin() {
+    const u = DB.usuarioActual || {};
+    if ((u.rol || '') !== 'admin') { showError('Solo el administrador puede revocar claves temporales.'); return; }
+
+    if (!confirm('¿Revocar la clave temporal administrativa activa?')) return;
+    if (!DB.configuracion) DB.configuracion = {};
+    DB.configuracion.adminClaveTemporalHash = '';
+    DB.configuracion.adminClaveTemporalExp = 0;
+    if (typeof markAppDirty === 'function') markAppDirty();
+    save();
+    registrarEvento(`Clave temporal admin revocada por ${u.nombre || u.usuario || 'admin'}`);
+    showInfo('Clave temporal revocada.');
+    renderGestionUsuarios();
 }
 
 // ═══════════════════════════════════════════════════════════════════════

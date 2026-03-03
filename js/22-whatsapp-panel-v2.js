@@ -23,7 +23,7 @@ let _destEditNumero = null; // numero (limpio) en edición
 let _reconexionAuto = false;  // true cuando reconecta desde sesión guardada (sin QR)
 
 let _waTemplates = {};
-let _waBranding = { nombreEstudio: '', telefono: '', horario: '', disclaimer: '', webLink: '', logoBase64: '', autoAppend: true };
+let _waBranding = { webLink: '', logoBase64: '', autoAppend: true };
 let _waTplSelectedKey = null;
 
 const WA_TPL_KEYS = [
@@ -44,6 +44,23 @@ function _waTplNormalizeCurly(s) {
     return String(s || '')
         .replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, '{$1}')
         .replace(/\{\s*([a-zA-Z0-9_]+)\s*\}/g, '{$1}');
+}
+
+function waTplInsertVar(varName) {
+    try {
+        const ta = document.getElementById('wa-tpl-texto');
+        if (!ta) return;
+        const token = `{${String(varName || '').trim()}}`;
+        const start = typeof ta.selectionStart === 'number' ? ta.selectionStart : ta.value.length;
+        const end = typeof ta.selectionEnd === 'number' ? ta.selectionEnd : ta.value.length;
+        const before = ta.value.slice(0, start);
+        const after = ta.value.slice(end);
+        ta.value = `${before}${token}${after}`;
+        const pos = start + token.length;
+        ta.focus();
+        ta.setSelectionRange(pos, pos);
+        waTemplatesOnChange();
+    } catch (_) {}
 }
 
 function _waBrandingSetLogoPreview(dataUrl) {
@@ -114,13 +131,21 @@ function _waTplRenderUI(templateUI, vars) {
 }
 
 function _waBrandingFirmaUI() {
-    const nombre = (document.getElementById('wa-brand-nombre')?.value || '').trim();
     const web = (document.getElementById('wa-brand-weblink')?.value || '').trim();
-    if (!nombre && !web) return '';
-    const firma = web
-        ? `Atte. ${nombre || 'Estudio'} | ${web}`
-        : `Atte. ${nombre}`;
+    if (!web) return '';
+    const nombreEstudio = _getNombreEstudioActivo();
+    const firma = `Atte. ${nombreEstudio} | ${web}`;
     return `\n\n${firma}`;
+}
+
+function _getNombreEstudioActivo() {
+    try {
+        const usuarios = (typeof AppConfig !== 'undefined' && AppConfig.get) ? (AppConfig.get('usuarios') || []) : [];
+        const activo = usuarios.find(u => u && u.activo);
+        return (activo?.nombre || 'Estudio').trim();
+    } catch (_) {
+        return 'Estudio';
+    }
 }
 
 function _waTplBuildFinalUI(baseTextUI) {
@@ -180,9 +205,7 @@ function waTemplatesOnChange() {
         nombre_cliente: 'Juan Pérez',
         monto: '250.000',
         fecha_venc: '31-03-2026',
-        nombre_estudio: (document.getElementById('wa-brand-nombre')?.value || 'LEXIUM').trim(),
-        telefono_estudio: (document.getElementById('wa-brand-telefono')?.value || '+56 9 1234 5678').trim(),
-        horario_estudio: (document.getElementById('wa-brand-horario')?.value || 'Lun–Vie 09:00–18:00').trim(),
+        nombre_estudio: _getNombreEstudioActivo(),
         detalle: '*Causa:* Pérez c/ López\n*Vence:* mañana',
         mensaje: 'Te escribimos para coordinar el envío de antecedentes.'
     };
@@ -206,11 +229,7 @@ async function waTemplatesGuardar() {
 
         // Branding
         _waBranding = {
-            nombreEstudio: (document.getElementById('wa-brand-nombre')?.value || '').trim(),
-            telefono: (document.getElementById('wa-brand-telefono')?.value || '').trim(),
-            horario: (document.getElementById('wa-brand-horario')?.value || '').trim(),
             webLink: (document.getElementById('wa-brand-weblink')?.value || '').trim(),
-            disclaimer: (document.getElementById('wa-brand-disclaimer')?.value || '').trim(),
             logoBase64: (_waBranding?.logoBase64 || ''),
             autoAppend: true
         };
@@ -711,17 +730,9 @@ async function actualizarEstado() {
             if (!_waTplSelectedKey) _waTemplatesSelect(WA_TPL_KEYS[0]?.key || 'RECORDATORIO_PAGO');
 
             const b = (e.waBranding && typeof e.waBranding === 'object') ? e.waBranding : {};
-            const bn = document.getElementById('wa-brand-nombre');
-            const bt = document.getElementById('wa-brand-telefono');
-            const bh = document.getElementById('wa-brand-horario');
             const bw = document.getElementById('wa-brand-weblink');
-            const bd = document.getElementById('wa-brand-disclaimer');
-            if (bn) bn.value = b.nombreEstudio || '';
-            if (bt) bt.value = b.telefono || '';
-            if (bh) bh.value = b.horario || '';
             if (bw) bw.value = b.webLink || '';
-            if (bd) bd.value = b.disclaimer || '';
-            _waBranding = { ..._waBranding, ...b };
+            _waBranding = { webLink: b.webLink || '', logoBase64: b.logoBase64 || '', autoAppend: true };
             _waBrandingSetLogoPreview(b.logoBase64 || '');
             waTemplatesOnChange();
         } catch (_) {}
@@ -1389,6 +1400,7 @@ window.waReset = waReset;
 
 window.waTemplatesSelect = waTemplatesSelect;
 window.waTemplatesOnChange = waTemplatesOnChange;
+window.waTplInsertVar = waTplInsertVar;
 window.waTemplatesGuardar = waTemplatesGuardar;
 window.waTemplatesRestaurarDefaults = waTemplatesRestaurarDefaults;
 window.waBrandingOnLogoChange = waBrandingOnLogoChange;

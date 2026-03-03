@@ -106,6 +106,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
             return ipcRenderer.invoke('whatsapp:enviar-alerta-a', numero, msg);
         },
 
+        // Enviar bienvenida al cliente (usa logo/caption si está configurado)
+        enviarBienvenida: (numero, msg) => {
+            if (typeof numero !== 'string' || !numero.trim()) throw new Error('Número vacío');
+            if (typeof msg !== 'string' || !msg.trim()) throw new Error('Mensaje vacío');
+            return ipcRenderer.invoke('whatsapp:enviar-bienvenida', numero, msg);
+        },
+
         guardarConfig:   (cfg) => ipcRenderer.invoke('whatsapp:guardar-config', cfg),
         desconectar:     ()    => ipcRenderer.invoke('whatsapp:desconectar'),
         getLogs:         (n)   => ipcRenderer.invoke('whatsapp:logs', n),

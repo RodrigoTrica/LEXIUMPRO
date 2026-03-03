@@ -72,6 +72,154 @@
             el.innerHTML = html || '<div class="empty-state" style="padding:22px 14px;"><i class="fas fa-check-circle" style="color:var(--success-ink);"></i><p>Sin alertas activas.</p></div>';
         }
 
+        function _waRenderTemplate(raw, vars) {
+            return String(raw || '').replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_m, k) => {
+                const v = vars && Object.prototype.hasOwnProperty.call(vars, k) ? vars[k] : '';
+                return (v === null || v === undefined) ? '' : String(v);
+            });
+        }
+
+        async function _waGetConfigSafe() {
+            try {
+                if (!window.electronAPI?.whatsapp?.estado) return null;
+                return await window.electronAPI.whatsapp.estado();
+            } catch (_) {
+                return null;
+            }
+        }
+
+        function _waClienteEnVentanaAutomatica(clienteId, tipoMsg) {
+            try {
+                const hoy = new Date();
+                hoy.setHours(0, 0, 0, 0);
+                const mas2 = new Date(hoy);
+                mas2.setDate(mas2.getDate() + 2);
+
+                const causas = (DB.causas || []).filter(c => String(c?.clienteId) === String(clienteId));
+                for (const causa of causas) {
+                    const h = causa?.honorarios;
+                    const plan = Array.isArray(h?.planPagos) ? h.planPagos : [];
+                    for (const cuota of plan) {
+                        if (!cuota || String(cuota.estado || '').toUpperCase() === 'PAGADA') continue;
+                        const f = new Date(cuota.fechaVencimiento);
+                        if (Number.isNaN(f.getTime())) continue;
+                        f.setHours(0, 0, 0, 0);
+
+                        if (tipoMsg === 'recordatorio') {
+                            if (f >= hoy && f <= mas2) return true; // hoy o d+2
+                        }
+                        if (tipoMsg === 'vencimiento') {
+                            if (f < hoy) return true; // vencida
+                        }
+                    }
+                }
+                return false;
+            } catch (_) {
+                return false;
+            }
+        }
+
+        async function _waEnviarPlantillaCliente(clienteId, tipoMsg) {
+            const cli = (DB.clientes || []).find(c => String(c.id) === String(clienteId));
+            if (!cli) { showError('Cliente no encontrado.'); return; }
+
+            const tel = String(cli.telefono || '').replace(/[\s\+\-\(\)]/g, '').trim();
+            if (!tel) { showInfo('El cliente no tiene teléfono registrado.'); return; }
+
+            const cfg = await _waGetConfigSafe();
+            const tpl = (cfg && cfg.waTemplates && typeof cfg.waTemplates === 'object') ? cfg.waTemplates : {};
+
+            let key = 'MENSAJE_LIBRE';
+            if (tipoMsg === 'recordatorio') key = 'RECORDATORIO_PAGO';
+            if (tipoMsg === 'vencimiento') key = 'ALERTA_VENCIMIENTO';
+            if (tipoMsg === 'bienvenida') key = 'BIENVENIDA_CLIENTE';
+            if (tipoMsg === 'libre') key = 'MENSAJE_LIBRE';
+
+            const defaults = {
+                RECORDATORIO_PAGO: 'Estimado/a {{nombre_cliente}}, le recordamos que su cuota de $ {{monto}} vence {{fecha_venc}}.',
+                ALERTA_VENCIMIENTO: '🚨 *ALERTA DE VENCIMIENTO*\n\n{{detalle}}',
+                BIENVENIDA_CLIENTE: 'Hola {{nombre_cliente}}, bienvenido/a. Quedamos atentos a ayudarte.',
+                MENSAJE_LIBRE: 'Hola {{nombre_cliente}},\n\n{{mensaje}}'
+            };
+
+            let mensaje = String(tpl[key] || defaults[key] || '').trim();
+            
+            // Extraer monto y fecha de cuota pendiente real
+            let montoPendiente = 0;
+            let fechaVenc = new Date().toLocaleDateString('es-CL');
+            const causas = (DB.causas || []).filter(c => String(c?.clienteId) === String(clienteId));
+            for (const causa of causas) {
+                const h = causa?.honorarios;
+                const plan = Array.isArray(h?.planPagos) ? h.planPagos : [];
+                for (const cuota of plan) {
+                    if (!cuota || String(cuota.estado || '').toUpperCase() === 'PAGADA') continue;
+                    montoPendiente = parseFloat(cuota.monto || 0);
+                    if (cuota.fechaVencimiento) {
+                        fechaVenc = new Date(cuota.fechaVencimiento).toLocaleDateString('es-CL');
+                    }
+                    break; // primera cuota pendiente
+                }
+                if (montoPendiente > 0) break;
+            }
+
+            const vars = {
+                nombre_cliente: cli.nombre || cli.nom || 'Cliente',
+                monto: montoPendiente > 0 ? Math.round(montoPendiente).toLocaleString('es-CL') : '0',
+                fecha_venc: fechaVenc,
+                detalle: `Cliente: ${cli.nombre || cli.nom || 'Cliente'}`,
+                mensaje: 'Escribimos para tomar contacto desde el estudio.'
+            };
+
+            if (key === 'MENSAJE_LIBRE') {
+                const custom = prompt('Mensaje libre para enviar al cliente:', 'Hola, te escribimos desde el estudio.');
+                if (!custom || !custom.trim()) return;
+                vars.mensaje = custom.trim();
+            }
+
+            // Confirmación obligatoria si es envío manual fuera de ventana de aviso automática
+            if ((tipoMsg === 'recordatorio' || tipoMsg === 'vencimiento') && !_waClienteEnVentanaAutomatica(clienteId, tipoMsg)) {
+                const okFueraPlazo = confirm(
+                    'Este mensaje se enviará MANUALMENTE fuera de plazo automático.\n\n' +
+                    '¿Confirmas que deseas enviarlo de todas formas?'
+                );
+                if (!okFueraPlazo) return;
+            }
+
+            mensaje = _waRenderTemplate(mensaje, vars).trim();
+            if (!mensaje) { showError('Plantilla vacía. Revisa la configuración de WhatsApp.'); return; }
+
+            try {
+                let r;
+                if (key === 'BIENVENIDA_CLIENTE' && window.electronAPI?.whatsapp?.enviarBienvenida) {
+                    r = await window.electronAPI.whatsapp.enviarBienvenida(tel, mensaje);
+                } else {
+                    r = await window.electronAPI.whatsapp.enviarAlertaA(tel, mensaje);
+                }
+                if (r?.ok) showSuccess(`Mensaje enviado a ${cli.nombre || cli.nom || 'cliente'} (+${tel}).`);
+                else showError(r?.error || 'No se pudo enviar el mensaje por WhatsApp.');
+            } catch (e) {
+                showError(e?.message || 'No se pudo enviar el mensaje por WhatsApp.');
+            }
+        }
+
+        async function _waEnviarBienvenidaAutoCliente(cliente) {
+            try {
+                if (!cliente) return;
+                const tel = String(cliente.telefono || '').replace(/[\s\+\-\(\)]/g, '').trim();
+                if (!tel) return;
+                const cfg = await _waGetConfigSafe();
+                const tpl = (cfg && cfg.waTemplates && typeof cfg.waTemplates === 'object') ? cfg.waTemplates : {};
+                const base = String(tpl.BIENVENIDA_CLIENTE || 'Hola {{nombre_cliente}}, bienvenido/a. Quedamos atentos a ayudarte.').trim();
+                const mensaje = _waRenderTemplate(base, { nombre_cliente: cliente.nombre || cliente.nom || 'Cliente' }).trim();
+                if (!mensaje) return;
+                if (window.electronAPI?.whatsapp?.enviarBienvenida) {
+                    await window.electronAPI.whatsapp.enviarBienvenida(tel, mensaje);
+                }
+            } catch (_) {}
+        }
+
+        window.uiWaEnviarPlantillaCliente = _waEnviarPlantillaCliente;
+
         function renderClientes() {
             const el = document.getElementById('client-list');
             if (!DB.clientes.length) {
@@ -105,6 +253,12 @@
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                         <div style="font-size:12px; font-weight:600; color:var(--cyan);">
                             ${causasCliente > 0 ? `<i class="fas fa-folder-open"></i> ${causasCliente} causa${causasCliente > 1 ? 's' : ''}` : '<i class="fas fa-folder"></i> Sin causas'}
+                        </div>
+                        <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+                            <button onclick="uiWaEnviarPlantillaCliente('${c.id}','recordatorio')" class="btn btn-xs" style="background:#14532d; color:#fff; border:none;" title="Recordatorio de pago"><i class="fab fa-whatsapp"></i> Recordatorio</button>
+                            <button onclick="uiWaEnviarPlantillaCliente('${c.id}','vencimiento')" class="btn btn-xs" style="background:#7f1d1d; color:#fff; border:none;" title="Alerta de vencimiento"><i class="fas fa-exclamation-triangle"></i></button>
+                            <button onclick="uiWaEnviarPlantillaCliente('${c.id}','bienvenida')" class="btn btn-xs" style="background:#0e7490; color:#fff; border:none;" title="Bienvenida cliente"><i class="fas fa-handshake"></i></button>
+                            <button onclick="uiWaEnviarPlantillaCliente('${c.id}','libre')" class="btn btn-xs" style="background:#334155; color:#fff; border:none;" title="Mensaje libre"><i class="fas fa-comment-dots"></i></button>
                         </div>
                         <div style="display:flex; gap:8px;">
                             ${esProspecto ? `<button onclick="(typeof plantillaCausaAbrir==='function') ? plantillaCausaAbrir('${c.id}') : convertToCause('${c.id}')" class="btn btn-p btn-sm"><i class="fas fa-plus"></i> Abrir Causa</button>` : ''}
@@ -370,13 +524,152 @@
         }
 
         // ─── Client Actions ───────────────────────────────────────────────
+        async function _hashSHA256(txt) {
+            const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(txt || '')));
+            return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        async function uiAutorizarAccionCritica(opts = {}) {
+            const titulo = opts.titulo || 'Autorización requerida';
+            const detalle = opts.detalle || 'Esta acción requiere aprobación administrativa.';
+
+            const pass = await new Promise((resolve) => {
+                let modal = document.getElementById('modal-auth-critica');
+                if (!modal) {
+                    modal = document.createElement('div');
+                    modal.id = 'modal-auth-critica';
+                    modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:10000; background:rgba(15,23,42,.55); align-items:center; justify-content:center; padding:16px; pointer-events:auto;';
+                    modal.innerHTML = `
+                        <div style="width:min(460px, 96vw); background:var(--bg-card,#fff); border:1px solid var(--border,#e2e8f0); border-radius:12px; box-shadow:0 20px 40px rgba(0,0,0,.25); font-family:'IBM Plex Sans',sans-serif; pointer-events:auto;">
+                            <div style="padding:14px 16px; border-bottom:1px solid var(--border,#e2e8f0); display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                                <h3 id="auth-critica-titulo" style="margin:0; font-size:15px; font-family:'IBM Plex Sans',sans-serif;"><i class="fas fa-shield-alt"></i> Autorización</h3>
+                                <button type="button" id="auth-critica-close" class="btn btn-sm" style="background:transparent; border:1px solid var(--border,#e2e8f0); font-family:'IBM Plex Sans',sans-serif;">×</button>
+                            </div>
+                            <div style="padding:14px 16px; display:grid; gap:10px;">
+                                <div id="auth-critica-detalle" style="font-size:13px; color:var(--text-2,#334155); font-family:'IBM Plex Sans',sans-serif;"></div>
+                                <label style="font-size:12px; color:var(--text-3,#64748b); font-family:'IBM Plex Sans',sans-serif;">Clave admin o clave temporal</label>
+                                <input id="auth-critica-pass" type="password" class="input-field" placeholder="Ingrese clave..." autocomplete="off" style="font-family:'IBM Plex Sans',sans-serif; font-size:14px; background:var(--bg,#0b1220); color:#e5e7eb !important; -webkit-text-fill-color:#e5e7eb; caret-color:#22d3ee; border:1px solid var(--border,#334155); pointer-events:auto;" />
+                                <div id="auth-critica-error" style="display:none; font-size:12px; color:#b91c1c;"><i class="fas fa-times-circle"></i> Clave inválida.</div>
+                                <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:4px;">
+                                    <button type="button" id="auth-critica-cancel" class="btn btn-sm" style="background:var(--bg-2); border:1px solid var(--border); font-family:'IBM Plex Sans',sans-serif;">Cancelar</button>
+                                    <button type="button" id="auth-critica-ok" class="btn btn-sm btn-p" style="font-family:'IBM Plex Sans',sans-serif;"><i class="fas fa-check"></i> Autorizar</button>
+                                </div>
+                            </div>
+                        </div>`;
+                    document.body.appendChild(modal);
+                }
+
+                const titleEl = document.getElementById('auth-critica-titulo');
+                const detailEl = document.getElementById('auth-critica-detalle');
+                const passEl = document.getElementById('auth-critica-pass');
+                const errEl = document.getElementById('auth-critica-error');
+                const btnOk = document.getElementById('auth-critica-ok');
+                const btnCancel = document.getElementById('auth-critica-cancel');
+                const btnClose = document.getElementById('auth-critica-close');
+
+                if (titleEl) titleEl.innerHTML = `<i class="fas fa-shield-alt"></i> ${escHtml(titulo)}`;
+                if (detailEl) detailEl.textContent = detalle;
+                if (passEl) {
+                    passEl.value = '';
+                    passEl.disabled = false;
+                    passEl.readOnly = false;
+                }
+                if (errEl) errEl.style.display = 'none';
+
+                const cleanup = () => {
+                    if (btnOk) btnOk.onclick = null;
+                    if (btnCancel) btnCancel.onclick = null;
+                    if (btnClose) btnClose.onclick = null;
+                    if (passEl) passEl.onkeydown = null;
+                    modal.style.display = 'none';
+                };
+
+                const submit = () => {
+                    const v = (passEl?.value || '').trim();
+                    if (!v) {
+                        if (errEl) {
+                            errEl.style.display = 'block';
+                            errEl.textContent = 'Ingrese una clave para autorizar.';
+                        }
+                        passEl?.focus();
+                        return;
+                    }
+                    cleanup();
+                    resolve(v);
+                };
+                const cancel = () => {
+                    cleanup();
+                    resolve('');
+                };
+
+                if (btnOk) btnOk.onclick = submit;
+                if (btnCancel) btnCancel.onclick = cancel;
+                if (btnClose) btnClose.onclick = cancel;
+                if (passEl) passEl.onkeydown = (e) => {
+                    if (e.key === 'Enter') submit();
+                    if (e.key === 'Escape') cancel();
+                };
+
+                modal.onclick = (e) => {
+                    if (e.target === modal) cancel();
+                };
+
+                modal.style.display = 'flex';
+                // foco inmediato + fallback corto para evitar bloqueos de interacción por repaint
+                try { passEl?.focus(); passEl?.click(); } catch (_) {}
+                setTimeout(() => { try { passEl?.focus(); passEl?.click(); } catch (_) {} }, 0);
+            });
+            if (!pass) return false;
+
+            try {
+                const hashIngresado = await _hashSHA256(pass);
+                const usuarios = (typeof AppConfig !== 'undefined' && AppConfig.get)
+                    ? (AppConfig.get('usuarios') || [])
+                    : [];
+                const usuarioActivo = usuarios.find(u => u && u.activo) || null;
+
+                const admin = usuarios.find(u => u && u.rol === 'admin');
+                if (admin && hashIngresado === admin.passwordHash) return true;
+
+                // Clave temporal delegada (si existe en configuración)
+                const cfg = (DB && DB.configuracion) ? DB.configuracion : {};
+                const tempHash = (cfg.adminClaveTemporalHash || '').toString();
+                const tempExp = parseInt(cfg.adminClaveTemporalExp || 0, 10) || 0;
+                if (tempHash && hashIngresado === tempHash && tempExp > Date.now()) {
+                    return true;
+                }
+
+                // Si el usuario activo es admin, también valida contra su propia clave
+                if (usuarioActivo && usuarioActivo.rol === 'admin' && hashIngresado === usuarioActivo.passwordHash) {
+                    return true;
+                }
+
+                showError('Autorización denegada. Se requiere clave válida de administrador.');
+                return false;
+            } catch (e) {
+                showError(e?.message || 'No se pudo validar la autorización.');
+                return false;
+            }
+        }
+
+        function uiOnCambioModoAltaCliente() {
+            const modo = (document.getElementById('cl-alta-modo')?.value || 'prospecto').toString();
+            const wrap = document.getElementById('cl-alta-tramite-wrap');
+            if (wrap) wrap.style.display = (modo === 'tramite') ? 'block' : 'none';
+        }
+
         function addClient() {
             const nom = document.getElementById('cl-nom').value.trim();
-            const rutRaw = document.getElementById('cl-rut').value.trim();
+            const rutRaw = (document.getElementById('cl-rut')?.value || '').trim();
             const tel = (document.getElementById('cl-telefono')?.value || '').trim();
             const rel = document.getElementById('cl-rel').value.trim();
-            if (!nom) { showError("Ingrese el nombre del cliente."); return; }
-            // Validación RUT si fue ingresado
+            const modoAlta = (document.getElementById('cl-alta-modo')?.value || 'prospecto').toString();
+            const honorarioTramite = parseFloat(document.getElementById('cl-honorario')?.value || 0) || 0;
+            if (!nom) { showError("Ingrese el nombre."); return; }
+            if (modoAlta === 'tramite' && honorarioTramite <= 0) {
+                showError('Ingrese un honorario válido para el trámite.');
+                return;
+            }
             if (rutRaw) {
                 if (!validarRUT(rutRaw)) {
                     const rutEl = document.getElementById('cl-rut');
@@ -389,26 +682,113 @@
                 }
             }
             const rut = rutRaw ? formatRUT(rutRaw) : '';
-            const nuevoCliente = { id: uid(), nombre: nom, nom, rut, telefono: tel, rel, descripcion: rel, estado: 'prospecto', status: 'prospecto', fechaCreacion: new Date() };
+            const nuevoCliente = {
+                id: uid(),
+                nombre: nom,
+                nom,
+                rut,
+                telefono: tel,
+                rel,
+                descripcion: rel,
+                estado: (modoAlta === 'tramite') ? 'activo' : 'prospecto',
+                status: (modoAlta === 'tramite') ? 'activo' : 'prospecto',
+                fechaCreacion: new Date()
+            };
             DB.clientes.push(nuevoCliente);
+
+            if (modoAlta === 'tramite') {
+                const nuevaCausa = {
+                    id: uid(),
+                    rut: nuevoCliente.rut || '',
+                    caratula: nuevoCliente.nombre,
+                    clienteId: nuevoCliente.id,
+                    tipoProcedimiento: 'Trámite Administrativo',
+                    tipoExpediente: 'tramite',
+                    rama: 'Administrativo',
+                    estadoGeneral: 'En tramitación',
+                    instancia: 'Primera',
+                    porcentajeAvance: 0,
+                    fechaCreacion: new Date(),
+                    fechaUltimaActividad: new Date(),
+                    etapasProcesales: [{ nombre: 'Ingreso de trámite', completada: false, fecha: null, observacion: '', documentoAsociado: null }],
+                    documentos: [],
+                    recursos: [],
+                    estrategia: {},
+                    riesgo: {},
+                    honorarios: {},
+                    jurisprudenciaAsociada: [],
+                    revisadoHoy: false,
+                    prioridadManual: false
+                };
+                DB.causas.push(nuevaCausa);
+                if (typeof asignarHonorarios === 'function') {
+                    asignarHonorarios(nuevaCausa.id, honorarioTramite);
+                } else {
+                    nuevaCausa.honorarios = { montoTotal: honorarioTramite, montoBase: honorarioTramite, modalidad: 'CONTADO', pagos: [], saldoPendiente: honorarioTramite, planPagos: [] };
+                }
+                registrarEvento(`Cliente + trámite creados: ${nom} · Honorario $${Math.round(honorarioTramite).toLocaleString('es-CL')}`);
+            }
+
             document.getElementById('cl-nom').value = '';
             document.getElementById('cl-rut').value = '';
             const telEl = document.getElementById('cl-telefono');
             if (telEl) telEl.value = '';
             document.getElementById('cl-rel').value = '';
+            const honEl = document.getElementById('cl-honorario');
+            if (honEl) honEl.value = '';
+            const modoEl = document.getElementById('cl-alta-modo');
+            if (modoEl) modoEl.value = 'prospecto';
+            uiOnCambioModoAltaCliente();
             const fb = document.querySelector('.rut-feedback');
             if (fb) fb.textContent = '';
-            registrarEvento(`Cliente registrado: ${nom}${rut ? ' · RUT: ' + rut : ''}`);
+            if (modoAlta !== 'tramite') {
+                registrarEvento(`Cliente registrado: ${nom}${rut ? ' · RUT: ' + rut : ''}`);
+            }
+            _waEnviarBienvenidaAutoCliente(nuevoCliente);
             if (typeof markAppDirty === "function") markAppDirty(); save(); renderAll();
         }
 
         function deleteClient(id) {
-            showConfirm("¿Eliminar cliente?", "Se eliminará el registro del cliente y su historial. Esta acción es irreversible.", () => {
-                DB.clientes = DB.clientes.filter(c => c.id !== id);
-                registrarEvento(`Cliente eliminado: ID ${id}`);
-                if (typeof markAppDirty === "function") markAppDirty(); save(); renderAll();
-                showSuccess("Cliente eliminado correctamente.");
-            }, 'danger');
+            showConfirm(
+                '¿Eliminar cliente?',
+                'Se eliminará el registro del cliente y su historial. Esta acción es irreversible.',
+                () => {
+                    setTimeout(() => {
+                        (async () => {
+                            const autorizado = await uiAutorizarAccionCritica({
+                                titulo: 'Eliminar cliente completo',
+                                detalle: 'Esta operación también eliminará causas, cobros y documentos asociados.'
+                            });
+                            if (!autorizado) return;
+
+                            const causasDelCliente = (DB.causas || [])
+                                .filter(c => String(c?.clienteId) === String(id))
+                                .map(c => c.id);
+
+                            DB.clientes = DB.clientes.filter(c => c.id !== id);
+
+                            // Cascade delete: al eliminar cliente, eliminar también sus causas y artefactos asociados
+                            if (causasDelCliente.length > 0) {
+                                DB.causas = (DB.causas || []).filter(c => !causasDelCliente.includes(c.id));
+                                if (Array.isArray(DB.alertas)) {
+                                    DB.alertas = DB.alertas.filter(a => !causasDelCliente.includes(a?.causaId));
+                                }
+                                if (Array.isArray(DB.documentos)) {
+                                    DB.documentos = DB.documentos.filter(d => !causasDelCliente.includes(d?.causaId));
+                                }
+                            }
+
+                            registrarEvento(`Cliente eliminado: ID ${id}`);
+                            if (typeof markAppDirty === "function") markAppDirty(); save(); renderAll();
+                            showSuccess("Cliente eliminado correctamente.");
+                        })().catch(e => {
+                            console.error('[CLIENTE] Error eliminando cliente:', e);
+                            showError(e?.message || 'No se pudo eliminar el cliente.');
+                        });
+                    }, 0);
+                },
+                'danger'
+            );
         }
 
         function convertToCause(id) {
@@ -602,21 +982,36 @@
             if (elModalidad) elModalidad.value = modalidad;
             if (elMonto) elMonto.value = monto ? String(Math.round(monto)) : '';
 
-            const wrap = document.getElementById('hr-cuotas-wrap');
+            const wrapCuotas = document.getElementById('hr-cuotas-wrap');
+            const wrapContado = document.getElementById('hr-contado-fecha-wrap');
             const elNCuotas = document.getElementById('hr-cuotas-num');
-            const elFecha = document.getElementById('hr-cuotas-fecha');
+            const elFechaCuotas = document.getElementById('hr-cuotas-fecha');
+            const elFechaContado = document.getElementById('hr-contado-fecha');
 
-            if (wrap) wrap.style.display = (modalidad === 'CUOTAS') ? 'block' : 'none';
+            if (wrapCuotas) wrapCuotas.style.display = (modalidad === 'CUOTAS') ? 'block' : 'none';
+            if (wrapContado) wrapContado.style.display = (modalidad === 'CONTADO') ? 'block' : 'none';
+
             if (modalidad === 'CUOTAS') {
                 const plan = Array.isArray(h.planPagos) ? h.planPagos : [];
                 if (elNCuotas) elNCuotas.value = plan.length ? String(plan.length) : (elNCuotas.value || '');
-                if (elFecha) {
+                if (elFechaCuotas) {
                     const f0 = plan[0]?.fechaVencimiento ? new Date(plan[0].fechaVencimiento) : null;
                     if (f0 && !Number.isNaN(f0.getTime())) {
                         const yyyy = String(f0.getFullYear());
                         const mm = String(f0.getMonth() + 1).padStart(2, '0');
                         const dd = String(f0.getDate()).padStart(2, '0');
-                        elFecha.value = `${yyyy}-${mm}-${dd}`;
+                        elFechaCuotas.value = `${yyyy}-${mm}-${dd}`;
+                    }
+                }
+            } else if (modalidad === 'CONTADO') {
+                const plan = Array.isArray(h.planPagos) ? h.planPagos : [];
+                if (elFechaContado && plan[0]?.fechaVencimiento) {
+                    const f0 = new Date(plan[0].fechaVencimiento);
+                    if (!Number.isNaN(f0.getTime())) {
+                        const yyyy = String(f0.getFullYear());
+                        const mm = String(f0.getMonth() + 1).padStart(2, '0');
+                        const dd = String(f0.getDate()).padStart(2, '0');
+                        elFechaContado.value = `${yyyy}-${mm}-${dd}`;
                     }
                 }
             }
@@ -833,7 +1228,7 @@
                                     const badge = est === 'PAGADA'
                                         ? '<span class="badge badge-s">PAGADA</span>'
                                         : '<span class="badge badge-w">PENDIENTE</span>';
-                                    const hasComp = !!(cuota?.comprobante?.base64);
+                                    const hasComp = !!(cuota?.comprobanteDocumentoId || cuota?.comprobante?.base64);
                                     const btnComp = hasComp
                                         ? `<button type="button" class="btn btn-xs" style="background:var(--bg-2); border:1px solid var(--border);" onclick="uiVerComprobanteCuota('${escHtml(String(causaId))}', ${cuota?.numero ?? 0})"><i class=\"fas fa-file-pdf\"></i></button>`
                                         : '<span style="color:var(--text-3); font-size:0.75rem;">—</span>';
@@ -869,7 +1264,7 @@
             uiSetHonorariosEditMode(false);
         }
 
-        function uiAsignarHonorarios(causaIdOverride) {
+        async function uiAsignarHonorarios(causaIdOverride) {
             const sel = document.getElementById('hr-causa-sel');
             const fromSelect = sel ? (sel.value || '').toString().trim() : '';
             const fromOverride = (causaIdOverride !== undefined && causaIdOverride !== null)
@@ -881,6 +1276,12 @@
             const monto = parseFloat(document.getElementById('hr-monto').value);
             if (!causaId) { showError('Seleccione una causa.'); return; }
             if (!monto || monto <= 0) { showError('Ingrese un monto válido.'); return; }
+
+            const autorizado = await uiAutorizarAccionCritica({
+                titulo: 'Asignar/editar honorarios',
+                detalle: 'Se modificarán cobros del cliente en Control Financiero.'
+            });
+            if (!autorizado) return;
 
             const causa = DB.causas.find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
             if (!causa) { showError('Causa no encontrada.'); return; }
@@ -912,8 +1313,28 @@
                 if (typeof markAppDirty === "function") markAppDirty();
                 save();
             } else {
-                // CONTADO: reutiliza asignarHonorarios para mantener compatibilidad
-                asignarHonorarios(causaId, monto);
+                // CONTADO: crear plan de 1 cuota con fecha editable
+                const fechaContadoStr = (document.getElementById('hr-contado-fecha')?.value || '').trim();
+                const fechaVenc = fechaContadoStr ? new Date(fechaContadoStr) : new Date();
+
+                causa.honorarios.modalidad = 'CONTADO';
+                causa.honorarios.montoTotal = monto;
+                causa.honorarios.montoBase = monto; // compat
+                causa.honorarios.planPagos = [
+                    {
+                        numero: 1,
+                        monto: monto,
+                        fechaVencimiento: fechaVenc.toISOString(),
+                        estado: 'PENDIENTE',
+                        fechaPago: null
+                    }
+                ];
+                // Mantener pagos legacy si existían
+                if (!Array.isArray(causa.honorarios.pagos)) causa.honorarios.pagos = [];
+                causa.honorarios.saldoPendiente = monto;
+
+                if (typeof markAppDirty === "function") markAppDirty();
+                save();
             }
 
             registrarEvento(`Honorarios asignados: $${monto.toLocaleString('es-CL')} — ${causa?.caratula}`);
@@ -924,6 +1345,47 @@
 
             uiSetHonorariosEditMode(false);
             uiActualizarHonorariosVista();
+        }
+
+        function uiEliminarCobroCausa() {
+            const sel = document.getElementById('hr-causa-sel');
+            const causaId = sel ? (sel.value || '').toString().trim() : '';
+            if (!causaId) { showError('Seleccione una causa.'); return; }
+
+            const causa = (DB.causas || []).find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
+            if (!causa) { showError('Causa no encontrada.'); return; }
+
+            const h = causa.honorarios || {};
+            const tieneCobro = !!(h.montoTotal || h.montoBase || h.base || (Array.isArray(h.planPagos) && h.planPagos.length) || (Array.isArray(h.pagos) && h.pagos.length));
+            if (!tieneCobro) {
+                showInfo('La causa seleccionada no tiene cobros/honorarios registrados.');
+                return;
+            }
+
+            showConfirm(
+                '¿Eliminar cobro de la causa?',
+                `Se eliminarán honorarios, plan de pagos y pagos registrados de la causa "${causa.caratula || causaId}". Esta acción es irreversible.`,
+                async () => {
+                    const autorizado = await uiAutorizarAccionCritica({
+                        titulo: 'Eliminar cobro de causa',
+                        detalle: `Causa: ${causa.caratula || causaId}`
+                    });
+                    if (!autorizado) return;
+
+                    causa.honorarios = {};
+                    registrarEvento(`Cobro eliminado en Control Financiero: ${causa.caratula || causaId}`);
+                    if (typeof markAppDirty === 'function') markAppDirty();
+                    save();
+                    renderHonorariosResumen();
+                    uiActualizarHonorariosVista();
+                    uiRenderPlanPagos(causaId);
+                    uiRenderPagosList(causaId);
+                    if (typeof renderHonorarios === 'function') renderHonorarios();
+                    renderAll();
+                    showSuccess('Cobro eliminado correctamente.');
+                },
+                'danger'
+            );
         }
 
         function _fileToBase64DataUrl(file) {
@@ -1233,6 +1695,12 @@
             if (cuota.estado === 'PAGADA') return;
 
             (async () => {
+                const autorizado = await uiAutorizarAccionCritica({
+                    titulo: 'Marcar cuota como pagada',
+                    detalle: `Causa: ${causa.caratula || causaId} · Cuota Nº ${numeroCuota}`
+                });
+                if (!autorizado) return;
+
                 const quiere = confirm('¿Adjuntar comprobante PDF para esta cuota?');
                 const comp = quiere ? await _pickPdfComprobante() : null;
 
@@ -1274,7 +1742,7 @@
             })();
         }
 
-        function uiDeshacerCuotaPagada(causaId, numeroCuota) {
+        async function uiDeshacerCuotaPagada(causaId, numeroCuota) {
             const causa = (DB.causas || []).find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
             if (!causa || !causa.honorarios) return;
             const h = causa.honorarios;
@@ -1284,6 +1752,12 @@
             if (!cuota) return;
             if (cuota.estado !== 'PAGADA') return;
             if (!confirm(`¿Deshacer el pago de la cuota Nº ${cuota.numero}?`)) return;
+
+            const autorizado = await uiAutorizarAccionCritica({
+                titulo: 'Deshacer pago de cuota',
+                detalle: `Causa: ${causa.caratula || causaId} · Cuota Nº ${numeroCuota}`
+            });
+            if (!autorizado) return;
 
             cuota.estado = 'PENDIENTE';
             cuota.fechaPago = null;
@@ -1316,14 +1790,16 @@
             renderAll();
         }
 
-        // UI: mostrar/ocultar campos cuotas
+        // UI: mostrar/ocultar campos cuotas/contado
         (function _initHonorariosCuotasUI() {
             const modalidadSel = document.getElementById('hr-modalidad');
-            const wrap = document.getElementById('hr-cuotas-wrap');
-            if (modalidadSel && wrap) {
+            const wrapCuotas = document.getElementById('hr-cuotas-wrap');
+            const wrapContado = document.getElementById('hr-contado-fecha-wrap');
+            if (modalidadSel && wrapCuotas && wrapContado) {
                 const apply = () => {
                     const m = (modalidadSel.value || 'CONTADO').toUpperCase();
-                    wrap.style.display = (m === 'CUOTAS') ? 'block' : 'none';
+                    wrapCuotas.style.display = (m === 'CUOTAS') ? 'block' : 'none';
+                    wrapContado.style.display = (m === 'CONTADO') ? 'block' : 'none';
                 };
                 modalidadSel.addEventListener('change', apply);
                 apply();
@@ -1371,6 +1847,12 @@
             if (!montoTotal) { showError('Esta causa no tiene honorarios asignados. Asígnelos primero.'); return; }
 
             (async () => {
+                const autorizado = await uiAutorizarAccionCritica({
+                    titulo: 'Registrar pago',
+                    detalle: `Causa: ${causa?.caratula || causaId} · Monto: $${Math.round(monto).toLocaleString('es-CL')}`
+                });
+                if (!autorizado) return;
+
                 let comp = null;
                 const inp = document.getElementById('hr-pago-comprobante');
                 const file = inp?.files && inp.files[0];

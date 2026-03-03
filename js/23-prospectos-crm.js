@@ -30,8 +30,11 @@
                 height: 100%;
                 display: flex;
                 flex-direction: column;
-                background: var(--bg-light, #f8fafc);
-                color: var(--text, #1e293b);
+                background: var(--bg-card, #f8fafc);
+                color: var(--text-1, #1e293b);
+                border: 1px solid var(--border, #e2e8f0);
+                border-radius: 14px;
+                overflow: hidden;
             }
             .crm-header {
                 display: flex;
@@ -71,14 +74,16 @@
                 padding: 20px;
                 overflow-x: auto;
                 align-items: flex-start;
+                scrollbar-width: thin;
             }
             .kanban-column {
                 flex: 0 0 280px;
                 background: var(--bg-2, #f1f5f9);
-                border-radius: 8px;
+                border-radius: 10px;
                 display: flex;
                 flex-direction: column;
                 max-height: 100%;
+                border: 1px solid var(--border, #e2e8f0);
             }
             .kanban-column-header {
                 padding: 12px 15px;
@@ -105,12 +110,13 @@
             /* Tarjetas */
             .kanban-card {
                 background: var(--bg-card, #ffffff);
-                border-radius: 6px;
+                border-radius: 8px;
                 padding: 12px;
                 box-shadow: 0 1px 3px rgba(0,0,0,0.1);
                 border-left: 4px solid transparent;
                 cursor: pointer;
                 transition: transform 0.2s, box-shadow 0.2s;
+                border: 1px solid var(--border, #e2e8f0);
             }
             .kanban-card:hover {
                 transform: translateY(-2px);
@@ -124,7 +130,7 @@
             }
             .kanban-card-meta {
                 font-size: 11px;
-                color: var(--text-light, #64748b);
+                color: var(--text-3, #64748b);
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
@@ -223,6 +229,29 @@
             /* Botones adicionales */
             .btn-ganado { background: #10b981; color: white; }
             .btn-perdido { background: #ef4444; color: white; }
+
+            @media (max-width: 900px) {
+                .crm-header {
+                    padding: 14px;
+                    flex-direction: column;
+                    align-items: flex-start;
+                    gap: 10px;
+                }
+                .crm-header-left h2 {
+                    font-size: 17px;
+                }
+                .crm-header-stats {
+                    flex-wrap: wrap;
+                    gap: 8px;
+                }
+                .kanban-board {
+                    padding: 12px;
+                    gap: 10px;
+                }
+                .kanban-column {
+                    flex-basis: 250px;
+                }
+            }
         `;
         document.head.appendChild(style);
     }
@@ -231,7 +260,7 @@
     // RENDERIZADO PRINCIPAL (KANBAN)
     // ═════════════════════════════════════════════════════════════════════════
     window.prospectosRender = function () {
-        const container = document.getElementById('prospectos-crm') || document.getElementById('prospectos');
+        const container = document.getElementById('prospectos-crm');
         if (!container) return;
 
         // Limpiar DB de prospectos temporal si no existe
@@ -293,8 +322,22 @@
             </div>
         `).join('');
 
+        if (!cardsHtml) {
+            cardsHtml = `
+                <div style="font-size:12px; color:var(--text-3,#64748b); text-align:center; padding:12px 10px; border:1px dashed var(--border,#cbd5e1); border-radius:8px; background:var(--bg-card,#fff);">
+                    Sin prospectos en esta etapa.
+                </div>
+            `;
+        }
+
         if (prospectos.length === 0) {
-            cardsHtml = `<div style="text-align:center; padding:20px 0; color:var(--text-3); font-size:11px;">Sin registros</div>`;
+            cardsHtml = `
+                <div style="text-align:center; padding:16px 10px; color:var(--text-3); font-size:12px; border:1px dashed var(--border,#cbd5e1); border-radius:8px; background:var(--bg-card,#fff);">
+                    Aún no hay prospectos.
+                    <div style="margin-top:10px;">
+                        <button class="btn btn-xs btn-p" onclick="crmAbrirModalProspecto()"><i class="fas fa-plus"></i> Crear primer prospecto</button>
+                    </div>
+                </div>`;
         }
 
         return `
@@ -438,6 +481,22 @@
                     ...data
                 };
                 DB.prospectos.push(nuevo);
+
+                // Bienvenida automática al registrar nuevo prospecto (si tiene teléfono)
+                (async () => {
+                    try {
+                        const tel = String(nuevo.telefono || '').replace(/[\s\+\-\(\)]/g, '').trim();
+                        if (!tel) return;
+                        const wa = window.electronAPI?.whatsapp;
+                        if (!wa?.estado || !wa?.enviarBienvenida) return;
+                        const cfg = await wa.estado();
+                        const templates = (cfg && cfg.waTemplates && typeof cfg.waTemplates === 'object') ? cfg.waTemplates : {};
+                        const base = String(templates.BIENVENIDA_CLIENTE || 'Hola {{nombre_cliente}}, bienvenido/a. Quedamos atentos a ayudarte.');
+                        const msg = base.replace(/\{\{\s*nombre_cliente\s*\}\}/g, nuevo.nombre || 'Cliente').trim();
+                        if (!msg) return;
+                        await wa.enviarBienvenida(tel, msg);
+                    } catch (_) {}
+                })();
             }
 
             if (typeof guardarCambiosGlobal === 'function') guardarCambiosGlobal();
