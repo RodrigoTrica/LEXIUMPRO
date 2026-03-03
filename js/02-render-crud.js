@@ -186,6 +186,10 @@
             }
 
             mensaje = _waRenderTemplate(mensaje, vars).trim();
+            const webLink = String(cfg?.waBranding?.webLink || '').trim();
+            if (webLink && !mensaje.includes(webLink)) {
+                mensaje = `${mensaje}\n\n${webLink}`.trim();
+            }
             if (!mensaje) { showError('Plantilla vacía. Revisa la configuración de WhatsApp.'); return; }
 
             try {
@@ -210,7 +214,11 @@
                 const cfg = await _waGetConfigSafe();
                 const tpl = (cfg && cfg.waTemplates && typeof cfg.waTemplates === 'object') ? cfg.waTemplates : {};
                 const base = String(tpl.BIENVENIDA_CLIENTE || 'Hola {{nombre_cliente}}, bienvenido/a. Quedamos atentos a ayudarte.').trim();
-                const mensaje = _waRenderTemplate(base, { nombre_cliente: cliente.nombre || cliente.nom || 'Cliente' }).trim();
+                let mensaje = _waRenderTemplate(base, { nombre_cliente: cliente.nombre || cliente.nom || 'Cliente' }).trim();
+                const webLink = String(cfg?.waBranding?.webLink || '').trim();
+                if (webLink && !mensaje.includes(webLink)) {
+                    mensaje = `${mensaje}\n\n${webLink}`.trim();
+                }
                 if (!mensaje) return;
                 if (window.electronAPI?.whatsapp?.enviarBienvenida) {
                     await window.electronAPI.whatsapp.enviarBienvenida(tel, mensaje);

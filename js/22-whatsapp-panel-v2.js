@@ -188,6 +188,18 @@ function _waTplBuildFinalUI(baseTextUI) {
     return `${base}${firma}`.trim();
 }
 
+function _waTplStripBrandingWeb(baseTextUI) {
+    const web = (document.getElementById('wa-brand-weblink')?.value || '').trim();
+    let txt = String(baseTextUI || '').trimEnd();
+    if (!web) return txt;
+
+    // Remover repeticiones heredadas de guardados anteriores en líneas finales
+    const esc = web.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const rx = new RegExp(`(?:\\n\\s*${esc}\\s*)+$`, 'i');
+    txt = txt.replace(rx, '').trimEnd();
+    return txt;
+}
+
 function _waTemplatesEnsureDefaults() {
     _waTemplates = { ...WA_TPL_DEFAULTS_UI, ...(_waTemplates || {}) };
     for (const k of Object.keys(_waTemplates)) {
@@ -259,13 +271,14 @@ async function waTemplatesGuardar() {
         if (!ta) return;
 
         const rawUI = ta.value || '';
-        _waTemplates[_waTplSelectedKey] = _waTplNormalizeCurly(rawUI);
+        _waTemplates[_waTplSelectedKey] = _waTplNormalizeCurly(_waTplStripBrandingWeb(rawUI));
 
         // Persistir: convertir a {{var}} para motor
         const engineTemplates = {};
         for (const k of Object.keys(_waTemplates || {})) {
-            const baseFinalUI = _waTplBuildFinalUI(_waTemplates[k]);
-            engineTemplates[k] = _waTplToEngine(_waTplNormalizeCurly(baseFinalUI));
+            // Guardar SIEMPRE plantilla base (sin branding), branding se adjunta al enviar
+            const baseUI = _waTplNormalizeCurly(_waTplStripBrandingWeb(_waTemplates[k]));
+            engineTemplates[k] = _waTplToEngine(baseUI);
         }
 
         await window.electronAPI.whatsapp.guardarConfig({

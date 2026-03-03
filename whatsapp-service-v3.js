@@ -909,24 +909,27 @@ function registrarHandlers(getConfig) {
         const config = getConfig();
         const destinatarios = _getDestinatarios(config, 'manual');
         if (destinatarios.length === 0) return { error: 'Sin destinatarios configurados' };
-        const v = validarMensaje(mensaje);
+        const mensajeFinal = _appendBranding(config, mensaje);
+        const v = validarMensaje(mensajeFinal);
         if (!v.ok) return { error: v.error };
         try {
-            await Promise.allSettled(destinatarios.map(dest => enviarMensaje(dest.numero, mensaje, 'manual')));
-            return { ok: true, destinatarios: destinatarios.length, mensaje };
+            await Promise.allSettled(destinatarios.map(dest => enviarMensaje(dest.numero, mensajeFinal, 'manual')));
+            return { ok: true, destinatarios: destinatarios.length, mensaje: mensajeFinal };
         }
         catch(e) { return { error: e.message }; }
     });
 
     // Enviar mensaje a UN número específico (secundarios on-demand)
     ipcMain.handle('whatsapp:enviar-alerta-a', async (_e, numero, mensaje) => {
+        const config = getConfig();
         const v1 = validarNumero(numero);
         if (!v1.ok) return { error: v1.error };
-        const v2 = validarMensaje(mensaje);
+        const mensajeFinal = _appendBranding(config, mensaje);
+        const v2 = validarMensaje(mensajeFinal);
         if (!v2.ok) return { error: v2.error };
         try {
-            await enviarMensaje(v1.numero, mensaje, 'manual-individual');
-            return { ok: true, numero: v1.numero, mensaje };
+            await enviarMensaje(v1.numero, mensajeFinal, 'manual-individual');
+            return { ok: true, numero: v1.numero, mensaje: mensajeFinal };
         } catch(e) { return { error: e.message }; }
     });
 
@@ -935,12 +938,13 @@ function registrarHandlers(getConfig) {
         const config = getConfig();
         const v1 = validarNumero(numero);
         if (!v1.ok) return { error: v1.error };
-        const v2 = validarMensaje(mensaje);
+        const mensajeFinal = _appendBranding(config, mensaje);
+        const v2 = validarMensaje(mensajeFinal);
         if (!v2.ok) return { error: v2.error };
         const logoDataUrl = config?.waBranding?.logoBase64 || '';
         try {
-            await enviarMensaje(v1.numero, mensaje, 'bienvenida-cliente', { logoDataUrl, templateKey: 'BIENVENIDA_CLIENTE' });
-            return { ok: true, numero: v1.numero, mensaje };
+            await enviarMensaje(v1.numero, mensajeFinal, 'bienvenida-cliente', { logoDataUrl, templateKey: 'BIENVENIDA_CLIENTE' });
+            return { ok: true, numero: v1.numero, mensaje: mensajeFinal };
         } catch(e) { return { error: e.message }; }
     });
 
