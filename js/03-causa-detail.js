@@ -59,6 +59,36 @@
             if (tab === 'proceso') dcRenderProceso(causaId);
         }
 
+        function _dcGetDocsUnificados(causa) {
+            if (!causa) return [];
+            const campos = [
+                { campo: 'docsCliente', origen: 'cliente' },
+                { campo: 'docsTribunal', origen: 'tribunal' },
+                { campo: 'docsContraparte', origen: 'contraparte' },
+                { campo: 'docsTramites', origen: 'tramites' }
+            ];
+            const docsTabs = campos.flatMap(({ campo, origen }) =>
+                (causa[campo] || []).map((d, i) => ({
+                    id: d.id || `${campo}-${i}`,
+                    nombreOriginal: d.nombre || 'Documento',
+                    fechaDocumento: d.fecha ? String(d.fecha).slice(0, 10) : null,
+                    tipo: d.tipoIA || 'Documento',
+                    cuaderno: 'Principal',
+                    etapaVinculada: d.etapaIA || '—',
+                    folio: d.folio || '—',
+                    origen
+                }))
+            );
+
+            if (docsTabs.length > 0) return docsTabs;
+            return (causa.documentos || []).map(d => ({ ...d }));
+        }
+
+        function _dcSyncLegacyDocumentos(causa) {
+            if (!causa) return;
+            causa.documentos = _dcGetDocsUnificados(causa);
+        }
+
         function abrirDetalleCausa(causaId) {
             // Mantener referencia global de la causa actualmente abierta (para acciones rápidas como honorarios)
             window._dcCurrentCausaId = causaId;
@@ -81,6 +111,7 @@
 
             const hon = causa.honorarios || {};
             const etapas = causa.etapasProcesales || [];
+            _dcSyncLegacyDocumentos(causa);
             const docs = causa.documentos || [];
             const causaIdJs = JSON.stringify(String(causaId));
             const esTramiteAdmin = /tramite/i.test(String(causa.tipoProcedimiento || ''));
@@ -163,7 +194,7 @@
                     <button class="dc-btn" onclick="cerrarModal('modal-detalle'); exportarInformeMejorado('${causaId}')" title="Generar informe PDF profesional">
                         <i class="fas fa-star"></i> PDF Pro
                     </button>
-                    <button class="dc-btn primary" onclick="cerrarModal('modal-detalle'); tab('estrategia-pro',null); document.getElementById('ep-causa-sel').value=${causaId}; uiRenderEstrategiaPro();">
+                    <button class="dc-btn primary" onclick="cerrarModal('modal-detalle'); tab('estrategia-pro',null); document.getElementById('ep-causa-sel').value=${causaIdJs}; uiRenderEstrategiaPro();">
                         <i class="fas fa-chess"></i> Estrategia
                     </button>
                 </div>
@@ -299,7 +330,7 @@
             if (!el) return;
 
             const movs = (causa.movimientos || []).map(m => ({ ...m, _origen: 'mov' }));
-            const docs = (causa.documentos || []).map(d => ({
+            const docs = _dcGetDocsUnificados(causa).map(d => ({
                 id: d.id, nombre: d.nombreOriginal || 'Documento',
                 fecha: d.fechaDocumento, tipo: d.tipo || 'Documento',
                 cuaderno: d.cuaderno || 'Principal', etapa: d.etapaVinculada || '—',
@@ -310,9 +341,9 @@
             el.innerHTML = `
             <div class="dc-mov-toolbar">
                 <input class="dc-search-mov" id="dc-search-mov-${causaId}"
-                    placeholder="Buscar movimientos..." oninput="dcFiltrarMovimientos(${causaId})">
+                    placeholder="Buscar movimientos..." oninput="dcFiltrarMovimientos('${causaId}')">
                 <select class="dc-cuaderno-sel" id="dc-cuaderno-${causaId}"
-                    onchange="dcFiltrarMovimientos(${causaId})">
+                    onchange="dcFiltrarMovimientos('${causaId}')">
                     <option value="">Todos los cuadernos</option>
                     <option>Principal</option>
                     <option>Reconvencional</option>
@@ -325,14 +356,14 @@
             </div>
             ${causa.estadoGeneral !== 'Finalizada' ? `
             <div style="margin-top:14px; padding-top:14px; border-top:1px dashed #e4eaf3; display:flex; gap:8px;">
-                <input id="dc-new-mov-nombre-${causaId}" placeholder="Nombre del trámite..."
+                <input id="dc-new-mov-nombre-${causaId}" placeholder="Nombre del movimiento..."
                     style="flex:1; padding:7px 10px; border:1px solid #e4eaf3; border-radius:7px; font-size:0.8rem; font-family:'IBM Plex Sans',sans-serif;">
                 <select id="dc-new-mov-tipo-${causaId}"
                     style="padding:7px; border:1px solid #e4eaf3; border-radius:7px; font-size:0.78rem; background:#f8fafc;">
                     <option>Resolución</option><option>Escrito</option><option>Notificación</option>
                     <option>Audiencia</option><option>Sentencia</option><option>Otro</option>
                 </select>
-                <button class="dc-btn primary" onclick="dcAgregarMovimiento(${causaId})">
+                <button class="dc-btn primary" onclick="dcAgregarMovimiento('${causaId}')">
                     <i class="fas fa-plus"></i> Agregar
                 </button>
             </div>` : ''}`;
@@ -384,7 +415,7 @@
             if (!causa) return;
             const nombre = document.getElementById(`dc-new-mov-nombre-${causaId}`)?.value.trim();
             const tipo = document.getElementById(`dc-new-mov-tipo-${causaId}`)?.value || 'Resolución';
-            if (!nombre) { showError('Ingrese el nombre del trámite.'); return; }
+            if (!nombre) { showError('Ingrese el nombre del movimiento.'); return; }
             if (!causa.movimientos) causa.movimientos = [];
             causa.movimientos.push({
                 id: generarID(), nombre, tipo,
@@ -413,7 +444,7 @@
 
             const tareaHtml = (t) => `
             <div class="dc-task-item ${t.done ? 'done' : ''}" id="tarea-${t.id}">
-                <div class="dc-task-check ${t.done ? 'done' : ''}" onclick="dcToggleTarea(${causaId},'${t.id}')">
+                <div class="dc-task-check ${t.done ? 'done' : ''}" onclick="dcToggleTarea('${causaId}','${t.id}')">
                     ${t.done ? '<i class="fas fa-check" style="font-size:0.6rem;"></i>' : ''}
                 </div>
                 <div style="flex:1; min-width:0;">
@@ -421,7 +452,7 @@
                     <div class="dc-task-meta">${t.fecha || ''}</div>
                 </div>
                 <span class="dc-task-prioridad dc-task-p-${t.prioridad || 'media'}">${t.prioridad || 'media'}</span>
-                <button class="dc-task-del" onclick="dcEliminarTarea(${causaId},'${t.id}')">
+                <button class="dc-task-del" onclick="dcEliminarTarea('${causaId}','${t.id}')">
                     <i class="fas fa-times"></i>
                 </button>
             </div>`;
@@ -429,14 +460,14 @@
             el.innerHTML = `
             <div class="dc-task-add">
                 <input id="dc-task-input-${causaId}" placeholder="Nueva tarea..."
-                    onkeydown="if(event.key==='Enter') dcAgregarTarea(${causaId})">
+                    onkeydown="if(event.key==='Enter') dcAgregarTarea('${causaId}')">
                 <select id="dc-task-prio-${causaId}"
                     style="padding:7px 8px; border:1px solid #e4eaf3; border-radius:7px; font-size:0.78rem; background:#f8fafc; font-family:'IBM Plex Sans',sans-serif;">
                     <option value="alta">🔴 Alta</option>
                     <option value="media" selected>🟡 Media</option>
                     <option value="baja">🟢 Baja</option>
                 </select>
-                <button class="dc-btn primary" onclick="dcAgregarTarea(${causaId})">
+                <button class="dc-btn primary" onclick="dcAgregarTarea('${causaId}')">
                     <i class="fas fa-plus"></i> Agregar
                 </button>
             </div>
@@ -534,7 +565,7 @@
                         </div>
                         ${p.email ? `<div class="dc-parte-sub" style="margin-bottom:2px;"><i class="fas fa-envelope" style="width:12px; color:#94a3b8;"></i> ${escHtml(p.email)}</div>` : ''}
                         ${p.telefono ? `<div class="dc-parte-sub"><i class="fas fa-phone" style="width:12px; color:#94a3b8;"></i> ${escHtml(p.telefono)}</div>` : ''}
-                        <button class="dc-parte-edit" onclick="dcEditarParte(${causaId},'${r.key}','${r.label}')">
+                        <button class="dc-parte-edit" onclick="dcEditarParte('${causaId}','${r.key}','${r.label}')">
                             <i class="fas fa-pencil-alt"></i> ${tiene ? 'Editar' : 'Agregar'}
                         </button>
                     </div>`;
@@ -560,7 +591,7 @@
                         <div class="dc-field-value">${escHtml((causa.partes || {}).secretario?.nombre || '—')}</div>
                     </div>
                 </div>
-                <button class="dc-btn" style="margin-top:10px; font-size:0.76rem;" onclick="dcEditarTribunal(${causaId})">
+                <button class="dc-btn" style="margin-top:10px; font-size:0.76rem;" onclick="dcEditarTribunal('${causaId}')">
                     <i class="fas fa-pencil-alt"></i> Editar tribunal
                 </button>
             </div>`;
@@ -892,6 +923,7 @@
                 }
             }
 
+            _dcSyncLegacyDocumentos(causa);
             _dcGuardar();
             dcRenderDocs(causaId, tipo);
 
@@ -1066,6 +1098,7 @@ ${textoTruncado}`;
             const causa = DB.causas.find(c => c.id === causaId);
             if (!causa?.[cfg.campo]) return;
             causa[cfg.campo].splice(idx, 1);
+            _dcSyncLegacyDocumentos(causa);
             if (typeof saveDataToDisk === 'function') saveDataToDisk();
             else if (typeof guardarCambiosGlobal === 'function') guardarCambiosGlobal();
             dcRenderDocs(causaId, tipo);
