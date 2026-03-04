@@ -5,6 +5,18 @@ let _waChatFiltro = '';
 let _waChatActivoId = '';
 let _waChatPolling = null;
 
+function _waChatInputEl() {
+    return document.getElementById('wa-chat-input');
+}
+
+function _waChatSetInputState() {
+    const inp = _waChatInputEl();
+    if (!inp) return;
+    const activo = !!_waChatActivoId;
+    inp.disabled = !activo;
+    inp.placeholder = activo ? 'Escribe un mensaje...' : 'Selecciona un chat para responder...';
+}
+
 function _waChatEsVisible() {
     const sec = document.getElementById('whatsapp-chat');
     return !!(sec && sec.classList.contains('active'));
@@ -110,6 +122,7 @@ function waChatFiltrarLista() {
 async function waChatAbrir(chatId) {
     if (!chatId || !window.electronAPI?.whatsapp?.getChatMessages) return;
     _waChatActivoId = chatId;
+    _waChatSetInputState();
     waChatFiltrarLista();
 
     const chat = _waChatLista.find(c => c.chatId === chatId);
@@ -162,6 +175,7 @@ async function waChatEnviar() {
     _waChatEstado('Mensaje enviado', 'ok');
     await waChatAbrir(_waChatActivoId);
     await _waChatCargarLista();
+    inp.focus();
 }
 
 function waChatOnInputKey(ev) {
@@ -173,6 +187,7 @@ function waChatOnInputKey(ev) {
 
 async function waChatRender() {
     try {
+        _waChatSetInputState();
         await _waChatCargarLista();
         if (_waChatActivoId) {
             await waChatAbrir(_waChatActivoId);
@@ -186,6 +201,10 @@ function _waChatIniciarPolling() {
     if (_waChatPolling) clearInterval(_waChatPolling);
     _waChatPolling = setInterval(async () => {
         if (!_waChatEsVisible()) return;
+
+        const inputActivo = document.activeElement?.id === 'wa-chat-input';
+        if (inputActivo) return;
+
         await _waChatCargarLista();
         if (_waChatActivoId) await waChatAbrir(_waChatActivoId);
     }, 5000);
@@ -193,6 +212,8 @@ function _waChatIniciarPolling() {
 
 function initWhatsAppChat() {
     if (!window.electronAPI?.whatsapp) return;
+
+    _waChatSetInputState();
 
     _waChatIniciarPolling();
 
