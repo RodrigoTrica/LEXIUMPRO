@@ -849,7 +849,10 @@ async function gaGuardarDoc() {
                 if (window.GoogleDrive && GoogleDrive.isConnected()) {
                     updateStatus(`Subiendo a Drive: ${file.name}`, stepBase + 20);
                     const buffer = await file.arrayBuffer();
-                    driveData = await GoogleDrive.uploadBinaryFile(buffer, nombreSistema, file.type);
+                    driveData = await GoogleDrive.uploadBinaryFile(buffer, nombreSistema, file.type, {
+                        causaId: gaCurrentCausa.id,
+                        caratula: gaCurrentCausa.caratula || ''
+                    });
                 }
 
                 // 2. IA Analysis if key exists

@@ -17,6 +17,7 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
 const os = require('os');
 const crypto = require('crypto');
 const puppeteer = require('puppeteer');
@@ -41,6 +42,255 @@ try {
     // Si no se puede crear la carpeta de datos, la app no puede funcionar
     dialog.showErrorBox('Error crítico', `No se pudo crear la carpeta de datos:\n${e.message}`);
     app.quit();
+}
+
+// ── Google OAuth (Drive) — Authorization Code + PKCE (loopback localhost) ────
+const DRIVE_OAUTH_TOKEN_KEY = 'drive_oauth_tokens_v1';
+const DRIVE_OAUTH_SCOPES = 'https://www.googleapis.com/auth/drive.file';
+
+function _b64UrlEncode(buf) {
+    return Buffer.from(buf)
+        .toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/g, '');
+}
+
+function _sha256Base64Url(input) {
+    return _b64UrlEncode(crypto.createHash('sha256').update(String(input)).digest());
+}
+
+function _generarCodeVerifier() {
+    // RFC 7636: 43-128 chars
+    return _b64UrlEncode(crypto.randomBytes(64));
+}
+
+function _leerDriveTokens() {
+    try {
+        const archivo = path.join(DATA_DIR, `${sanitizarNombre(DRIVE_OAUTH_TOKEN_KEY)}.enc`);
+        if (!fs.existsSync(archivo)) return null;
+        const raw = descifrar(fs.readFileSync(archivo, 'utf8'));
+        if (!raw) return null;
+        const obj = JSON.parse(raw);
+        if (!obj || typeof obj !== 'object') return null;
+        return obj;
+    } catch (e) {
+        return null;
+    }
+}
+
+function _guardarDriveTokens(tokens) {
+    const archivo = path.join(DATA_DIR, `${sanitizarNombre(DRIVE_OAUTH_TOKEN_KEY)}.enc`);
+    fs.writeFileSync(archivo, cifrar(JSON.stringify(tokens)), 'utf8');
+}
+
+function _borrarDriveTokens() {
+    try {
+        const archivo = path.join(DATA_DIR, `${sanitizarNombre(DRIVE_OAUTH_TOKEN_KEY)}.enc`);
+        if (fs.existsSync(archivo)) fs.unlinkSync(archivo);
+    } catch (_) { }
+}
+
+async function _postForm(url, formObj) {
+    const body = new URLSearchParams();
+    Object.keys(formObj || {}).forEach(k => body.set(k, String(formObj[k])));
+    const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+        const msg = data?.error_description || data?.error || resp.statusText;
+        throw new Error(msg);
+    }
+    return data;
+}
+
+function _startOAuthLoopbackServer() {
+    return new Promise((resolve, reject) => {
+        let done = false;
+        let callbackResolve;
+        const callbackPromise = new Promise((r) => { callbackResolve = r; });
+
+        const server = http.createServer((req, res) => {
+            try {
+                const u = new URL(req.url || '/', 'http://127.0.0.1');
+                if (u.pathname !== '/callback') {
+                    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+                    res.end('Not found');
+                    return;
+                }
+
+                const code = u.searchParams.get('code');
+                const state = u.searchParams.get('state');
+                const error = u.searchParams.get('error');
+
+                res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+                if (code) {
+                    res.end('<html><body style="font-family:system-ui; padding:24px;"><h2>Éxito</h2><p>Puedes cerrar esta pestaña y volver a LEXIUM.</p></body></html>');
+                } else {
+                    res.end('<html><body style="font-family:system-ui; padding:24px;"><h2>Error</h2><p>No se pudo autorizar. Puedes cerrar esta pestaña y volver a LEXIUM.</p></body></html>');
+                }
+
+                if (!done) {
+                    done = true;
+                    callbackResolve({ code, state, error });
+                }
+
+                setTimeout(() => {
+                    try { server.close(); } catch (_) { }
+                }, 50);
+            } catch (e) {
+                try {
+                    res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+                    res.end('Error');
+                } catch (_) { }
+
+                if (!done) {
+                    done = true;
+                    callbackResolve({ code: null, state: null, error: e.message });
+                }
+
+                setTimeout(() => {
+                    try { server.close(); } catch (_) { }
+                }, 50);
+            }
+        });
+
+        server.listen(0, '127.0.0.1', () => {
+            const addr = server.address();
+            if (!addr || typeof addr !== 'object' || !addr.port) {
+                try { server.close(); } catch (_) { }
+                reject(new Error('No se pudo iniciar servidor local OAuth'));
+                return;
+            }
+            resolve({ port: addr.port, callbackPromise });
+        });
+        server.on('error', (err) => reject(err));
+    });
+}
+
+async function _driveOAuthConnect(clientId, clientSecret) {
+    const cid = String(clientId || '').trim();
+    const csec = String(clientSecret || '').trim();
+    if (!cid) throw new Error('Client ID vacío');
+    if (!/\.apps\.googleusercontent\.com$/.test(cid)) throw new Error('Client ID inválido');
+
+    // Preparar loopback
+    const { port, callbackPromise } = await _startOAuthLoopbackServer();
+    const redirectUri = `http://127.0.0.1:${port}/callback`;
+
+    const state = _b64UrlEncode(crypto.randomBytes(16));
+    const codeVerifier = _generarCodeVerifier();
+    const codeChallenge = _sha256Base64Url(codeVerifier);
+
+    const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+    authUrl.searchParams.set('client_id', cid);
+    authUrl.searchParams.set('redirect_uri', redirectUri);
+    authUrl.searchParams.set('response_type', 'code');
+    authUrl.searchParams.set('scope', DRIVE_OAUTH_SCOPES);
+    authUrl.searchParams.set('access_type', 'offline');
+    authUrl.searchParams.set('prompt', 'consent');
+    authUrl.searchParams.set('include_granted_scopes', 'true');
+    authUrl.searchParams.set('state', state);
+    authUrl.searchParams.set('code_challenge', codeChallenge);
+    authUrl.searchParams.set('code_challenge_method', 'S256');
+
+    // Abrir en navegador del sistema
+    await shell.openExternal(authUrl.toString());
+
+    const serverResult = await callbackPromise;
+
+    if (serverResult?.error) throw new Error(serverResult.error);
+    if (!serverResult?.code) throw new Error('No se recibió code de Google');
+    if (serverResult?.state !== state) throw new Error('State OAuth inválido');
+
+    let tokenData;
+    try {
+        tokenData = await _postForm('https://oauth2.googleapis.com/token', {
+            client_id: cid,
+            ...(csec ? { client_secret: csec } : {}),
+            code: serverResult.code,
+            code_verifier: codeVerifier,
+            redirect_uri: redirectUri,
+            grant_type: 'authorization_code'
+        });
+    } catch (e) {
+        const msg = String(e?.message || 'Error token');
+        if (msg.toLowerCase().includes('client_secret')) {
+            throw new Error('Google exige client_secret para este Client ID. Pega también el "Secreto del cliente" en LEXIUMPRO o crea/usa un OAuth Client tipo "Aplicación de escritorio (Desktop app)" que no lo requiera.');
+        }
+        throw e;
+    }
+
+    if (!tokenData?.access_token) throw new Error('Google no entregó access_token');
+
+    const now = Date.now();
+    const expiresIn = Number(tokenData.expires_in || 0);
+    const tokens = {
+        clientId: cid,
+        clientSecret: csec || null,
+        scope: DRIVE_OAUTH_SCOPES,
+        access_token: tokenData.access_token,
+        refresh_token: tokenData.refresh_token || null,
+        token_type: tokenData.token_type || 'Bearer',
+        expiry: expiresIn ? (now + (expiresIn - 60) * 1000) : (now + 45 * 60 * 1000),
+        obtainedAt: now,
+    };
+
+    // Guardar refresh token si viene; si no viene, preservar el que ya existía
+    const prev = _leerDriveTokens();
+    if (!tokens.refresh_token && prev?.refresh_token && prev?.clientId === cid) {
+        tokens.refresh_token = prev.refresh_token;
+    }
+    if (!tokens.clientSecret && prev?.clientSecret && prev?.clientId === cid) {
+        tokens.clientSecret = prev.clientSecret;
+    }
+    if (!tokens.refresh_token) {
+        // Sin refresh token, igual funcionará, pero obligará a reconectar al expirar.
+        // Lo dejamos explícito.
+    }
+
+    _guardarDriveTokens(tokens);
+    return { ok: true, tokens };
+}
+
+async function _driveGetAccessToken(clientId) {
+    const cid = String(clientId || '').trim();
+    if (!cid) throw new Error('Client ID vacío');
+
+    const saved = _leerDriveTokens();
+    if (saved && saved.clientId === cid && saved.access_token && saved.expiry && Date.now() < saved.expiry) {
+        return { ok: true, accessToken: saved.access_token, expiry: saved.expiry };
+    }
+
+    if (!saved || saved.clientId !== cid) {
+        return { ok: false, error: 'No hay sesión Drive guardada. Conecta nuevamente.' };
+    }
+
+    if (!saved.refresh_token) {
+        return { ok: false, error: 'Sesión Drive expirada y sin refresh_token. Conecta nuevamente.' };
+    }
+
+    const tokenData = await _postForm('https://oauth2.googleapis.com/token', {
+        client_id: cid,
+        ...(saved.clientSecret ? { client_secret: saved.clientSecret } : {}),
+        refresh_token: saved.refresh_token,
+        grant_type: 'refresh_token'
+    });
+
+    const now = Date.now();
+    const expiresIn = Number(tokenData.expires_in || 0);
+    const next = {
+        ...saved,
+        access_token: tokenData.access_token,
+        token_type: tokenData.token_type || saved.token_type || 'Bearer',
+        expiry: expiresIn ? (now + (expiresIn - 60) * 1000) : (now + 45 * 60 * 1000),
+        obtainedAt: now,
+    };
+    _guardarDriveTokens(next);
+    return { ok: true, accessToken: next.access_token, expiry: next.expiry };
 }
 
 // ── Cifrado AES-256-GCM ───────────────────────────────────────────────────────
@@ -118,6 +368,41 @@ ipcMain.handle('storage:get', (_e, clave) => {
     } catch (e) {
         console.error('[Storage:get]', e.message);
         return null;
+    }
+});
+
+// ── IPC Handlers — Google Drive OAuth (navegador del sistema) ─────────────────
+ipcMain.handle('drive:connect', async (_e, args) => {
+    try {
+        const clientId = (args && typeof args === 'object') ? args.clientId : '';
+        const clientSecret = (args && typeof args === 'object') ? args.clientSecret : '';
+        const res = await _driveOAuthConnect(clientId, clientSecret);
+        if (res && res.ok && res.tokens && typeof res.tokens === 'object') {
+            const safeTokens = { ...res.tokens };
+            delete safeTokens.clientSecret;
+            return { ok: true, tokens: safeTokens };
+        }
+        return res;
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
+});
+
+ipcMain.handle('drive:get-access-token', async (_e, args) => {
+    try {
+        const clientId = (args && typeof args === 'object') ? args.clientId : '';
+        return await _driveGetAccessToken(clientId);
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
+});
+
+ipcMain.handle('drive:disconnect', async () => {
+    try {
+        _borrarDriveTokens();
+        return { ok: true };
+    } catch (e) {
+        return { ok: false, error: e.message };
     }
 });
 
@@ -629,11 +914,11 @@ function crearVentana() {
                 ...details.responseHeaders,
                 'Content-Security-Policy': [
                     "default-src 'self';" +
-                    "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com;" +
+                    "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://accounts.google.com https://apis.google.com;" +
                     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com;" +
                     "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com;" +
                     "img-src 'self' data: blob:;" +
-                    "connect-src 'self' https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://api.openai.com https://api.anthropic.com;" +
+                    "connect-src 'self' https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://api.openai.com https://api.anthropic.com https://api.groq.com https://oauth2.googleapis.com https://www.googleapis.com;" +
                     "worker-src 'self' blob: https://cdnjs.cloudflare.com;" +
                     "frame-src 'none';" +
                     "object-src 'none';"
@@ -652,8 +937,38 @@ function crearVentana() {
         }
     });
 
-    // Bloquear apertura de nuevas ventanas
-    mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    // Bloquear apertura de nuevas ventanas (permitiendo solo popups OAuth de Google)
+    mainWindow.webContents.setWindowOpenHandler((details) => {
+        try {
+            const targetUrl = String(details?.url || '');
+            const u = new URL(targetUrl);
+            const isGoogleOAuth = u.origin === 'https://accounts.google.com';
+
+            if (isGoogleOAuth) {
+                return {
+                    action: 'allow',
+                    overrideBrowserWindowOptions: {
+                        width: 520,
+                        height: 720,
+                        parent: mainWindow,
+                        modal: true,
+                        show: true,
+                        webPreferences: {
+                            contextIsolation: true,
+                            nodeIntegration: false,
+                            sandbox: true,
+                            webSecurity: true,
+                            allowRunningInsecureContent: false,
+                        },
+                    },
+                };
+            }
+        } catch (e) {
+            // noop
+        }
+
+        return { action: 'deny' };
+    });
 
     mainWindow.once('ready-to-show', () => {
         mainWindow.show();

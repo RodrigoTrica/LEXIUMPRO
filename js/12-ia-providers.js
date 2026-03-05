@@ -246,6 +246,19 @@ const IA_PROVIDERS = {
         ],
         defaultModel: 'glm-4',
     },
+    groq: {
+        id: 'groq',
+        label: 'Groq',
+        icon: 'fas fa-bolt',
+        color: '#7c3aed',
+        keyHint: 'gsk_… (Groq API Key)',
+        keyUrl: 'https://console.groq.com/keys',
+        keyPrefix: 'gsk_',
+        models: [
+            { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B (Versatile)', badge: 'RECOMENDADO', badgeColor: '#15803d', desc: 'Redacción sólida y rápida. Ideal para borradores jurídicos.' },
+        ],
+        defaultModel: 'llama-3.3-70b-versatile',
+    },
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -373,6 +386,7 @@ async function iaCall(prompt, opts = {}) {
         case 'openai': return _iaCallOpenAI(prompt, key, model);
         case 'claude': return _iaCallClaude(prompt, key, model);
         case 'glm': return _iaCallGLM(prompt, key, model);
+        case 'groq': return _iaCallGroq(prompt, key, model, opts);
         default: throw new Error(`Proveedor IA desconocido: ${providerId}`);
     }
 }
@@ -463,6 +477,84 @@ async function _iaCallOpenAI(prompt, key, model) {
     const data = await resp.json();
     return data.choices?.[0]?.message?.content || '';
 }
+
+const GROQ_DEFAULT_SYSTEM_PROMPT = `Eres un experto abogado chileno y procurador senior especializado en redacción jurídica. Tu objetivo es generar borradores de alta precisión para la plataforma LEXIUM.
+
+Reglas de cumplimiento obligatorio:
+
+Marco Legal: Utiliza exclusivamente el Derecho Chileno (Código Civil, Código del Trabajo, Ley 18.101 de Arriendo, etc.).
+
+Terminología Notarial: Usa fórmulas estándar de notarías chilenas (ej: 'Ante mí', 'comparece don/doña', 'mayor de edad, domiciliado en...', 'en adelante el vendedor/arrendador').
+
+Identificación: Siempre incluye campos para RUT y verifica que la individualización de las partes siga el orden: Nombre, nacionalidad, estado civil, profesión/oficio, RUT y domicilio.
+
+Jurisprudencia y Doctrina: Al citar doctrina, prefiere autores chilenos clásicos y modernos (Alessandri, Somarriva, Fueyo) y menciona la sala de la Corte Suprema o Apelaciones si el contexto lo requiere.
+
+Estructura de Contratos: Los contratos deben incluir siempre: Individualización, Antecedentes, Objeto, Precio/Contraprestación, Obligaciones, Cláusula de Incumplimiento, Jurisdicción (Prorrroga de competencia) y Personerías si corresponde.
+
+Prohibición: No utilices terminología extranjera como 'procurador' (en sentido mexicano/español), 'licenciado', 'honorarios de éxito' o conceptos de Common Law que no existan en Chile.`;
+
+async function _iaCallGroq(prompt, key, model, opts = {}) {
+    let resp;
+    try {
+        const systemPrompt = (opts && typeof opts.systemPrompt === 'string' && opts.systemPrompt.trim())
+            ? opts.systemPrompt.trim()
+            : GROQ_DEFAULT_SYSTEM_PROMPT;
+
+        resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json; charset=utf-8',
+                'Authorization': `Bearer ${key}`,
+            },
+            body: JSON.stringify({
+                model: model || 'llama-3.3-70b-versatile',
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: prompt },
+                ],
+                temperature: 0.3,
+                max_tokens: 4000,
+            }),
+        });
+    } catch (e) {
+        throw new Error('Error de red al conectar con Groq. Verifique su conexión a internet.');
+    }
+
+    if (!resp.ok) {
+        const errBody = await resp.json().catch(() => ({}));
+        const errMsg = errBody?.error?.message || `HTTP ${resp.status}`;
+        if (resp.status === 429) {
+            const err = new Error('Cuota de Groq excedida (429). Verifique su límite en console.groq.com.');
+            err.status = 429; throw err;
+        }
+        if (resp.status === 401) throw new Error('API Key de Groq inválida o expirada (401).');
+        throw new Error(errMsg);
+    }
+
+    const data = await resp.json();
+    return data.choices?.[0]?.message?.content || '';
+}
+
+function formatForNotary(text) {
+    const s = String(text == null ? '' : text);
+    return s
+        .replace(/^```[a-zA-Z0-9_-]*\s*$/gm, '')
+        .replace(/^```\s*$/gm, '')
+        .replace(/^#{1,6}\s+/gm, '')
+        .replace(/\*\*(.+?)\*\*/g, '$1')
+        .replace(/\*(.+?)\*/g, '$1')
+        .replace(/__(.+?)__/g, '$1')
+        .replace(/_(.+?)_/g, '$1')
+        .replace(/^\s*[-*+]\s+/gm, '')
+        .replace(/^\s*\d+\.\s+/gm, '')
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
+        .replace(/`([^`]+)`/g, '$1')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
+
+window.formatForNotary = formatForNotary;
 
 // ── Anthropic Claude ──────────────────────────────────────────────
 async function _iaCallClaude(prompt, key, model) {

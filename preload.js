@@ -92,6 +92,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
         },
     },
 
+    // ── Google Drive OAuth (navegador del sistema) ───────────────────────────
+    drive: {
+        connect: (clientId, clientSecret) => {
+            assertString(clientId, 'clientId', 300);
+            if (typeof clientSecret !== 'undefined' && clientSecret !== null) {
+                assertStringOrEmpty(String(clientSecret), 'clientSecret', 300);
+            }
+            return ipcRenderer.invoke('drive:connect', {
+                clientId,
+                clientSecret: (typeof clientSecret === 'undefined' || clientSecret === null) ? '' : String(clientSecret)
+            });
+        },
+        getAccessToken: (clientId) => {
+            assertString(clientId, 'clientId', 300);
+            return ipcRenderer.invoke('drive:get-access-token', { clientId });
+        },
+        disconnect: () => ipcRenderer.invoke('drive:disconnect'),
+    },
+
     whatsapp: {
         estado:   () => ipcRenderer.invoke('whatsapp:estado'),
         conectar: () => ipcRenderer.invoke('whatsapp:conectar'),

@@ -14,7 +14,8 @@ const GoogleDrive = (() => {
     // API habilitada: Google Drive API v3
     // ──────────────────────────────────────────────────────────────
     const DRIVE_CONFIG_KEY = 'APPBOGADO_DRIVE_CONFIG_V1';
-    const DRIVE_FOLDER_NAME = 'AppBogado — Despacho';
+    const DRIVE_FOLDER_NAME = 'LEXIUM - DESPACHO';
+    const DRIVE_FOLDER_NAME_LEGACY = 'AppBogado — Despacho';
     const SYNC_META_KEY = 'APPBOGADO_DRIVE_SYNC_META';
     const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
@@ -22,8 +23,15 @@ const GoogleDrive = (() => {
     let _accessToken = null;
     let _tokenExpiry = null;   // timestamp ms
     let _folderId = null;   // ID de la carpeta en Drive
-    let _tokenClient = null;   // Google OAuth2 token client
     let _isInitialized = false;
+
+    function _sanitizeFolderName(s) {
+        return String(s || '')
+            .replace(/[\\/:*?"<>|]/g, '-')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .substring(0, 120) || 'Sin nombre';
+    }
 
     // ── Configuración persistida (solo client_id, NUNCA el token) ──
     function _loadConfig() {
@@ -37,6 +45,7 @@ const GoogleDrive = (() => {
     }
 
     function getClientId() { return _loadConfig().clientId || ''; }
+    function getClientSecret() { return _loadConfig().clientSecret || ''; }
     function isConfigured() { return !!getClientId(); }
     function isConnected() { return !!_accessToken && Date.now() < (_tokenExpiry || 0); }
 
@@ -51,49 +60,8 @@ const GoogleDrive = (() => {
         catch (e) { }
     }
 
-    // ── Carga la librería GIS (Google Identity Services) ──────────
-    function _loadGIS() {
-        return new Promise((resolve, reject) => {
-            if (window.google?.accounts?.oauth2) { resolve(); return; }
-            const script = document.createElement('script');
-            script.src = 'https://accounts.google.com/gsi/client';
-            script.onload = resolve;
-            script.onerror = () => reject(new Error('No se pudo cargar Google Identity Services. Verifica tu conexión.'));
-            document.head.appendChild(script);
-        });
-    }
-
-    // ── Inicializar OAuth2 token client ────────────────────────────
-    async function _initTokenClient() {
-        const clientId = getClientId();
-        if (!clientId) throw new Error('CLIENT_ID no configurado.');
-        await _loadGIS();
-
-        return new Promise((resolve, reject) => {
-            _tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: clientId,
-                scope: SCOPES,
-                callback: (response) => {
-                    if (response.error) {
-                        EventBus.emit('drive:error', { error: response.error });
-                        reject(new Error(response.error));
-                        return;
-                    }
-                    _accessToken = response.access_token;
-                    // GIS devuelve expires_in en segundos
-                    _tokenExpiry = Date.now() + (response.expires_in - 60) * 1000;
-                    _isInitialized = true;
-                    EventBus.emit('drive:connected', { expiry: _tokenExpiry });
-                    _driveRenderStatus();
-                    resolve(response);
-                },
-                error_callback: (err) => {
-                    EventBus.emit('drive:error', { error: err });
-                    reject(new Error(err.message || 'OAuth2 error'));
-                }
-            });
-            resolve(_tokenClient);
-        });
+    function _isElectronDriveAvailable() {
+        return !!(window.electronAPI && window.electronAPI.drive && typeof window.electronAPI.drive.connect === 'function');
     }
 
     // ── Solicitar token (abre popup Google) ───────────────────────
@@ -103,9 +71,18 @@ const GoogleDrive = (() => {
             return;
         }
         try {
-            await _initTokenClient();
-            // Pedir token (puede mostrar popup si no hay sesión)
-            _tokenClient.requestAccessToken({ prompt: 'consent' });
+            if (!_isElectronDriveAvailable()) {
+                throw new Error('OAuth Drive no disponible. Reinicie la app para aplicar la actualización.');
+            }
+            const res = await window.electronAPI.drive.connect(getClientId(), getClientSecret());
+            if (!res || !res.ok) throw new Error(res?.error || 'No se pudo conectar Drive');
+
+            const t = res.tokens || {};
+            _accessToken = t.access_token || null;
+            _tokenExpiry = t.expiry || null;
+            _isInitialized = true;
+            EventBus.emit('drive:connected', { expiry: _tokenExpiry });
+            _driveRenderStatus();
         } catch (e) {
             showError('Error al conectar con Google: ' + e.message);
             console.error('[Drive] connect error:', e);
@@ -114,29 +91,24 @@ const GoogleDrive = (() => {
 
     // ── Refresh silencioso (sin popup) ────────────────────────────
     async function refreshToken() {
-        if (!_tokenClient) await _initTokenClient();
-        return new Promise((resolve, reject) => {
-            const originalCallback = _tokenClient.callback;
-            _tokenClient.callback = (response) => {
-                if (response.error) { reject(new Error(response.error)); return; }
-                _accessToken = response.access_token;
-                _tokenExpiry = Date.now() + (response.expires_in - 60) * 1000;
-                _tokenClient.callback = originalCallback;
-                resolve(response);
-            };
-            _tokenClient.requestAccessToken({ prompt: '' }); // sin popup
-        });
+        if (!_isElectronDriveAvailable()) throw new Error('OAuth Drive no disponible.');
+        const res = await window.electronAPI.drive.getAccessToken(getClientId());
+        if (!res || !res.ok) throw new Error(res?.error || 'No se pudo refrescar token');
+        _accessToken = res.accessToken;
+        _tokenExpiry = res.expiry;
+        return res;
     }
 
     // ── Revocar token y desconectar ────────────────────────────────
     function disconnect() {
-        if (_accessToken) {
-            google.accounts.oauth2.revoke(_accessToken, () => { });
-        }
+        try {
+            if (_isElectronDriveAvailable()) {
+                window.electronAPI.drive.disconnect();
+            }
+        } catch (_) { }
         _accessToken = null;
         _tokenExpiry = null;
         _folderId = null;
-        _tokenClient = null;
         _isInitialized = false;
         EventBus.emit('drive:disconnected', {});
         _driveRenderStatus();
@@ -173,12 +145,31 @@ const GoogleDrive = (() => {
         if (_folderId) return _folderId;
 
         // Buscar carpeta existente
-        const search = await _driveRequest(
+        const searchNew = await _driveRequest(
             `/files?q=name='${DRIVE_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`
         );
 
-        if (search.files?.length > 0) {
-            _folderId = search.files[0].id;
+        if (searchNew.files?.length > 0) {
+            _folderId = searchNew.files[0].id;
+            return _folderId;
+        }
+
+        // Compatibilidad: si existe carpeta con nombre legacy, renombrarla
+        const searchLegacy = await _driveRequest(
+            `/files?q=name='${DRIVE_FOLDER_NAME_LEGACY}' and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`
+        );
+        if (searchLegacy.files?.length > 0) {
+            const legacyId = searchLegacy.files[0].id;
+            try {
+                await _driveRequest(`/files/${legacyId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: DRIVE_FOLDER_NAME })
+                });
+            } catch (e) {
+                console.warn('[Drive] No se pudo renombrar carpeta legacy:', e.message);
+            }
+            _folderId = legacyId;
             return _folderId;
         }
 
@@ -194,6 +185,39 @@ const GoogleDrive = (() => {
 
         _folderId = created.id;
         return _folderId;
+    }
+
+    async function _getOrCreateChildFolder(parentId, name) {
+        const safeName = _sanitizeFolderName(name);
+        const search = await _driveRequest(
+            `/files?q=name='${safeName}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`
+        );
+        if (search.files?.length > 0) return search.files[0].id;
+        const created = await _driveRequest('/files', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: safeName,
+                parents: [parentId],
+                mimeType: 'application/vnd.google-apps.folder'
+            })
+        });
+        return created.id;
+    }
+
+    async function ensureCausaFolder(causaId, caratula = '') {
+        const rootId = await _getOrCreateFolder();
+        const causasId = await _getOrCreateChildFolder(rootId, 'CAUSAS');
+        const folderName = caratula ? `${String(causaId)} - ${caratula}` : String(causaId);
+        return _getOrCreateChildFolder(causasId, folderName);
+    }
+
+    async function ensureGestionFolder(tipo, gestionId, label = '') {
+        const rootId = await _getOrCreateFolder();
+        const bucket = (String(tipo || '').toLowerCase() === 'tramite') ? 'TRAMITES' : 'GESTIONES';
+        const bucketId = await _getOrCreateChildFolder(rootId, bucket);
+        const folderName = label ? `${String(gestionId)} - ${label}` : String(gestionId);
+        return _getOrCreateChildFolder(bucketId, folderName);
     }
 
     // ── Subir o actualizar un archivo en Drive ─────────────────────
@@ -242,6 +266,14 @@ const GoogleDrive = (() => {
         return res.files?.[0] || null;
     }
 
+    async function findFilesByName(filename) {
+        const folderId = await _getOrCreateFolder();
+        const res = await _driveRequest(
+            `/files?q=name='${filename}' and '${folderId}' in parents and trashed=false&fields=files(id,name,modifiedTime,size)&orderBy=modifiedTime desc`
+        );
+        return Array.isArray(res.files) ? res.files : [];
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // SYNC — Sincronización de datos de la app
     // ═══════════════════════════════════════════════════════════════
@@ -259,7 +291,19 @@ const GoogleDrive = (() => {
 
         const snapshot = Store.snapshot();
         const meta = _loadSyncMeta();
-        const existing = await findFile(MAIN_DATA_FILE);
+        const matches = await findFilesByName(MAIN_DATA_FILE);
+        const existing = matches[0] || null;
+
+        // Si hay duplicados, eliminar todos excepto el más reciente
+        if (matches.length > 1) {
+            for (const f of matches.slice(1)) {
+                try {
+                    await _driveRequest(`/files/${f.id}`, { method: 'DELETE' });
+                } catch (e) {
+                    console.warn('[Drive] No se pudo eliminar duplicado:', e.message);
+                }
+            }
+        }
 
         // ── Incluir módulos con almacenamiento propio ──────────────────
         // Desde v15, Doctrina está integrada en Store (no requiere merge manual).
@@ -350,7 +394,13 @@ const GoogleDrive = (() => {
     async function syncVersion(docId, docNombre, contenido, versionTag = '') {
         if (!isConnected()) throw new Error('No conectado a Drive.');
 
-        const folderId = await _getOrCreateFolder();
+        let folderId = await _getOrCreateFolder();
+        try {
+            const versionsId = await _getOrCreateChildFolder(folderId, 'VERSIONES');
+            folderId = await _getOrCreateChildFolder(versionsId, `doc-${docId}`);
+        } catch (e) {
+            folderId = await _getOrCreateFolder();
+        }
         const tag = versionTag || new Date().toISOString().split('T')[0];
         const fname = `doc-${docId}-${tag}.json`;
 
@@ -528,7 +578,7 @@ const GoogleDrive = (() => {
                                 <label style="font-size:12.5px; font-weight:700; color:var(--text);">
                                     Google OAuth2 Client ID
                                 </label>
-                                <a href="https://console.cloud.google.com/apis/credentials" target="_blank"
+                                <a href="https://console.cloud.google.com/apis/credentials"
                                     style="font-size:11.5px; color:var(--cyan); font-weight:600; text-decoration:none;">
                                     <i class="fas fa-external-link-alt"></i> Guía de Configuración
                                 </a>
@@ -537,10 +587,30 @@ const GoogleDrive = (() => {
                                 <input id="drive-client-id-input" type="text"
                                     value="${escHtml(cfg.clientId || '')}"
                                     placeholder="123456789-abc....apps.googleusercontent.com"
-                                    style="flex:1; font-family:'IBM Plex Mono',monospace; font-size:13px; padding:10px 14px;"
+                                    title="${escHtml(cfg.clientId || '')}"
+                                    spellcheck="false"
+                                    style="flex:1; font-family:'IBM Plex Mono',monospace; font-size:14px; padding:10px 14px;"
                                 >
+                                <button onclick="GoogleDrive.copyDriveClientId()" class="btn" style="padding:0 14px; background:var(--bg-2,#f8fafc); border:1px solid var(--border);">
+                                    <i class="far fa-copy"></i>
+                                </button>
                                 <button onclick="GoogleDrive.saveClientId()" class="btn btn-p" style="padding:0 20px;">
                                     <i class="fas fa-save" style="margin-right:6px;"></i> Guardar
+                                </button>
+                            </div>
+                            <div style="display:flex; gap:10px; margin-top:10px;">
+                                <input id="drive-client-secret-input" type="password"
+                                    value="${escHtml(cfg.clientSecret || '')}"
+                                    placeholder="Client Secret (opcional)"
+                                    title="${escHtml(cfg.clientSecret || '')}"
+                                    spellcheck="false"
+                                    style="flex:1; font-family:'IBM Plex Mono',monospace; font-size:14px; padding:10px 14px;"
+                                >
+                                <button onclick="GoogleDrive.toggleDriveClientSecret()" class="btn" style="padding:0 14px; background:var(--bg-2,#f8fafc); border:1px solid var(--border);" title="Mostrar/Ocultar">
+                                    <i class="far fa-eye"></i>
+                                </button>
+                                <button onclick="GoogleDrive.copyDriveClientSecret()" class="btn" style="padding:0 14px; background:var(--bg-2,#f8fafc); border:1px solid var(--border);" title="Copiar">
+                                    <i class="far fa-copy"></i>
                                 </button>
                             </div>
                             <div style="font-size:11.5px; color:var(--text-3); margin-top:8px; font-style:italic;">
@@ -556,17 +626,45 @@ const GoogleDrive = (() => {
 
     function saveClientId() {
         const input = document.getElementById('drive-client-id-input');
+        const secretInput = document.getElementById('drive-client-secret-input');
         if (!input) return;
         const clientId = input.value.trim();
         if (!clientId) { showError('El Client ID no puede estar vacío.'); return; }
-        if (!clientId.includes('.apps.googleusercontent.com')) {
-            showError('El Client ID no parece válido. Debe terminar en .apps.googleusercontent.com');
-            return;
-        }
-        _saveConfig({ clientId });
-        registrarEvento('Google Drive Client ID configurado.');
-        showSuccess('✅ Client ID guardado. Ahora puedes conectar con Google.');
+
+        const clientSecret = secretInput ? String(secretInput.value || '').trim() : '';
+        _saveConfig({ clientId, clientSecret });
+        showOk('Client ID guardado. Ahora puedes conectar Drive.');
         _driveRenderStatus();
+    }
+
+    async function copyDriveClientId() {
+        try {
+            const input = document.getElementById('drive-client-id-input');
+            const val = input ? String(input.value || '').trim() : '';
+            if (!val) { showError('Client ID vacío.'); return; }
+            await navigator.clipboard.writeText(val);
+            showOk('Client ID copiado.');
+        } catch (e) {
+            showError('No se pudo copiar (permiso del sistema).');
+        }
+    }
+
+    async function copyDriveClientSecret() {
+        try {
+            const input = document.getElementById('drive-client-secret-input');
+            const val = input ? String(input.value || '').trim() : '';
+            if (!val) { showError('Client Secret vacío.'); return; }
+            await navigator.clipboard.writeText(val);
+            showOk('Client Secret copiado.');
+        } catch (e) {
+            showError('No se pudo copiar (permiso del sistema).');
+        }
+    }
+
+    function toggleDriveClientSecret() {
+        const input = document.getElementById('drive-client-secret-input');
+        if (!input) return;
+        input.type = (input.type === 'password') ? 'text' : 'password';
     }
 
     // Suscribirse a eventos relevantes
@@ -608,10 +706,22 @@ const GoogleDrive = (() => {
     // @param {string}      filename    — nombre a usar en Drive
     // @param {string}      mimeType    — MIME type (ej: 'application/pdf')
     // @returns {Promise<{id, name, webViewLink}>}
-    async function uploadBinaryFile(arrayBuffer, filename, mimeType = 'application/pdf') {
+    async function uploadBinaryFile(arrayBuffer, filename, mimeType = 'application/pdf', opts = null) {
         if (!isConnected()) throw new Error('No conectado a Drive. Conecta primero en Configurar IA & Drive.');
 
-        const folderId = await _getOrCreateFolder();
+        let folderId = await _getOrCreateFolder();
+        try {
+            if (opts && typeof opts === 'object') {
+                if (opts.causaId) {
+                    folderId = await ensureCausaFolder(opts.causaId, opts.caratula || '');
+                } else if (opts.gestionId) {
+                    folderId = await ensureGestionFolder(opts.tipo || 'gestion', opts.gestionId, opts.label || '');
+                }
+            }
+        } catch (e) {
+            console.warn('[Drive] No se pudo resolver subcarpeta, usando raíz:', e.message);
+            folderId = await _getOrCreateFolder();
+        }
 
         // Construir cuerpo multipart con datos binarios reales
         const boundary = '-------AppBogadoPDFBoundary' + Date.now();
@@ -671,9 +781,15 @@ const GoogleDrive = (() => {
         syncVersion, listVersions,
         startAutoSync, stopAutoSync,
         renderConfigPanel,
+        copyDriveClientId,
+        copyDriveClientSecret,
+        toggleDriveClientSecret,
         _driveRenderStatus,
         uploadBinaryFile,
         downloadBinaryFile,
+        ensureCausaFolder,
+        ensureGestionFolder,
+        getRootFolderId: _getOrCreateFolder,
     };
 })();
 
