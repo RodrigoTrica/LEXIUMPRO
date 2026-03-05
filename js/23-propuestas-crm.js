@@ -409,7 +409,7 @@ window.uiAgregarCuota = function (causaId) {
     showSuccess('✅ Cuota registrada.');
     renderExpedienteFinanciero(causaId);
     // Crear alerta en calendario
-    DB.alertas.push({
+    const alertaNueva = {
         id: generarID(),
         causaId,
         tipo: 'pago',
@@ -419,7 +419,9 @@ window.uiAgregarCuota = function (causaId) {
         fechaObjetivo: fecha,
         _cobro: true,
         alertaEnviadaWA: false,
-    });
+    };
+    if (typeof Store !== 'undefined' && Store?.agregarAlerta) Store.agregarAlerta(alertaNueva);
+    else DB.alertas.push(alertaNueva);
     if (typeof markAppDirty === 'function') markAppDirty();
     guardarDB();
 };
@@ -437,9 +439,9 @@ window.exportarInformeConsolidado = function (causaId) {
     const docsCli = causa.documentosCliente || causa.documentos || [];
     const docsTri = causa.documentosTribunal || [];
 
-    const html = \`<!DOCTYPE html>
+    const html = `<!DOCTYPE html>
 <html lang="es"><head><meta charset="UTF-8">
-<title>Informe Consolidado — \${causa.caratula}</title>
+<title>Informe Consolidado — ${causa.caratula}</title>
 <style>
   body{font-family:Georgia,serif;max-width:820px;margin:40px auto;color:#1a202c;font-size:13px;line-height:1.7;}
   .header{background:linear-gradient(135deg,#1E3A5F,#2E75B6);color:#fff;padding:32px 40px;border-radius:8px 8px 0 0;}
@@ -458,57 +460,57 @@ window.exportarInformeConsolidado = function (causaId) {
 <div class="header">
   <div style="font-size:11px;opacity:.7;margin-bottom:8px;">⚖️ LEXIUM — Gestión Legal Inteligente</div>
   <h1>Informe Consolidado de Causa</h1>
-  <div class="meta">Generado el \${hoy} · Por: \${usuario}</div>
+  <div class="meta">Generado el ${hoy} · Por: ${usuario}</div>
 </div>
 <h2>I. Antecedentes Generales</h2>
 <table>
-  <tr><th>Carátula</th><td>\${causa.caratula}</td></tr>
-  <tr><th>Procedimiento</th><td>\${causa.tipoProcedimiento||'—'}</td></tr>
-  <tr><th>Tipo</th><td>\${causa.tipoExpediente==='tramite'?'Trámite':'Gestión Judicial'}</td></tr>
-  <tr><th>Estado</th><td>\${causa.estadoGeneral||'—'}</td></tr>
-  <tr><th>Instancia</th><td>\${causa.instancia||'Primera'}</td></tr>
-  <tr><th>Avance</th><td>\${causa.porcentajeAvance||0}%</td></tr>
+  <tr><th>Carátula</th><td>${causa.caratula}</td></tr>
+  <tr><th>Procedimiento</th><td>${causa.tipoProcedimiento||'—'}</td></tr>
+  <tr><th>Tipo</th><td>${causa.tipoExpediente==='tramite'?'Trámite':'Gestión Judicial'}</td></tr>
+  <tr><th>Estado</th><td>${causa.estadoGeneral||'—'}</td></tr>
+  <tr><th>Instancia</th><td>${causa.instancia||'Primera'}</td></tr>
+  <tr><th>Avance</th><td>${causa.porcentajeAvance||0}%</td></tr>
 </table>
 <h2>II. Últimos Movimientos</h2>
 <table><thead><tr><th>Etapa</th><th>Estado</th></tr></thead><tbody>
-\${(causa.etapasProcesales||[]).slice(-5).map(e=>\`
-  <tr><td>\${e.nombre||e.etapa||'—'}</td>
-  <td class="\${e.completada?'verde':'ambar'}">\${e.completada?'✅ Completada':'⏳ Pendiente'}</td></tr>\`
+${(causa.etapasProcesales||[]).slice(-5).map(e=>`
+  <tr><td>${e.nombre||e.etapa||'—'}</td>
+  <td class="${e.completada?'verde':'ambar'}">${e.completada?'✅ Completada':'⏳ Pendiente'}</td></tr>`
 ).join('')}
 </tbody></table>
 <h2>III. Estado de Cuenta</h2>
 <table>
-  <tr><th>Total Acordado</th><td><strong>$\${(hon.montoBase||0).toLocaleString('es-CL')}</strong></td></tr>
-  <tr><th>Pagado</th><td class="verde">$\${pagado.toLocaleString('es-CL')}</td></tr>
-  <tr><th>Pendiente</th><td class="\${pendiente>0?'rojo':'verde'}">$\${pendiente.toLocaleString('es-CL')}</td></tr>
+  <tr><th>Total Acordado</th><td><strong>$${(hon.montoBase||0).toLocaleString('es-CL')}</strong></td></tr>
+  <tr><th>Pagado</th><td class="verde">$${pagado.toLocaleString('es-CL')}</td></tr>
+  <tr><th>Pendiente</th><td class="${pendiente>0?'rojo':'verde'}">$${pendiente.toLocaleString('es-CL')}</td></tr>
 </table>
-\${cuotas.length?\`
+${cuotas.length?`
 <table><thead><tr><th>Cuota</th><th>Monto</th><th>Vencimiento</th><th>Estado</th></tr></thead><tbody>
-\${cuotas.map(q=>\`<tr>
-  <td>\${q.descripcion}</td>
-  <td>$\${(q.monto||0).toLocaleString('es-CL')}</td>
-  <td>\${q.fechaVencimiento||'—'}</td>
-  <td class="\${q.pagada?'verde':'rojo'}">\${q.pagada?'Pagada':'Pendiente'}</td>
-</tr>\`).join('')}
-</tbody></table>\`:\`\`}
-<h2>IV. Documentos Cliente (\${docsCli.length})</h2>
-\${docsCli.length?\`<table><thead><tr><th>Nombre</th><th>Tipo</th><th>Fecha</th></tr></thead><tbody>
-\${docsCli.map(d=>\`<tr><td>\${d.nombre||d.nombreOriginal||'—'}</td><td>\${d.tipo||'—'}</td><td>\${d.fecha||d.fechaDocumento||'—'}</td></tr>\`).join('')}
-</tbody></table>\`:'<p style="color:#94A3B8;">Sin documentos del cliente.</p>'}
-<h2>V. Documentos Tribunal (\${docsTri.length})</h2>
-\${docsTri.length?\`<table><thead><tr><th>Nombre</th><th>Tipo</th><th>Fecha</th></tr></thead><tbody>
-\${docsTri.map(d=>\`<tr><td>\${d.nombre||d.nombreOriginal||'—'}</td><td>\${d.tipo||'—'}</td><td>\${d.fecha||d.fechaDocumento||'—'}</td></tr>\`).join('')}
-</tbody></table>\`:'<p style="color:#94A3B8;">Sin documentos del tribunal.</p>'}
+${cuotas.map(q=>`<tr>
+  <td>${q.descripcion}</td>
+  <td>$${(q.monto||0).toLocaleString('es-CL')}</td>
+  <td>${q.fechaVencimiento||'—'}</td>
+  <td class="${q.pagada?'verde':'rojo'}">${q.pagada?'Pagada':'Pendiente'}</td>
+</tr>`).join('')}
+</tbody></table>`:``}
+<h2>IV. Documentos Cliente (${docsCli.length})</h2>
+${docsCli.length?`<table><thead><tr><th>Nombre</th><th>Tipo</th><th>Fecha</th></tr></thead><tbody>
+${docsCli.map(d=>`<tr><td>${d.nombre||d.nombreOriginal||'—'}</td><td>${d.tipo||'—'}</td><td>${d.fecha||d.fechaDocumento||'—'}</td></tr>`).join('')}
+</tbody></table>`:'<p style="color:#94A3B8;">Sin documentos del cliente.</p>'}
+<h2>V. Documentos Tribunal (${docsTri.length})</h2>
+${docsTri.length?`<table><thead><tr><th>Nombre</th><th>Tipo</th><th>Fecha</th></tr></thead><tbody>
+${docsTri.map(d=>`<tr><td>${d.nombre||d.nombreOriginal||'—'}</td><td>${d.tipo||'—'}</td><td>${d.fecha||d.fechaDocumento||'—'}</td></tr>`).join('')}
+</tbody></table>`:'<p style="color:#94A3B8;">Sin documentos del tribunal.</p>'}
 <div class="footer">
-  LEXIUM · \${hoy} · \${usuario} — Documento de uso interno exclusivo.
+  LEXIUM · ${hoy} · ${usuario} — Documento de uso interno exclusivo.
 </div>
-</body></html>\`;
+</body></html>`;
 
     const blob = new Blob([html],{type:'text/html;charset=utf-8'});
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href = url;
-    a.download = \`Informe_\${causa.caratula.replace(/\\s+/g,'_')}_\${new Date().toISOString().slice(0,10)}.html\`;
+    a.download = `Informe_${causa.caratula.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.html`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(()=>URL.revokeObjectURL(url),2000);
 };

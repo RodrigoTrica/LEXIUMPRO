@@ -6039,6 +6039,21 @@
             margin-bottom: 14px;
         }
 
+        .tr-evento-form textarea {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .tr-evento-form select {
+            flex: 0 0 180px;
+            max-width: 220px;
+        }
+
+        .tr-evento-form button {
+            flex: 0 0 auto;
+            white-space: nowrap;
+        }
+
         .tr-evento-form input,
         .tr-evento-form select {
             padding: 7px 10px;

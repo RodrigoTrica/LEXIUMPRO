@@ -81,6 +81,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     sistema: {
         info: () => ipcRenderer.invoke('sistema:info'),
         abrirCarpetaDatos: () => ipcRenderer.invoke('sistema:abrirCarpetaDatos'),
+        elegirCarpeta: (args) => ipcRenderer.invoke('sistema:elegirCarpeta', (args && typeof args === 'object') ? args : {}),
+        abrirRuta: (ruta) => {
+            if (typeof ruta !== 'string' || !ruta.trim()) throw new Error('ruta vacía');
+            return ipcRenderer.invoke('sistema:abrirRuta', ruta);
+        },
+        revelarEnCarpeta: (ruta) => {
+            if (typeof ruta !== 'string' || !ruta.trim()) throw new Error('ruta vacía');
+            return ipcRenderer.invoke('sistema:revelarEnCarpeta', ruta);
+        },
     },
 
     whatsapp: {

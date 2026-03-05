@@ -602,6 +602,13 @@ Analiza esta sentencia y entrega:
 async function clAnalizarEstrategiaPro(causaId) {
     const causa = DB.causas.find(c => c.id == causaId);
     if (!causa) { showError('Selecciona una causa primero.'); return; }
+    const tipoExp = String(causa?.tipoExpediente || '').toLowerCase();
+    const tipoProc = String(causa?.tipoProcedimiento || '').toLowerCase();
+    const esAdmin = tipoExp === 'tramite' || tipoProc.includes('administrativ') || tipoProc.includes('trámite') || tipoProc.includes('tramite');
+    if (esAdmin) {
+        showInfo('Estrategia y riesgo IA están disponibles solo para causas judiciales.');
+        return;
+    }
 
     const pid = typeof iaGetProvider === 'function' ? iaGetProvider() : 'claude';
     // FIX Problema 1: iaGetKey es async 2014 await obligatorio
@@ -1446,6 +1453,15 @@ Jurisdicción: Chile. Responde en español formal y técnico.
 // ── 10.4 Análisis estratégico ─────────────────────────────────────
 function clAbrirEstrategia(causaId) {
     const causa = causaId ? DB.causas.find(c => c.id == causaId) : null;
+    if (causa) {
+        const tipoExp = String(causa?.tipoExpediente || '').toLowerCase();
+        const tipoProc = String(causa?.tipoProcedimiento || '').toLowerCase();
+        const esAdmin = tipoExp === 'tramite' || tipoProc.includes('administrativ') || tipoProc.includes('trámite') || tipoProc.includes('tramite');
+        if (esAdmin) {
+            if (typeof showInfo === 'function') showInfo('Este módulo de estrategia aplica solo a causas judiciales.');
+            return;
+        }
+    }
     _clAbrirModalIA({
         titulo: causa ? `Estrategia: ${causa.caratula}` : 'Análisis Estratégico con IA',
         placeholder: 'Describe la situación o pregunta estratégica:\n\nEj: El demandado acaba de presentar recurso de nulidad. ¿Qué hacemos?\nEj: ¿Conviene transigir o llegar a sentencia?\nEj: ¿Es viable la casación en el fondo en este caso?',

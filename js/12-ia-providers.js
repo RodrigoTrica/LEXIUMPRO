@@ -614,16 +614,14 @@ async function iaRenderConfigUI() {
                     <!-- FUNCIONES DISPONIBLES -->
                     <div class="card" style="padding: 24px; border-left: 4px solid var(--cyan);">
                         <h3 style="font-size:16px; margin-bottom:18px; color:var(--text); display:flex; align-items:center; gap:10px;">
-                            <i class="fas fa-magic" style="color:var(--cyan);"></i> Capacidades
+                            <i class="fas fa-book-open" style="color:var(--cyan);"></i> Repositorio IA Jurídico
                         </h3>
                         <div style="display:flex; flex-direction:column; gap:16px;">
                             ${[
-            ['fa-pen-nib',       'Redacción Legal',    'Escritos adaptados a la causa.'],
             ['fa-book',          'Jurisprudencia IA',  'Búsqueda y análisis de fallos chilenos.'],
             ['fa-graduation-cap','Doctrina Legal',     'Consulta doctrinal con autores nacionales.'],
-            ['fa-file-alt',      'Informes Word/PDF',  'Genera documentos descargables con IA.'],
-            ['fa-file-search',   'Análisis de ROL',    'Extracción de hitos y fallos.'],
-            ['fa-comments',      'LexBot Chat',        'Asistente con contexto jurídico.'],
+            ['fa-database',      'Base propia del estudio', 'Material interno reutilizable para análisis y redacción.'],
+            ['fa-link',          'Apoyo a estrategia', 'Se integra como insumo para Estrategia y Riesgo en causas judiciales.'],
         ].map(([icon, title, desc]) => `
                             <div style="display:flex; align-items:center; gap:14px;">
                                 <div style="min-width:40px; height:40px; display:flex; align-items:center; justify-content:center; background:var(--bg-2); border-radius:10px;">
@@ -637,12 +635,12 @@ async function iaRenderConfigUI() {
                         </div>
                         
                         <div style="margin-top:16px; padding:14px; background:linear-gradient(135deg,#faf5ff,#f5f3ff); border:1px solid #e9d5ff; border-radius:12px;">
-                            <div style="font-size:11px; font-weight:700; color:#5b21b6; margin-bottom:10px; letter-spacing:0.04em; text-transform:uppercase;">Accesos Rápidos IA</div>
+                            <div style="font-size:11px; font-weight:700; color:#5b21b6; margin-bottom:10px; letter-spacing:0.04em; text-transform:uppercase;">Accesos Rápidos del Repositorio</div>
                             <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
                                 <button onclick="typeof clAbrirBusquedaJuris!=='undefined'&&clAbrirBusquedaJuris()" style="display:flex;align-items:center;gap:7px;padding:8px 10px;background:white;border:1px solid #e9d5ff;border-radius:8px;cursor:pointer;font-size:0.72rem;font-weight:700;color:#4c1d95;" onmouseover="this.style.background='#ede9fe'" onmouseout="this.style.background='white'"><i class="fas fa-book" style="color:#7c3aed;"></i>Jurisprudencia</button>
                                 <button onclick="typeof clAbrirDoctrina!=='undefined'&&clAbrirDoctrina()" style="display:flex;align-items:center;gap:7px;padding:8px 10px;background:white;border:1px solid #e9d5ff;border-radius:8px;cursor:pointer;font-size:0.72rem;font-weight:700;color:#4c1d95;" onmouseover="this.style.background='#ede9fe'" onmouseout="this.style.background='white'"><i class="fas fa-graduation-cap" style="color:#7c3aed;"></i>Doctrina</button>
-                                <button onclick="typeof clMejorarEscritoActual!=='undefined'&&clMejorarEscritoActual()" style="display:flex;align-items:center;gap:7px;padding:8px 10px;background:white;border:1px solid #e9d5ff;border-radius:8px;cursor:pointer;font-size:0.72rem;font-weight:700;color:#4c1d95;" onmouseover="this.style.background='#ede9fe'" onmouseout="this.style.background='white'"><i class="fas fa-magic" style="color:#7c3aed;"></i>Mejorar Escrito</button>
-                                <button onclick="typeof clToggleIframe!=='undefined'&&clToggleIframe()" style="display:flex;align-items:center;gap:7px;padding:8px 10px;background:white;border:1px solid #e9d5ff;border-radius:8px;cursor:pointer;font-size:0.72rem;font-weight:700;color:#4c1d95;" onmouseover="this.style.background='#ede9fe'" onmouseout="this.style.background='white'"><i class="fas fa-robot" style="color:#7c3aed;"></i>IA Web</button>
+                                <button onclick="tab && tab('jurisprudencia', null)" style="display:flex;align-items:center;gap:7px;padding:8px 10px;background:white;border:1px solid #e9d5ff;border-radius:8px;cursor:pointer;font-size:0.72rem;font-weight:700;color:#4c1d95;" onmouseover="this.style.background='#ede9fe'" onmouseout="this.style.background='white'"><i class="fas fa-landmark" style="color:#7c3aed;"></i>Módulo Jurisprudencia</button>
+                                <button onclick="tab && tab('doctrina', null)" style="display:flex;align-items:center;gap:7px;padding:8px 10px;background:white;border:1px solid #e9d5ff;border-radius:8px;cursor:pointer;font-size:0.72rem;font-weight:700;color:#4c1d95;" onmouseover="this.style.background='#ede9fe'" onmouseout="this.style.background='white'"><i class="fas fa-book-reader" style="color:#7c3aed;"></i>Módulo Doctrina</button>
                             </div>
                         </div>
                         <div style="margin-top:14px; padding:14px; background:rgba(245, 158, 11, 0.05); border:1px solid rgba(245, 158, 11, 0.2); border-radius:14px; font-size:12.5px; color:#d97706; line-height:1.5;">

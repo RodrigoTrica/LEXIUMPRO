@@ -20,6 +20,84 @@ function uid() {
     });
 }
 
+window.beEnviarAlertaWhatsApp = async function(alertaId) {
+    const alerta = (DB.alertas || []).find(a => String(a.id) === String(alertaId));
+    if (!alerta) return;
+    if (alerta.waAlertadoEn && !confirm('Esta alerta ya fue enviada por WhatsApp. ¿Desea reenviarla?')) return;
+    if (!window.electronAPI?.whatsapp?.enviarAlertaA && !window.electronAPI?.whatsapp?.enviarAlerta) {
+        if (typeof showError === 'function') showError('WhatsApp no está disponible en este entorno.');
+        return;
+    }
+    const causa = (DB.causas || []).find(c => String(c.id) === String(alerta.causaId));
+    const causaLabel = causa?.caratula || causa?.cliente || `Causa ${alerta.causaId}`;
+    const fecha = alerta.fechaObjetivo ? new Date(alerta.fechaObjetivo).toLocaleDateString('es-CL') : 'fecha por definir';
+    const msg = `🔔 Alerta legal\nCausa: ${causaLabel}\nTipo: ${alerta.tipo || 'evento'}\nDetalle: ${alerta.mensaje || 'Sin detalle'}\nFecha: ${fecha}`;
+
+    try {
+        const cli = (DB.clientes || []).find(c => {
+            const n = String(c?.nombre || c?.nom || '').trim().toLowerCase();
+            const cNom = String(causa?.cliente || '').trim().toLowerCase();
+            return n && cNom && n === cNom;
+        });
+        const tel = String(cli?.telefono || cli?.tel || cli?.whatsapp || '').replace(/[^\d]/g, '');
+        let r = null;
+        if (tel && window.electronAPI?.whatsapp?.enviarAlertaA) {
+            r = await window.electronAPI.whatsapp.enviarAlertaA(tel, msg);
+        } else if (window.electronAPI?.whatsapp?.enviarAlerta) {
+            r = await window.electronAPI.whatsapp.enviarAlerta(msg);
+        } else if (typeof showError === 'function') {
+            showError('No hay teléfono del cliente ni destinatarios globales para WhatsApp.');
+            return;
+        }
+        if (r?.ok) {
+            const nowIso = new Date().toISOString();
+            alerta.waAlertadoEn = nowIso;
+            if (causa && Array.isArray(causa.eventosProcesalesIA)) {
+                causa.eventosProcesalesIA.forEach(ev => {
+                    if (String(ev?.tipo || '').toLowerCase() !== 'audiencia') return;
+                    const sameFecha = !ev.fecha || String(ev.fecha || '') === String(alerta.fechaObjetivo || '');
+                    const sameTitulo = String(alerta.mensaje || '').toLowerCase().includes(String(ev.titulo || '').toLowerCase());
+                    if (sameFecha || sameTitulo) ev.waAlertadoEn = nowIso;
+                });
+            }
+            if (typeof markAppDirty === 'function') markAppDirty();
+            guardarDB();
+            if (typeof showSuccess === 'function') showSuccess('Alerta enviada por WhatsApp.');
+            renderCalendario();
+        } else if (typeof showError === 'function') {
+            showError(r?.error || 'No se pudo enviar alerta por WhatsApp.');
+        }
+    } catch (e) {
+        if (typeof showError === 'function') showError(e?.message || 'No se pudo enviar alerta por WhatsApp.');
+    }
+};
+
+window.beCerrarAlerta = function(alertaId) {
+    const alerta = (DB.alertas || []).find(a => String(a.id) === String(alertaId));
+    if (!alerta) return;
+    if (!confirm('¿Marcar esta alerta como gestionada/cerrada?')) return;
+    alerta.estado = 'cerrada';
+    alerta.gestionadaEn = new Date().toISOString();
+
+    const causa = (DB.causas || []).find(c => String(c.id) === String(alerta.causaId));
+    if (causa && Array.isArray(causa.eventosProcesalesIA) && String(alerta.tipo || '').toLowerCase() === 'audiencia') {
+        causa.eventosProcesalesIA.forEach(ev => {
+            if (String(ev?.tipo || '').toLowerCase() !== 'audiencia') return;
+            const sameFecha = !ev.fecha || String(ev.fecha || '') === String(alerta.fechaObjetivo || '');
+            const sameTitulo = String(alerta.mensaje || '').toLowerCase().includes(String(ev.titulo || '').toLowerCase());
+            if (sameFecha || sameTitulo) {
+                ev.gestionado = true;
+                ev.gestionadoEn = new Date().toISOString();
+            }
+        });
+    }
+
+    if (typeof markAppDirty === 'function') markAppDirty();
+    guardarDB();
+    if (typeof showInfo === 'function') showInfo('Alerta marcada como gestionada.');
+    renderCalendario();
+};
+
 function _addMonthsKeepDay(date, months) {
     const d = new Date(date);
     const day = d.getDate();
@@ -120,11 +198,15 @@ function recalcularAvance(causa) {
  * @returns {object} Objeto causa creado y agregado a DB.causas.
  */
 function crearCausa(data) {
+    const tipoExpediente = String(data.tipoExpediente || '').toLowerCase() === 'tramite'
+        ? 'tramite'
+        : 'judicial';
     const nueva = {
         id: generarID(),
         clienteId: data.clienteId,
         caratula: data.caratula,
         tipoProcedimiento: data.tipoProcedimiento || "Ordinario Civil",
+        tipoExpediente,
         rama: data.rama || "",
         estadoGeneral: "En tramitación",
         instancia: "Primera",
@@ -135,15 +217,37 @@ function crearCausa(data) {
         etapasProcesales: generarEtapas(data.tipoProcedimiento || "Ordinario Civil"),
         documentos: [],
         recursos: [],
+        partes: { demandante: {}, demandado: {}, abogadoContrario: {}, juez: {} },
         estrategia: {},
         riesgo: {},
         honorarios: {},
         jurisprudenciaAsociada: [],
-        revisadoHoy: false
+        revisadoHoy: false,
+        docsCliente: [],
+        docsTribunal: [],
+        docsContraparte: [],
+        docsTramites: [],
+        tramiteMeta: { organismo: '', tipoTramite: '', lugarGestion: '', numeroIngreso: '' },
+        hitosTramite: {
+            fechaIngresoSistema: new Date().toISOString().slice(0, 10),
+            fechaCargaDocumentos: null,
+            fechaIngresoOrganismo: null,
+            fechaRespuestaOrganismo: null,
+            fechaFinalizacion: null
+        },
+        reparos: [],
+        iaSugerencias: null,
+        eventosProcesalesIA: [],
+        audiencias: { habilitado: false }
     };
-    DB.causas.push(nueva);
+    if (typeof Store !== 'undefined' && Store?.agregarCausa) {
+        Store.agregarCausa(nueva);
+    } else {
+        DB.causas.push(nueva);
+    }
     if (typeof markAppDirty === "function") markAppDirty(); guardarDB();
     renderDashboard();
+    return nueva;
 }
 
 /**
@@ -214,7 +318,7 @@ function crearAlerta(data) {
         a.mensaje === data.mensaje && new Date(a.fechaObjetivo).toDateString() === hoyStr
     );
     if (existe) return;
-    DB.alertas.push({
+    const alertaNueva = {
         id: generarID(),
         causaId: data.causaId,
         tipo: data.tipo,
@@ -222,7 +326,9 @@ function crearAlerta(data) {
         fechaObjetivo: data.fechaObjetivo || hoy(),
         prioridad: data.prioridad || "media",
         estado: "activa"
-    });
+    };
+    if (typeof Store !== 'undefined' && Store?.agregarAlerta) Store.agregarAlerta(alertaNueva);
+    else DB.alertas.push(alertaNueva);
     if (typeof markAppDirty === "function") markAppDirty(); guardarDB();
 }
 
@@ -245,18 +351,85 @@ function evaluarAlertas() {
 function generarEventosCalendario() {
     return DB.alertas
         .filter(a => a.estado === "activa")
-        .map(alerta => ({ id: alerta.id, causaId: alerta.causaId, titulo: alerta.mensaje, fecha: alerta.fechaObjetivo, prioridad: alerta.prioridad }));
+        .map(alerta => {
+            const causa = DB.causas.find(c => String(c.id) === String(alerta.causaId));
+            return {
+                id: alerta.id,
+                causaId: alerta.causaId,
+                titulo: alerta.mensaje,
+                fecha: alerta.fechaObjetivo,
+                prioridad: alerta.prioridad,
+                tipo: (alerta.tipo || 'evento').toLowerCase(),
+                causaLabel: causa?.caratula || causa?.cliente || `Causa ${alerta.causaId}`,
+                waAlertadoEn: alerta.waAlertadoEn || null
+            };
+        });
 }
 
 function renderCalendario() {
     const contenedor = document.getElementById("calendarioEventos");
     if (!contenedor) return;
     const eventos = generarEventosCalendario().sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
-    contenedor.innerHTML = eventos.length ? eventos.map(ev => `
-        <div class="alert-item ${ev.prioridad === 'critica' || ev.prioridad === 'alta' ? '' : 'info'}">
-            <i class="fas fa-calendar-day"></i>
-            <div><strong>${new Date(ev.fecha).toLocaleDateString('es-CL')}</strong> — ${escHtml(ev.titulo)}</div>
+    const audienciasIA = (DB.causas || []).filter(c => c?.audiencias?.habilitado);
+    const tipoColor = {
+        audiencia: '#2563eb',
+        plazo: '#dc2626',
+        procesal: '#7c3aed',
+        inactividad: '#b45309',
+        evento: '#64748b'
+    };
+    const audienciasHtml = audienciasIA.length ? `
+        <div style="margin-bottom:10px; padding:10px 12px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px;">
+            <div style="font-size:.72rem; font-weight:800; color:#1e40af; text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">
+                <i class="fas fa-gavel"></i> Módulo Audiencias (IA)
+            </div>
+            ${audienciasIA.slice(0, 4).map(c => {
+                const auds = (c.eventosProcesalesIA || [])
+                    .filter(ev => String(ev?.tipo || '').toLowerCase() === 'audiencia')
+                    .sort((a, b) => new Date(a.fecha || 0) - new Date(b.fecha || 0));
+                const prox = auds.find(a => a.fecha) || auds[0] || null;
+                const fechaProx = prox?.fecha ? new Date(prox.fecha).toLocaleDateString('es-CL') : 'Sin fecha definida';
+                const tituloProx = prox?.titulo || 'Audiencia detectada por IA';
+                const causaLabel = escHtml(c.caratula || c.cliente || `Causa ${c.id}`);
+                const causaId = String(c.id).replace(/'/g, "\\'");
+                return `
+                <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start; margin:6px 0; padding:7px 8px; border:1px solid #dbeafe; border-radius:7px; background:#fff;">
+                    <div style="min-width:0;">
+                        <div style="font-size:.76rem; color:#1e3a8a; font-weight:700;">${causaLabel}</div>
+                        <div style="font-size:.72rem; color:#334155; margin-top:2px;">${escHtml(tituloProx)}</div>
+                        <div style="font-size:.68rem; color:#64748b; margin-top:1px;">${fechaProx} · ${auds.length} audiencia(s) IA</div>
+                    </div>
+                    <button class="btn btn-xs" style="background:#dbeafe; color:#1e40af; border:none;" onclick="tab('detalle-causa'); setTimeout(()=>abrirDetalleCausa?.('${causaId}'),80);">
+                        Ver causa
+                    </button>
+                </div>`;
+            }).join('')}
+            ${audienciasIA.length > 4 ? `<div style="font-size:.7rem; color:#1d4ed8; margin-top:4px;">+${audienciasIA.length - 4} causa(s) adicional(es)</div>` : ''}
+        </div>` : '';
+
+    const eventosHtml = eventos.length ? eventos.map(ev => `
+        <div class="alert-item ${ev.prioridad === 'critica' || ev.prioridad === 'alta' ? '' : 'info'}" style="border-left:3px solid ${tipoColor[ev.tipo] || tipoColor.evento};">
+            <i class="fas fa-calendar-day" style="color:${tipoColor[ev.tipo] || tipoColor.evento};"></i>
+            <div>
+                <strong>${new Date(ev.fecha).toLocaleDateString('es-CL')}</strong> — ${escHtml(ev.titulo)}
+                <div style="font-size:.72rem; color:#64748b; margin-top:2px;">${escHtml(ev.causaLabel)}</div>
+                ${ev.waAlertadoEn ? `<div style="font-size:.68rem; color:#0f766e; margin-top:2px;"><i class="fab fa-whatsapp"></i> Enviado: ${new Date(ev.waAlertadoEn).toLocaleString('es-CL')}</div>` : ''}
+                ${(ev.tipo === 'audiencia' || ev.tipo === 'plazo') ? `
+                <div style="margin-top:5px;">
+                    <button class="btn btn-xs" style="background:#eef2ff; color:#4338ca; border:none; margin-right:4px;" onclick="tab('detalle-causa'); setTimeout(()=>abrirDetalleCausa?.('${ev.causaId}'),80);">
+                        <i class="fas fa-folder-open"></i> Ver causa
+                    </button>
+                    <button class="btn btn-xs" style="background:#ecfeff; color:#0f766e; border:none;" onclick="beEnviarAlertaWhatsApp('${ev.id}')">
+                        <i class="fab fa-whatsapp"></i> ${ev.waAlertadoEn ? 'Reenviar' : 'Avisar'}
+                    </button>
+                    <button class="btn btn-xs" style="background:#f0fdf4; color:#166534; border:none; margin-left:4px;" onclick="beCerrarAlerta('${ev.id}')">
+                        <i class="fas fa-check"></i> Gestionada
+                    </button>
+                </div>` : ''}
+            </div>
         </div>`).join('') : '<div class="alert-empty">Sin eventos próximos.</div>';
+
+    contenedor.innerHTML = audienciasHtml + eventosHtml;
 }
 
 function actualizarSistema() {
@@ -268,7 +441,7 @@ function actualizarSistema() {
 
 // ─── BLOQUE 3: MÓDULO COMERCIAL + HONORARIOS ─────────
 function crearProspecto(data) {
-    DB.prospectos.push({
+    const nuevo = {
         id: generarID(),
         nombre: data.nombre,
         materia: data.materia,
@@ -291,7 +464,9 @@ function crearProspecto(data) {
             rechazada: false,
         },
         tipoExpediente: null,   // 'judicial' | 'tramite' — se fija al aceptar
-    });
+    };
+    if (typeof Store !== 'undefined' && Store?.prospectos) Store.prospectos.push(nuevo);
+    else DB.prospectos.push(nuevo);
     if (typeof markAppDirty === 'function') markAppDirty();
     guardarDB();
     if (typeof renderProspectos === 'function') renderProspectos();
@@ -341,13 +516,31 @@ function renderProspectos() {
                 </div>`).join('') || '<div class="empty-state"><i class="fas fa-funnel-dollar"></i><p>Sin prospectos.</p></div>';
 }
 
+function _beContratoServiciosHTML(prospecto, tipoExpediente, honorarios) {
+    const tipoLabel = tipoExpediente === 'tramite' ? 'Trámite Administrativo' : 'Causa Judicial';
+    const hoyStr = new Date().toLocaleDateString('es-CL');
+    return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Contrato - ${prospecto.nombre}</title></head>
+<body style="font-family:Arial,sans-serif;padding:28px;color:#0f172a;line-height:1.5;">
+<h1 style="margin:0 0 8px;">Contrato de Prestación de Servicios</h1>
+<div style="font-size:12px;color:#64748b;">${hoyStr} · ${tipoLabel}</div>
+<h3>Cliente</h3><p><strong>${prospecto.nombre}</strong><br>RUT: ${prospecto.rut || '—'}</p>
+<h3>Objeto</h3><p>${prospecto.descripcion || 'Gestión legal encomendada por el cliente.'}</p>
+<h3>Honorarios</h3><p>$${Number(honorarios || 0).toLocaleString('es-CL')} CLP.</p>
+<h3>Mandato</h3><p>El cliente confiere patrocinio y poder suficiente para actuaciones propias del encargo profesional.</p>
+</body></html>`;
+}
+
 function convertirACliente(prospectoId, tipoExpediente) {
     const prospecto = DB.prospectos.find(p => p.id === prospectoId);
     if (!prospecto) return;
 
+    const tipoFinal = (tipoExpediente === 'tramite' || tipoExpediente === 'judicial')
+        ? tipoExpediente
+        : (confirm('¿Desea crear este expediente como Trámite Administrativo?\nSelecciona "Cancelar" para crear Causa Judicial.') ? 'tramite' : 'judicial');
+
     // Marcar propuesta como aceptada
     prospecto.estado = 'Aceptado';
-    prospecto.tipoExpediente = tipoExpediente || 'judicial';
+    prospecto.tipoExpediente = tipoFinal;
     if (prospecto.propuesta) prospecto.propuesta.aceptada = true;
 
     // Crear cliente
@@ -358,19 +551,21 @@ function convertirACliente(prospectoId, tipoExpediente) {
         fechaCreacion: hoy(),
         prospectoId: prospecto.id,
     };
-    DB.clientes.push(nuevoCliente);
+    const clienteCreado = (typeof Store !== 'undefined' && Store?.agregarCliente)
+        ? Store.agregarCliente(nuevoCliente)
+        : (DB.clientes.push(nuevoCliente), nuevoCliente);
 
     // Crear causa con datos completos del prospecto
     const hon = prospecto.tipoHonorario === 'variable'
         ? Math.round((prospecto.cuantiaLitigio || 0) * (prospecto.porcentajeLitigio || 0) / 100)
         : (prospecto.honorarioPropuesto || 0);
 
-    crearCausa({
-        clienteId: nuevoCliente.id,
+    const payload = {
+        clienteId: clienteCreado.id,
         caratula: prospecto.nombre,
-        tipoProcedimiento: tipoExpediente === 'tramite' ? 'Trámite Administrativo' : 'Ordinario Civil',
+        tipoProcedimiento: tipoFinal === 'tramite' ? 'Trámite Administrativo' : 'Ordinario Civil',
         rama: prospecto.materia,
-        tipoExpediente: tipoExpediente || 'judicial',
+        tipoExpediente: tipoFinal,
         honorarios: {
             montoBase: hon,
             tipoHonorario: prospecto.tipoHonorario || 'fijo',
@@ -380,13 +575,41 @@ function convertirACliente(prospectoId, tipoExpediente) {
         },
         documentosCliente: [],    // nueva colección separada
         documentosTribunal: [],    // nueva colección separada
-    });
+    };
+    const causaNueva = crearCausa(payload);
+    if (causaNueva) {
+        if (!Array.isArray(causaNueva.docsCliente)) causaNueva.docsCliente = [];
+        const htmlContrato = _beContratoServiciosHTML(prospecto, tipoFinal, hon);
+        const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(htmlContrato)}`;
+        const nombreContrato = `Contrato_${String(prospecto.nombre || 'cliente').replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.html`;
+        causaNueva.docsCliente.push({
+            nombre: nombreContrato,
+            mimetype: 'text/html',
+            size: dataUrl.length,
+            fecha: new Date().toISOString(),
+            data: dataUrl,
+            tipoIA: 'Contrato',
+            etapaIA: 'Contratación',
+            resumenIA: `Contrato generado al convertir prospecto (${tipoFinal === 'tramite' ? 'administrativo' : 'judicial'}).`
+        });
+        causaNueva.contratoServicios = {
+            generadoEn: new Date().toISOString(),
+            tipoExpediente: tipoFinal,
+            nombreDocumento: nombreContrato
+        };
+        prospecto.contratoServicios = {
+            generadoEn: new Date().toISOString(),
+            tipoExpediente: tipoFinal,
+            causaId: causaNueva.id,
+            nombreDocumento: nombreContrato
+        };
+    }
 
     if (typeof markAppDirty === 'function') markAppDirty();
     guardarDB();
     if (typeof renderProspectos === 'function') renderProspectos();
     if (typeof showSuccess === 'function')
-        showSuccess(`✅ Expediente creado: ${prospecto.nombre} → ${tipoExpediente === 'tramite' ? 'Trámite' : 'Gestión Judicial'}`);
+        showSuccess(`✅ Expediente creado: ${prospecto.nombre} → ${tipoFinal === 'tramite' ? 'Trámite' : 'Gestión Judicial'}`);
 }
 
 function asignarHonorarios(causaId, montoBase) {

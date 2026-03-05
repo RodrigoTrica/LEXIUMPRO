@@ -34,10 +34,34 @@
                 const causeOptOptional = '<option value="">-- Sin causa específica --</option>' +
                     (DB.causas || []).map(c => `<option value="${c.id}">${escHtml(c.caratula)}</option>`).join('');
 
-                ['risk-select','ga-causa-sel','ep-causa-sel','doc-causa-sel','hr-causa-sel',
-                 'hr-pago-causa-sel','rec-causa-sel','inf-causa-sel','esc-causa-sel',
+                const finOptBase = (() => {
+                    const causas = (DB.causas || []).map(c => ({ tipo: 'causa', id: c.id, label: c.caratula }));
+                    let tramites = [];
+                    try {
+                        const lista = (typeof window.TramitesDB !== 'undefined' && window.TramitesDB?.todos)
+                            ? window.TramitesDB.todos()
+                            : (typeof AppConfig !== 'undefined' && AppConfig.get) ? (AppConfig.get('tramites') || []) : [];
+                        tramites = (lista || []).map(t => ({
+                            tipo: 'tramite',
+                            id: t.id,
+                            label: `${(t?.tipo || 'Trámite')} — ${(t?.caratula || '')}`.trim()
+                        }));
+                    } catch (_) {}
+                    const opts = [...causas, ...tramites]
+                        .filter(x => x && x.id)
+                        .map(x => `<option value="${x.tipo}:${x.id}">${escHtml(x.label || x.id)}</option>`)
+                        .join('');
+                    return `<option value="">-- Seleccione una gestión --</option>` + opts;
+                })();
+
+                ['risk-select','ga-causa-sel','ep-causa-sel','doc-causa-sel',
+                 'rec-causa-sel','inf-causa-sel','esc-causa-sel',
                  'inst-causa-sel','coh-causa-sel','fe-causa-sel']
                     .forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = causeOptBase; });
+
+                // Control financiero: selector unificado (causa + trámite)
+                ['hr-causa-sel','hr-pago-causa-sel']
+                    .forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = finOptBase; });
 
                 ['cal-causa-sel','cq-causa-sel']
                     .forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = causeOptOptional; });

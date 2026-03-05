@@ -113,11 +113,61 @@ let _raw = (() => {
     }
     ['prospectos', 'propuestas', 'alertas', 'documentos', 'intentosLogin', 'bitacora', 'logs', '_doctrina'].forEach(k => { if (!d[k]) d[k] = []; });
 
+    // Normalizar alertas (calendario + WhatsApp)
+    d.alertas.forEach(a => {
+        if (!a || typeof a !== 'object') return;
+        if (!a.id) a.id = (typeof uid === 'function') ? uid() : (Date.now().toString(36) + Math.random().toString(36).slice(2));
+        if (!a.tipo) a.tipo = 'evento';
+        a.tipo = String(a.tipo).toLowerCase();
+        if (!a.fechaObjetivo) a.fechaObjetivo = new Date().toISOString().slice(0, 10);
+        if (!a.prioridad) a.prioridad = 'media';
+        if (!a.estado) a.estado = 'activa';
+        if (a.waAlertadoEn === undefined) a.waAlertadoEn = null;
+        if (a.gestionadaEn === undefined) a.gestionadaEn = null;
+    });
+
+    // Normalizar prospectos (CRM -> causa + contrato)
+    d.prospectos.forEach(p => {
+        if (!p || typeof p !== 'object') return;
+        if (p.tipoExpediente !== 'judicial' && p.tipoExpediente !== 'tramite') p.tipoExpediente = null;
+        if (!p.propuesta || typeof p.propuesta !== 'object') {
+            p.propuesta = {
+                generada: false,
+                fechaGeneracion: null,
+                fechaVencimiento: null,
+                aceptada: false,
+                rechazada: false
+            };
+        }
+        if (p.contratoServicios === undefined) p.contratoServicios = null;
+    });
+
+    // Normalizar propuestas (CRM comercial)
+    d.propuestas.forEach(pr => {
+        if (!pr || typeof pr !== 'object') return;
+        if (pr.prospectoId === undefined) pr.prospectoId = null;
+        if (typeof pr.montoTotal !== 'number') pr.montoTotal = parseFloat(pr.montoTotal) || 0;
+        if (!Array.isArray(pr.pagos)) pr.pagos = [];
+        if (!pr.estado) pr.estado = 'borrador';
+        if (pr.aceptada === undefined) pr.aceptada = false;
+        if (pr.rechazada === undefined) pr.rechazada = false;
+        if (!pr.fechaCreacion) pr.fechaCreacion = new Date().toISOString();
+    });
+
     // Normalizar esquema de documentos (SID Fase 1)
     // - proveedorIA: identifica el proveedor que generó análisis/insights (openai/gemini/glm)
     //   (para documentos existentes queda null)
     d.documentos.forEach(doc => {
-        if (doc && doc.proveedorIA === undefined) doc.proveedorIA = null;
+        if (!doc || typeof doc !== 'object') return;
+        if (!doc.id) doc.id = (typeof uid === 'function') ? uid() : (Date.now().toString(36) + Math.random().toString(36).slice(2));
+        if (doc.causaId === undefined || doc.causaId === '') doc.causaId = null;
+        if (!doc.tipo) doc.tipo = 'Otro';
+        if (!doc.nombreOriginal && doc.nombre) doc.nombreOriginal = String(doc.nombre).trim();
+        if (!doc.nombreOriginal) doc.nombreOriginal = 'documento';
+        if (!doc.fechaDocumento) doc.fechaDocumento = new Date().toISOString().slice(0, 10);
+        if (!doc.fechaIngreso) doc.fechaIngreso = new Date().toISOString();
+        if (!doc.archivoMime && doc.mimetype) doc.archivoMime = doc.mimetype;
+        if (doc.proveedorIA === undefined) doc.proveedorIA = null;
     });
     // Migración única: mover Doctrina del localStorage aislado al Store centralizado
     try {
@@ -221,7 +271,73 @@ let _raw = (() => {
         if (!causa.docsTribunal) causa.docsTribunal = [];
         if (!causa.docsTramites) causa.docsTramites = [];
         if (!causa.docsContraparte) causa.docsContraparte = [];
+        if (!Array.isArray(causa.movimientos)) causa.movimientos = [];
+        if (!Array.isArray(causa.tareas)) causa.tareas = [];
+        if (!Array.isArray(causa.etapasProcesales)) causa.etapasProcesales = [];
+        if (!Array.isArray(causa.recursos)) causa.recursos = [];
+        if (!causa.prescripcion || typeof causa.prescripcion !== 'object') causa.prescripcion = {};
+        if (!causa.honorarios || typeof causa.honorarios !== 'object') causa.honorarios = {};
         if (!causa.estadoCuenta) causa.estadoCuenta = { montoTotal: 0, pagos: [], totalPagado: 0, saldoPendiente: 0 };
+        if (!causa.tipoExpediente) causa.tipoExpediente = 'judicial';
+        if (!causa.tipoProcedimiento) causa.tipoProcedimiento = causa.tipoExpediente === 'tramite' ? 'Trámite Administrativo' : 'Ordinario Civil';
+        if (!causa.partes || typeof causa.partes !== 'object') causa.partes = { demandante: {}, demandado: {}, abogadoContrario: {}, juez: {} };
+        if (!causa.iaSugerencias || typeof causa.iaSugerencias !== 'object') causa.iaSugerencias = {};
+        if (!Array.isArray(causa.eventosProcesalesIA)) causa.eventosProcesalesIA = [];
+        if (!causa.audiencias || typeof causa.audiencias !== 'object') causa.audiencias = {};
+        if (typeof causa.audiencias.habilitado !== 'boolean') causa.audiencias.habilitado = false;
+        if (!causa.audiencias.filtroVista) causa.audiencias.filtroVista = 'todas';
+        if (!causa.contratoServicios || typeof causa.contratoServicios !== 'object') causa.contratoServicios = null;
+        if (Array.isArray(causa.eventosProcesalesIA) && Array.isArray(d.alertas)) {
+            causa.eventosProcesalesIA.forEach(ev => {
+                if (String(ev?.tipo || '').toLowerCase() !== 'audiencia') return;
+                if (!ev.waAlertadoEn) return;
+                d.alertas.forEach(a => {
+                    if (String(a?.causaId) !== String(causa.id)) return;
+                    if (String(a?.tipo || '').toLowerCase() !== 'audiencia') return;
+                    const sameFecha = !ev.fecha || String(a.fechaObjetivo || '') === String(ev.fecha || '');
+                    const sameTitulo = String(a.mensaje || '').toLowerCase().includes(String(ev.titulo || '').toLowerCase());
+                    if ((sameFecha || sameTitulo) && !a.waAlertadoEn) a.waAlertadoEn = ev.waAlertadoEn;
+                });
+            });
+            d.alertas.forEach(a => {
+                if (String(a?.causaId) !== String(causa.id)) return;
+                if (String(a?.tipo || '').toLowerCase() !== 'audiencia') return;
+                causa.eventosProcesalesIA.forEach(ev => {
+                    if (String(ev?.tipo || '').toLowerCase() !== 'audiencia') return;
+                    const sameFecha = !ev.fecha || String(a.fechaObjetivo || '') === String(ev.fecha || '');
+                    const sameTitulo = String(a.mensaje || '').toLowerCase().includes(String(ev.titulo || '').toLowerCase());
+                    if (!sameFecha && !sameTitulo) return;
+                    if (a.waAlertadoEn && !ev.waAlertadoEn) ev.waAlertadoEn = a.waAlertadoEn;
+                    if (String(a.estado || '').toLowerCase() === 'cerrada' && !ev.gestionado) {
+                        ev.gestionado = true;
+                        ev.gestionadoEn = a.gestionadaEn || new Date().toISOString();
+                    }
+                });
+            });
+        }
+
+        // Seguimiento de trámites administrativos (Fase B inicial)
+        if (!causa.tramiteMeta || typeof causa.tramiteMeta !== 'object') {
+            causa.tramiteMeta = {
+                organismo: '',
+                organismoLabel: '',
+                tipoTramite: '',
+                lugarGestion: '',
+                numeroIngreso: ''
+            };
+        }
+        if (typeof causa.tramiteMeta.organismoLabel !== 'string') causa.tramiteMeta.organismoLabel = '';
+        if (!causa.tramiteMeta.tipoTramite && causa.tipoExpediente === 'tramite') causa.tramiteMeta.tipoTramite = 'Trámite administrativo';
+        if (!causa.hitosTramite || typeof causa.hitosTramite !== 'object') {
+            causa.hitosTramite = {
+                fechaIngresoSistema: causa.fechaCreacion ? String(causa.fechaCreacion).slice(0, 10) : new Date().toISOString().slice(0, 10),
+                fechaCargaDocumentos: null,
+                fechaIngresoOrganismo: null,
+                fechaRespuestaOrganismo: null,
+                fechaFinalizacion: null
+            };
+        }
+        if (!Array.isArray(causa.reparos)) causa.reparos = [];
 
         // Normalización honorarios (modalidad + planPagos) — compatibilidad hacia atrás
         if (!causa.honorarios) causa.honorarios = {};
@@ -328,32 +444,91 @@ const Store = (() => {
         save: _persist,
 
         // — Consultas tipadas (capa de dominio) —
-        getCausa: id => _data.causas.find(c => c.id === id),
-        getCliente: id => _data.clientes.find(c => c.id === id),
+        getCausa: id => _data.causas.find(c => String(c.id) === String(id)),
+        getCliente: id => _data.clientes.find(c => String(c.id) === String(id)),
         getCausasActivas: () => _data.causas.filter(c => c.estadoGeneral !== 'Finalizada'),
         getAlertasActivas: () => _data.alertas.filter(a => a.estado === 'activa'),
-        getDocsDeCausa: causaId => _data.documentos.filter(d => d.causaId === causaId),
+        getDocsDeCausa: causaId => _data.documentos.filter(d => String(d.causaId) === String(causaId)),
 
         // — Mutaciones controladas —
         agregarCausa(causa) {
-            _data.causas.push(causa);
+            const c = (causa && typeof causa === 'object') ? { ...causa } : {};
+            if (!c.id) c.id = (typeof uid === 'function') ? uid() : (Date.now().toString(36) + Math.random().toString(36).slice(2));
+            if (!c.estadoGeneral) c.estadoGeneral = 'En tramitación';
+            if (!c.fechaCreacion) c.fechaCreacion = new Date().toISOString();
+            if (!c.fechaUltimaActividad) c.fechaUltimaActividad = c.fechaCreacion;
+            if (!c.tipoExpediente) c.tipoExpediente = 'judicial';
+            if (!c.tipoProcedimiento) c.tipoProcedimiento = c.tipoExpediente === 'tramite' ? 'Trámite Administrativo' : 'Ordinario Civil';
+            if (!Array.isArray(c.docsCliente)) c.docsCliente = [];
+            if (!Array.isArray(c.docsTribunal)) c.docsTribunal = [];
+            if (!Array.isArray(c.docsContraparte)) c.docsContraparte = [];
+            if (!Array.isArray(c.docsTramites)) c.docsTramites = [];
+            if (!c.partes || typeof c.partes !== 'object') c.partes = { demandante: {}, demandado: {}, abogadoContrario: {}, juez: {} };
+            if (!c.iaSugerencias || typeof c.iaSugerencias !== 'object') c.iaSugerencias = {};
+            if (!Array.isArray(c.eventosProcesalesIA)) c.eventosProcesalesIA = [];
+            if (!c.audiencias || typeof c.audiencias !== 'object') c.audiencias = {};
+            if (typeof c.audiencias.habilitado !== 'boolean') c.audiencias.habilitado = false;
+            if (!c.audiencias.filtroVista) c.audiencias.filtroVista = 'todas';
+            if (!c.tramiteMeta || typeof c.tramiteMeta !== 'object') c.tramiteMeta = { organismo: '', organismoLabel: '', tipoTramite: '', lugarGestion: '', numeroIngreso: '' };
+            if (!c.hitosTramite || typeof c.hitosTramite !== 'object') {
+                c.hitosTramite = {
+                    fechaIngresoSistema: new Date().toISOString().slice(0, 10),
+                    fechaCargaDocumentos: null,
+                    fechaIngresoOrganismo: null,
+                    fechaRespuestaOrganismo: null,
+                    fechaFinalizacion: null
+                };
+            }
+            if (!Array.isArray(c.reparos)) c.reparos = [];
+            if (c.contratoServicios === undefined) c.contratoServicios = null;
+            _data.causas.push(c);
             _persist();
+            return c;
         },
         eliminarCausa(id) {
-            _data.causas = _data.causas.filter(c => c.id !== id);
+            _data.causas = _data.causas.filter(c => String(c.id) !== String(id));
             _persist();
         },
         agregarCliente(cliente) {
-            _data.clientes.push(cliente);
+            const c = (cliente && typeof cliente === 'object') ? { ...cliente } : {};
+            if (!c.id) c.id = (typeof uid === 'function') ? uid() : (Date.now().toString(36) + Math.random().toString(36).slice(2));
+            c.nombre = String(c.nombre || '').trim();
+            c.rut = String(c.rut || '').trim();
+            c.telefono = String(c.telefono || '').trim();
+            if (!c.fechaCreacion) c.fechaCreacion = new Date().toISOString();
+            _data.clientes.push(c);
             _persist();
+            return c;
         },
         agregarAlerta(alerta) {
-            _data.alertas.push(alerta);
+            const a = (alerta && typeof alerta === 'object') ? { ...alerta } : {};
+            if (!a.id) a.id = (typeof uid === 'function') ? uid() : (Date.now().toString(36) + Math.random().toString(36).slice(2));
+            a.tipo = String(a.tipo || 'evento').toLowerCase();
+            if (a.causaId === undefined) a.causaId = null;
+            if (typeof a.mensaje !== 'string') a.mensaje = String(a.mensaje || '').trim();
+            if (!a.fechaObjetivo) a.fechaObjetivo = new Date().toISOString().slice(0, 10);
+            if (!a.prioridad) a.prioridad = 'media';
+            if (!a.estado) a.estado = 'activa';
+            if (a.waAlertadoEn === undefined) a.waAlertadoEn = null;
+            if (a.gestionadaEn === undefined) a.gestionadaEn = null;
+            _data.alertas.push(a);
             _persist();
+            return a;
         },
         agregarDocumento(doc) {
-            _data.documentos.push(doc);
+            const d = (doc && typeof doc === 'object') ? { ...doc } : {};
+            if (!d.id) d.id = (typeof uid === 'function') ? uid() : (Date.now().toString(36) + Math.random().toString(36).slice(2));
+            if (d.causaId === undefined || d.causaId === '') d.causaId = null;
+            d.tipo = String(d.tipo || 'Otro').trim() || 'Otro';
+            if (!d.nombreOriginal && d.nombre) d.nombreOriginal = String(d.nombre || '').trim();
+            d.nombreOriginal = String(d.nombreOriginal || 'documento').trim() || 'documento';
+            if (!d.archivoMime && d.mimetype) d.archivoMime = d.mimetype;
+            if (d.proveedorIA === undefined) d.proveedorIA = null;
+            if (!d.fechaIngreso) d.fechaIngreso = new Date().toISOString();
+            if (!d.fechaDocumento) d.fechaDocumento = new Date().toISOString().slice(0, 10);
+            _data.documentos.push(d);
             _persist();
+            return d;
         },
         registrarEvento(desc) {
             _data.bitacora.push({ descripcion: desc, fecha: new Date() });

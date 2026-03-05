@@ -18,8 +18,38 @@ function markAppDirty() {
     }
 }
 
+// ── Señal global de escritura para render-guards ───────────────────
+try {
+    if (typeof window.__lastUserInputAt !== 'number') window.__lastUserInputAt = 0;
+    // Registrar una sola vez
+    if (!window.__userInputSignalBound) {
+        window.__userInputSignalBound = true;
+        document.addEventListener('input', () => { window.__lastUserInputAt = Date.now(); }, true);
+        document.addEventListener('keydown', (e) => {
+            // Solo teclas que suelen modificar (evitar tab/shift/control)
+            if (!e) return;
+            const k = e.key || '';
+            if (k.length === 1 || k === 'Backspace' || k === 'Delete' || k === 'Enter') {
+                window.__lastUserInputAt = Date.now();
+            }
+        }, true);
+    }
+} catch (_) {}
+
 function __autoSave() {
     if (!__appDirty) return;
+    try {
+        const ae = document.activeElement;
+        if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT')) {
+            const ro = ae.readOnly || ae.disabled;
+            const type = (ae.getAttribute && ae.getAttribute('type')) ? String(ae.getAttribute('type')).toLowerCase() : '';
+            const isTextual = (ae.tagName === 'TEXTAREA') || (ae.tagName === 'SELECT') || (!['checkbox','radio','button','submit','reset','file','range','color','date','datetime-local','month','time','week'].includes(type));
+            if (!ro && isTextual) {
+                // Evitar interrupciones mientras el usuario escribe
+                return;
+            }
+        }
+    } catch (_) {}
     try {
         if (typeof saveDataToDisk === 'function') {
             saveDataToDisk();
@@ -427,6 +457,7 @@ function tab(id, btn) {
     if (id === 'coherencia') renderCoherenciaGlobal();
     if (id === 'biblioteca') bibRender();
     if (id === 'admin-usuarios') renderGestionUsuarios();
+    if (id === 'config-estudio') { if (typeof renderConfigEstudio === 'function') renderConfigEstudio(); }
     if (id === 'tramites') {
         if (typeof tramitesRender === 'function') tramitesRender();
         if (typeof inyectarTramitesNav === 'function') inyectarTramitesNav();
@@ -1117,17 +1148,49 @@ setInterval(__autoSave, 30000);
 
 // ── Panel switcher para Clientes / Control Financiero ─────────────
 window.mostrarPanelClientes = function (panelId, btn) {
-    // Ocultar todos los panels dentro de #clientes
-    document.querySelectorAll('#clientes .hub-panel').forEach(p => p.style.display = 'none');
-    // Mostrar el panel seleccionado
-    const panel = document.getElementById(panelId);
-    if (panel) panel.style.display = 'block';
-    // Actualizar estado visual de los hub-tabs
-    document.querySelectorAll('#clientes .hub-tab').forEach(t => t.classList.remove('active'));
-    if (btn) btn.classList.add('active');
-    // Si se abre Control Financiero, recargar los selects de honorarios
-    if (panelId === 'financiero-panel') {
-        if (typeof poblarSelectsHonorarios === 'function') poblarSelectsHonorarios();
-        if (typeof renderHonorarios === 'function') renderHonorarios();
+    // Race-proof: si el usuario cambia muy rápido entre tabs, ignorar renders atrasados
+    if (typeof window.__hubClientesPanelToken !== 'number') window.__hubClientesPanelToken = 0;
+    const token = ++window.__hubClientesPanelToken;
+
+    const apply = () => {
+        if (token !== window.__hubClientesPanelToken) return;
+        // Ocultar todos los panels dentro de #clientes
+        document.querySelectorAll('#clientes .hub-panel').forEach(p => p.style.display = 'none');
+        // Mostrar el panel seleccionado
+        const panel = document.getElementById(panelId);
+        if (panel) panel.style.display = 'block';
+        // Actualizar estado visual de los hub-tabs
+        document.querySelectorAll('#clientes .hub-tab').forEach(t => t.classList.remove('active'));
+        if (btn) btn.classList.add('active');
+
+        // Si se abre Control Financiero, recargar los selects de honorarios
+        if (panelId === 'financiero-panel') {
+            try {
+                if (typeof RenderBus !== 'undefined' && RenderBus?.render) {
+                    RenderBus.render('selectors');
+                } else if (typeof renderAll === 'function') {
+                    renderAll();
+                }
+            } catch (_) {}
+            try {
+                // Refrescar UI del Control Financiero (resumen/estado) sin re-render global
+                setTimeout(() => {
+                    try { if (typeof renderHonorariosResumen === 'function') renderHonorariosResumen(); } catch (_) {}
+                    try { if (typeof uiActualizarHonorariosVista === 'function') uiActualizarHonorariosVista(); } catch (_) {}
+                    try {
+                        const v = (document.getElementById('hr-causa-sel')?.value || '').toString().trim();
+                        if (v && typeof uiRenderPlanPagos === 'function') uiRenderPlanPagos(v);
+                        if (v && typeof uiRenderPagosList === 'function') uiRenderPagosList(v);
+                    } catch (_) {}
+                }, 0);
+            } catch (_) {}
+            try { if (typeof renderHonorarios === 'function') renderHonorarios(); } catch (_) {}
+        }
+    };
+
+    try {
+        requestAnimationFrame(apply);
+    } catch (_) {
+        setTimeout(apply, 0);
     }
 };

@@ -196,12 +196,14 @@
                     revisadoHoy: false, prioridadManual: false
                 };
 
-                DB.causas.push(nueva);
+                const causaCreada = (typeof Store !== 'undefined' && Store?.agregarCausa)
+                    ? Store.agregarCausa(nueva)
+                    : (DB.causas.push(nueva), nueva);
                 cliente.estado = 'activo'; cliente.status = 'activo';
 
                 // Honorarios iniciales (opcional)
                 if (montoBaseOpt && montoBaseOpt > 0 && typeof asignarHonorarios === 'function') {
-                    asignarHonorarios(nueva.id, montoBaseOpt);
+                    asignarHonorarios(causaCreada.id, montoBaseOpt);
                 }
 
                 // Crear alertas automáticas de la plantilla
@@ -209,16 +211,19 @@
                 plantilla.alertas.forEach(a => {
                     const fechaVenc = new Date(hoy);
                     fechaVenc.setDate(fechaVenc.getDate() + a.diasDesdeHoy);
-                    DB.alertas.push({
+                    const alertaNueva = {
                         id: uid(),
-                        causaId: nueva.id,
+                        causaId: causaCreada.id,
                         tipo: 'plazo',
-                        mensaje: `[${nueva.caratula}] ${a.nombre}`,
+                        mensaje: `[${causaCreada.caratula}] ${a.nombre}`,
                         fechaVencimiento: fechaVenc.toISOString(),
+                        fechaObjetivo: fechaVenc.toISOString().slice(0, 10),
                         prioridad: a.prioridad,
                         estado: 'activa',
                         fechaCreacion: hoy.toISOString()
-                    });
+                    };
+                    if (typeof Store !== 'undefined' && Store?.agregarAlerta) Store.agregarAlerta(alertaNueva);
+                    else DB.alertas.push(alertaNueva);
                 });
 
                 registrarEvento(`Causa creada (${tipoProcedimiento}) para ${cliente.nombre || cliente.nom}`);
@@ -821,15 +826,18 @@
             const fechaVenc = new Date();
             fechaVenc.setDate(fechaVenc.getDate() + dias);
 
-            DB.alertas.push({
+            const alertaNueva = {
                 id: uid(),
                 causaId, tipo: 'plazo',
                 mensaje: `[${causa?.caratula || ''}] ${msg}`,
                 fechaVencimiento: fechaVenc.toISOString(),
+                fechaObjetivo: fechaVenc.toISOString().slice(0, 10),
                 prioridad: prio,
                 estado: 'activa',
                 fechaCreacion: new Date().toISOString()
-            });
+            };
+            if (typeof Store !== 'undefined' && Store?.agregarAlerta) Store.agregarAlerta(alertaNueva);
+            else DB.alertas.push(alertaNueva);
 
             if (typeof markAppDirty === "function") markAppDirty(); save();
             renderAll();
@@ -846,12 +854,14 @@
 
             if (!nom) { showError('Ingrese el nombre del cliente.'); return; }
 
-            DB.clientes.push({
+            const nuevoCliente = {
                 id: uid(), nombre: nom, nom, rut,
                 descripcion: obs, rel: obs,
                 estado: 'prospecto', status: 'prospecto',
                 fechaCreacion: new Date()
-            });
+            };
+            if (typeof Store !== 'undefined' && Store?.agregarCliente) Store.agregarCliente(nuevoCliente);
+            else DB.clientes.push(nuevoCliente);
 
             if (typeof markAppDirty === "function") markAppDirty(); save(); renderAll();
             cerrarModal('modal-accion-rapida');
@@ -908,6 +918,28 @@
                     return [];
                 }
             })();
+
+            const prospectoRelacionado = (() => {
+                try {
+                    const pid = String(cliente?.prospectoId || '').trim();
+                    if (pid && Array.isArray(DB.prospectos)) {
+                        const pr = (DB.prospectos || []).find(p => p && String(p.id) === pid);
+                        if (pr) return pr;
+                    }
+                    const rut = String(cliente?.rut || '').trim();
+                    if (rut && Array.isArray(DB.prospectos)) {
+                        const pr = (DB.prospectos || []).find(p => p && String(p.rut || '').trim() === rut);
+                        if (pr) return pr;
+                    }
+                } catch (_) {}
+                return null;
+            })();
+
+            const tipoCli = String(cliente?.tipoExpediente || '').toLowerCase();
+            const tipoPros = String(prospectoRelacionado?.tipoExpediente || '').toLowerCase();
+            const esClienteTramite = (tipoCli === 'tramite')
+                || (!tipoCli && tipoPros === 'tramite')
+                || (tramitesCliente.length > 0 && causas.length === 0);
             const totalAdjuntos = causas.reduce((s, c) => s + (c.adjuntos?.length || 0), 0);
             const totalPagado = causas.reduce((s, c) =>
                 s + (c.honorarios?.totalPagado || 0), 0);
@@ -950,10 +982,7 @@
                    </div>`
                 : '';
             if (!causas.length) {
-                causasEl.innerHTML = `${tramitesHtml}<div class="mpc-empty">Sin causas asociadas.
-                    <button class="btn btn-xs btn-p" onclick="plantillaCausaAbrir('${clienteId}')">
-                        <i class="fas fa-plus"></i> Crear causa
-                    </button></div>`;
+                causasEl.innerHTML = `${tramitesHtml}<div class="mpc-empty">Sin causas asociadas.</div>`;
             } else {
                 causasEl.innerHTML = `${tramitesHtml}` + causas.map(c => {
                     const pagos = c.honorarios?.pagos || [];
@@ -1008,11 +1037,32 @@
                 }).join('');
             }
 
-            // Botón de nueva causa
-            document.getElementById('mpc-btn-nueva-causa').onclick = () => {
-                cerrarModal('modal-perfil-cliente');
-                plantillaCausaAbrir(clienteId);
-            };
+            const btnNueva = document.getElementById('mpc-btn-nueva-causa');
+            if (btnNueva) {
+                if (esClienteTramite) {
+                    btnNueva.innerHTML = '<i class="fas fa-plus"></i> Nuevo Trámite';
+                    btnNueva.onclick = () => {
+                        cerrarModal('modal-perfil-cliente');
+                        try {
+                            tab('tramites', null);
+                            if (typeof window.tramiteAbrirModalCliente === 'function') {
+                                setTimeout(() => window.tramiteAbrirModalCliente(clienteId), 50);
+                            } else if (typeof window.tramiteAbrirModal === 'function') {
+                                // fallback: abrir modal sin preselección
+                                setTimeout(() => window.tramiteAbrirModal(), 50);
+                            }
+                        } catch (_) {
+                            try { tab('tramites', null); } catch (_) {}
+                        }
+                    };
+                } else {
+                    btnNueva.innerHTML = '<i class="fas fa-plus"></i> Nueva Causa';
+                    btnNueva.onclick = () => {
+                        cerrarModal('modal-perfil-cliente');
+                        plantillaCausaAbrir(clienteId);
+                    };
+                }
+            }
 
             // Renderizar actividad consolidada
             _mpcRenderActividad(clienteId, causas);

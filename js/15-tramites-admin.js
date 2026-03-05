@@ -309,23 +309,64 @@
         // ── Capa de datos ─────────────────────────────────────────────────
         const TramitesDB = {
             _cargar() {
-                try { return AppConfig.get('tramites') || []; }
-                catch(e) { return []; }
+                let lista = [];
+                try {
+                    lista = AppConfig.get('tramites') || [];
+                } catch (e) {
+                    try {
+                        lista = JSON.parse(localStorage.getItem(TRAMITES_KEY) || '[]') || [];
+                    } catch (_) {
+                        lista = [];
+                    }
+                }
+                if (!Array.isArray(lista)) lista = [];
+                // Normalización defensiva (evita trámites "fantasma" sin ID o sin defaults)
+                let mutated = false;
+                lista = lista
+                    .filter(Boolean)
+                    .map((t, idx) => {
+                        if (!t || typeof t !== 'object') { mutated = true; return null; }
+                        const out = { ...t };
+                        if (!out.id) { out.id = `TRA-LEGACY-${Date.now()}-${idx}`; mutated = true; }
+                        if (!out.fechaCreacion) { out.fechaCreacion = new Date().toISOString(); mutated = true; }
+                        if (!Array.isArray(out.eventos)) { out.eventos = []; mutated = true; }
+                        if (!Array.isArray(out.documentos)) { out.documentos = []; mutated = true; }
+                        if (!out.honorarios || typeof out.honorarios !== 'object') { out.honorarios = { monto: 0, pagado: 0 }; mutated = true; }
+                        if (typeof out.honorarios.monto !== 'number') { out.honorarios.monto = parseFloat(out.honorarios.monto || 0) || 0; mutated = true; }
+                        if (typeof out.honorarios.pagado !== 'number') { out.honorarios.pagado = parseFloat(out.honorarios.pagado || 0) || 0; mutated = true; }
+                        if (!out.estado) { out.estado = 'pendiente'; mutated = true; }
+                        return out;
+                    })
+                    .filter(Boolean);
+                if (mutated) this._guardar(lista);
+                return lista;
             },
             _guardar(lista) {
-                try { AppConfig.set('tramites', lista); } catch(e) {}
+                try {
+                    AppConfig.set('tramites', lista);
+                    return;
+                } catch (e) {
+                    try { localStorage.setItem(TRAMITES_KEY, JSON.stringify(lista || [])); } catch (_) {}
+                }
             },
             todos() { return this._cargar(); },
-            porId(id) { return this._cargar().find(t => t.id === id); },
+            porId(id) {
+                const needle = String(id || '');
+                return this._cargar().find(t => String(t?.id || '') === needle);
+            },
             crear(datos) {
                 const lista = this._cargar();
                 const t = {
                     id: 'TRA-' + Date.now(),
                     fechaCreacion: new Date().toISOString(),
-                    ...datos,
                     eventos: [],
                     documentos: [],
-                    honorarios: { monto: 0, pagado: 0 }
+                    ...datos,
+                    honorarios: {
+                        monto: 0,
+                        pagado: 0,
+                        ...(datos && typeof datos.honorarios === 'object' ? datos.honorarios : {})
+                    }
                 };
                 lista.unshift(t);
                 this._guardar(lista);
@@ -397,7 +438,17 @@
 
         function tramiteCausaLabel(causaId) {
             if (!causaId) return '';
-            const c = (Store?.causas?.() || []).find(c => c.id === causaId);
+            const causas = (() => {
+                try {
+                    if (typeof Store !== 'undefined') {
+                        if (typeof Store.causas === 'function') return Store.causas() || [];
+                        if (Array.isArray(Store.causas)) return Store.causas;
+                    }
+                } catch (_) {}
+                try { return (typeof DB !== 'undefined' && Array.isArray(DB.causas)) ? DB.causas : []; } catch (_) {}
+                return [];
+            })();
+            const c = (causas || []).find(c => c && c.id === causaId);
             return c ? `<span class="tr-causa-link" title="Ver causa">${c.caratula || causaId}</span>` : '';
         }
 
@@ -557,6 +608,14 @@
                     ${t.causaId ? `<div class="tr-card-meta"><i class="fas fa-gavel"></i> Vinculada a causa</div>` : ''}
                 </div>
                 <div class="tr-card-right">
+                    <div class="tr-card-actions" style="display:flex; gap:8px; justify-content:flex-end;">
+                        <button class="tr-btn tr-btn-secondary" onclick="event.stopPropagation(); tramiteAbrirModal('${t.id}')" title="Editar" style="padding:6px 10px;">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="tr-btn tr-btn-danger" onclick="event.stopPropagation(); tramiteEliminar('${t.id}')" title="Eliminar" style="padding:6px 10px;">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
                     <div class="tr-card-estado" style="background:${est.color}22; color:${est.color}; border:1px solid ${est.color}44;">
                         <i class="fas ${est.icon}"></i> ${est.label}
                     </div>
@@ -580,9 +639,11 @@
 
         // ── Detalle de trámite ────────────────────────────────────────────
         function tramiteVerDetalle(id) {
-            _tramiteDetalle = id;
             const t = TramitesDB.porId(id);
             if (!t) return;
+
+            if (typeof t.cuantiaPretension !== 'number') t.cuantiaPretension = parseFloat(t.cuantiaPretension || 0) || 0;
+
             const org = tramiteGetOrganismo(t.organismo);
             const est = tramiteGetEstado(t.estado);
 
@@ -614,6 +675,12 @@
                                 <i class="fas ${e.icon}"></i> ${e.label}
                             </button>`).join('')}
                         </div>
+                        <button class="tr-btn tr-btn-secondary" onclick="${pdfAskSaveAs ? "window._lexiumForceSaveAsOnce=true;" : ""} window.generarContratoGestion && window.generarContratoGestion('tramite','${t.id}')" title="${pdfAskSaveAs ? 'Generar contrato y elegir ubicación (Guardar como…)' : 'Generar contrato de prestación de servicios'}">
+                            <i class="fas ${pdfAskSaveAs ? 'fa-save' : 'fa-file-signature'}"></i> Generar Contrato
+                        </button>
+                        ${pdfAskSaveAs ? '' : `<button class="tr-btn tr-btn-secondary" onclick="window._lexiumForceSaveAsOnce=true; window.generarContratoGestion && window.generarContratoGestion('tramite','${t.id}')" title="Generar contrato y elegir ubicación (Guardar como…)">
+                            <i class="fas fa-save"></i> Contrato (Guardar como…)
+                        </button>`}
                         <button class="tr-btn tr-btn-primary" onclick="tramiteAbrirModal('${t.id}')">
                             <i class="fas fa-edit"></i> Editar
                         </button>
@@ -687,19 +754,22 @@
                                 <span>${Math.min(100, Math.round((t.honorarios.pagado/t.honorarios.monto)*100))}% cobrado</span>
                             </div>` : ''}
                             <div class="tr-honorario-actions">
-                                <input type="number" id="tr-det-honorario" placeholder="Monto total ($)" value="${t.honorarios?.monto || ''}" min="0">
-                                <input type="number" id="tr-det-pagado" placeholder="Pagado ($)" value="${t.honorarios?.pagado || ''}" min="0">
-                                <button class="tr-btn tr-btn-secondary" onclick="tramiteGuardarHonorarios('${t.id}')">
-                                    <i class="fas fa-save"></i> Guardar
+                                <button class="tr-btn tr-btn-secondary" onclick="tramiteIrControlFinanciero('${t.id}')">
+                                    <i class="fas fa-wallet"></i> Ir a Control Financiero
                                 </button>
                             </div>
                         </div>
 
                         <!-- Eventos / Seguimiento -->
                         <div class="tr-det-section">
-                            <h4><i class="fas fa-history"></i> Registro de actividad</h4>
+                            <h4 style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                                <span><i class="fas fa-history"></i> Registro de actividad</span>
+                                <button class="tr-btn tr-btn-secondary" style="padding:6px 10px;" onclick="tramiteLimpiarEventos('${t.id}')" title="Eliminar todos los eventos">
+                                    <i class="fas fa-broom"></i> Limpiar
+                                </button>
+                            </h4>
                             <div class="tr-evento-form">
-                                <input type="text" id="tr-evt-desc" placeholder="Describir acción, gestión o nota…" style="flex:1;">
+                                <textarea id="tr-evt-desc" placeholder="Describir acción, gestión o nota…" rows="3" style="flex:1; min-height:90px; resize:vertical;"></textarea>
                                 <select id="tr-evt-tipo">
                                     <option value="gestion">Gestión</option>
                                     <option value="nota">Nota</option>
@@ -841,6 +911,28 @@
             tramiteVerDetalle(tramiteId);
         }
 
+        function tramiteLimpiarEventos(tramiteId) {
+            const t = TramitesDB.porId(tramiteId);
+            if (!t) return;
+            const total = Array.isArray(t.eventos) ? t.eventos.length : 0;
+            if (!total) return;
+            if (typeof showConfirm === 'function') {
+                return showConfirm(
+                    'Limpiar registro',
+                    `¿Eliminar los ${total} evento(s) del registro de actividad? Esta acción no se puede deshacer.`,
+                    () => {
+                        TramitesDB.actualizar(tramiteId, { eventos: [] });
+                        tramiteVerDetalle(tramiteId);
+                        if (typeof showSuccess === 'function') showSuccess('Registro de actividad limpiado.');
+                    },
+                    'danger'
+                );
+            }
+            // Fallback silencioso si no existe modal
+            TramitesDB.actualizar(tramiteId, { eventos: [] });
+            tramiteVerDetalle(tramiteId);
+        }
+
         function tramiteToggleCheck(tramiteId, checkId, valor) {
             const t = TramitesDB.porId(tramiteId);
             if (!t) return;
@@ -903,17 +995,62 @@
             mostrarToast('Honorarios actualizados', 'success');
         }
 
-        function tramiteEliminar(id) {
-            if (!confirm('¿Eliminar este trámite? Esta acción no se puede deshacer.')) return;
+        async function tramiteEliminar(id) {
+            let permitido = false;
+            if (typeof window._dcConfirmarAccionSegura === 'function') {
+                permitido = await window._dcConfirmarAccionSegura('¿Eliminar este trámite? Esta acción no se puede deshacer.');
+            } else {
+                if (!confirm('¿Eliminar este trámite? Esta acción no se puede deshacer.')) return;
+                const pass = prompt('Confirma con tu contraseña para eliminar este trámite:');
+                if (!pass) return;
+                const usuarios = AppConfig.get('usuarios') || [];
+                const usuarioActivo = usuarios.find(u => u.activo) || usuarios[0];
+                if (!usuarioActivo?.passwordHash) return mostrarToast('No se pudo validar la contraseña', 'warning');
+                const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pass));
+                const hashIngresado = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+                permitido = hashIngresado === usuarioActivo.passwordHash;
+            }
+            if (!permitido) return mostrarToast('Contraseña incorrecta', 'warning');
+
             TramitesDB.eliminar(id);
             tramitesRender();
             mostrarToast('Trámite eliminado', 'info');
         }
 
+        async function _tramiteAutorizarAccionCritica(titulo, detalle) {
+            try {
+                if (typeof window.uiAutorizarAccionCritica === 'function') {
+                    const ok = await window.uiAutorizarAccionCritica({ titulo, detalle });
+                    return !!ok;
+                }
+            } catch (_) {}
+            try {
+                const pass = prompt('Confirma con tu contraseña:');
+                if (!pass) return false;
+                const usuarios = AppConfig.get('usuarios') || [];
+                const usuarioActivo = usuarios.find(u => u.activo) || usuarios[0];
+                if (!usuarioActivo?.passwordHash) return false;
+                const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pass));
+                const hashIngresado = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+                return hashIngresado === usuarioActivo.passwordHash;
+            } catch (_) {
+                return false;
+            }
+        }
+
         // ── Modal de creación/edición ─────────────────────────────────────
         function tramiteAbrirModal(id) {
             const t = id ? TramitesDB.porId(id) : null;
-            const causas = (typeof Store !== 'undefined' ? Store.causas() : []);
+            const causas = (() => {
+                try {
+                    if (typeof Store !== 'undefined') {
+                        if (typeof Store.causas === 'function') return Store.causas() || [];
+                        if (Array.isArray(Store.causas)) return Store.causas;
+                    }
+                } catch (_) {}
+                try { return (typeof DB !== 'undefined' && Array.isArray(DB.causas)) ? DB.causas : []; } catch (_) {}
+                return [];
+            })();
             const clientes = (typeof DB !== 'undefined' && Array.isArray(DB.clientes)) ? DB.clientes : [];
 
             const orgOptions = Object.entries(TRAMITES_CATALOGO).map(([k, v]) =>
@@ -1018,9 +1155,52 @@
             </div>`;
 
             document.body.insertAdjacentHTML('beforeend', html);
+            try {
+                const overlay = document.getElementById('tr-modal-overlay');
+                const modal = overlay ? overlay.querySelector('.tr-modal') : null;
+                if (modal) {
+                    // Evitar que handlers globales interfieran con la escritura dentro del modal
+                    modal.addEventListener('click', (ev) => ev.stopPropagation());
+                    modal.addEventListener('mousedown', (ev) => ev.stopPropagation());
+                    modal.addEventListener('keydown', (ev) => ev.stopPropagation(), true);
+                }
+                const focusFirst = () => {
+                    const el = document.getElementById('tr-f-caratula')
+                        || document.getElementById('tr-f-cliente')
+                        || document.getElementById('tr-f-responsable');
+                    if (el && typeof el.focus === 'function') {
+                        el.focus();
+                        try { el.click(); } catch (_) {}
+                        try { el.select?.(); } catch (_) {}
+                    }
+                };
+                requestAnimationFrame(() => {
+                    focusFirst();
+                    setTimeout(focusFirst, 0);
+                    setTimeout(focusFirst, 60);
+                });
+            } catch (_) {}
             tramiteActualizarTipos(t?.tipo);
             tramiteSyncClienteNombre();
         }
+
+        // Helper: abrir creación de trámite con cliente preseleccionado
+        window.tramiteAbrirModalCliente = function (clienteId) {
+            try {
+                tramiteAbrirModal();
+                setTimeout(() => {
+                    try {
+                        const sel = document.getElementById('tr-f-cliente-id');
+                        if (sel) {
+                            sel.value = String(clienteId || '');
+                            if (typeof tramiteSyncClienteNombre === 'function') tramiteSyncClienteNombre();
+                        }
+                    } catch (_) {}
+                }, 0);
+            } catch (_) {
+                try { tramiteAbrirModal(); } catch (_) {}
+            }
+        };
 
         function tramiteActualizarTipos(seleccionado) {
             const org = document.getElementById('tr-f-organismo')?.value || 'CBR';
@@ -1094,7 +1274,7 @@
             extra.innerHTML = campos[org] || '';
         }
 
-        function tramiteGuardar(id) {
+        async function tramiteGuardar(id) {
             const org = document.getElementById('tr-f-organismo')?.value;
             const tipoSel = document.getElementById('tr-f-tipo')?.value;
             const tipoCustom = document.getElementById('tr-f-tipo-custom')?.value?.trim();
@@ -1113,6 +1293,14 @@
 
             if (!org || !tipo) return mostrarToast('Selecciona organismo y tipo', 'warning');
             if (!clienteId && !cliente) return mostrarToast('Selecciona o ingresa cliente solicitante', 'warning');
+
+            if (id) {
+                const ok = await _tramiteAutorizarAccionCritica(
+                    'Actualizar trámite',
+                    `Trámite: ${(tipo || 'Trámite')} — ${(caratula || id)}`
+                );
+                if (!ok) return mostrarToast('Acción no autorizada', 'warning');
+            }
 
             const camposExtra = {};
             if (org === 'CBR') {
@@ -1174,6 +1362,40 @@
             } catch (_) {}
         }
 
+        function tramiteIrControlFinanciero(tramiteId) {
+            const selVal = `tramite:${String(tramiteId || '')}`;
+            try {
+                if (typeof window.tab === 'function') {
+                    window.tab('clientes', document.querySelector(`[onclick="tab('clientes',this)"]`));
+                }
+            } catch (_) {}
+            try {
+                if (typeof window.mostrarPanelClientes === 'function') {
+                    const btn = document.getElementById('hub-tab-financiero');
+                    window.mostrarPanelClientes('financiero-panel', btn || undefined);
+                }
+            } catch (_) {}
+            setTimeout(() => {
+                try {
+                    if (typeof RenderBus !== 'undefined' && RenderBus?.render) RenderBus.render('selectors');
+                } catch (_) {}
+                const a = document.getElementById('hr-causa-sel');
+                const b = document.getElementById('hr-pago-causa-sel');
+                if (a) {
+                    a.value = selVal;
+                    try { a.dispatchEvent(new Event('change', { bubbles: true })); } catch (_) {}
+                }
+                if (b) {
+                    b.value = selVal;
+                    try { b.dispatchEvent(new Event('change', { bubbles: true })); } catch (_) {}
+                }
+                try {
+                    const top = document.getElementById('financiero-panel');
+                    if (top && top.scrollIntoView) top.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                } catch (_) {}
+            }, 0);
+        }
+
         // ── Helper toast (si no existe globalmente) ───────────────────────
         function mostrarToast(msg, tipo = 'info') {
             // usa el sistema de notificaciones existente si lo hay
@@ -1187,3 +1409,25 @@
             document.body.appendChild(el);
             setTimeout(() => el.remove(), 3000);
         }
+
+        // Exposición global para handlers inline del módulo
+        window.TramitesDB = TramitesDB;
+        window.tramitesRender = tramitesRender;
+        window.tramiteFiltrar = tramiteFiltrar;
+        window.tramiteLimpiarFiltros = tramiteLimpiarFiltros;
+        window.tramiteAbrirModal = tramiteAbrirModal;
+        window.tramiteCerrarModal = tramiteCerrarModal;
+        window.tramiteActualizarTipos = tramiteActualizarTipos;
+        window.tramiteGuardar = tramiteGuardar;
+        window.tramiteVerDetalle = tramiteVerDetalle;
+        window.tramiteCambiarEstado = tramiteCambiarEstado;
+        window.tramiteAgregarEvento = tramiteAgregarEvento;
+        window.tramiteEliminarEvento = tramiteEliminarEvento;
+        window.tramiteToggleCheck = tramiteToggleCheck;
+        window.tramiteAgregarCheck = tramiteAgregarCheck;
+        window.tramiteAgregarCheckDesdeStr = tramiteAgregarCheckDesdeStr;
+        window.tramiteEliminarCheck = tramiteEliminarCheck;
+        window.tramiteGuardarHonorarios = tramiteGuardarHonorarios;
+        window.tramiteEliminar = tramiteEliminar;
+        window.tramiteSyncClienteNombre = tramiteSyncClienteNombre;
+        window.tramiteIrControlFinanciero = tramiteIrControlFinanciero;

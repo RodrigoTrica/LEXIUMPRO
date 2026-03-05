@@ -245,8 +245,9 @@ ipcMain.handle('pdf:extraer-texto', async (_e, base64Data) => {
 });
 
 // ── IPC Handlers — Prospectos / CRM ───────────────────────────────────────────
-ipcMain.handle('prospectos:generar-pdf', async (_e, { tipo, html, nombre }) => {
+ipcMain.handle('prospectos:generar-pdf', async (_e, { tipo, html, nombre, defaultName, outputDir, outputPath, saveAs }) => {
     try {
+        const finalNombre = nombre || defaultName || `pdf_${fechaHoy()}`;
         const execPath = puppeteer.executablePath();
         const browser = await puppeteer.launch({
             executablePath: execPath,
@@ -261,13 +262,47 @@ ipcMain.handle('prospectos:generar-pdf', async (_e, { tipo, html, nombre }) => {
             margin: { top: '20mm', right: '20mm', bottom: '20mm', left: '20mm' }
         });
         await browser.close();
-        const ruta = path.join(DATA_DIR, 'pdfs', `${sanitizarNombre(nombre)}.pdf`);
+        let ruta = '';
+
+        // 1) outputPath explícito gana
+        if (outputPath && typeof outputPath === 'string' && outputPath.trim()) {
+            ruta = outputPath.trim();
+        }
+
+        // 2) saveAs abre diálogo
+        if (!ruta && saveAs) {
+            const baseDir = (outputDir && typeof outputDir === 'string' && outputDir.trim())
+                ? outputDir.trim()
+                : path.join(DATA_DIR, 'pdfs');
+            const defaultPath = path.join(baseDir, `${sanitizarNombre(finalNombre)}.pdf`);
+            const res = await dialog.showSaveDialog({
+                title: 'Guardar PDF',
+                defaultPath,
+                filters: [{ name: 'PDF', extensions: ['pdf'] }]
+            });
+            if (res.canceled || !res.filePath) {
+                return { ok: false, success: false, error: 'Cancelado por usuario', message: 'Cancelado por usuario' };
+            }
+            ruta = res.filePath;
+        }
+
+        // 3) outputDir si viene (sin diálogo)
+        if (!ruta && outputDir && typeof outputDir === 'string' && outputDir.trim()) {
+            ruta = path.join(outputDir.trim(), `${sanitizarNombre(finalNombre)}.pdf`);
+        }
+
+        // 4) fallback legacy
+        if (!ruta) {
+            ruta = path.join(DATA_DIR, 'pdfs', `${sanitizarNombre(finalNombre)}.pdf`);
+        }
+
         fs.mkdirSync(path.dirname(ruta), { recursive: true });
         fs.writeFileSync(ruta, pdf);
-        return { ok: true, ruta };
+        const base64 = pdf.toString('base64');
+        return { ok: true, success: true, ruta, base64 };
     } catch (e) {
         console.error('[prospectos:generar-pdf]', e.message);
-        return { ok: false, error: e.message };
+        return { ok: false, success: false, error: e.message, message: e.message };
     }
 });
 
@@ -355,9 +390,44 @@ ipcMain.handle('sistema:info', () => ({
     isDev: IS_DEV
 }));
 
+ipcMain.handle('sistema:elegirCarpeta', async (_e, { titulo } = {}) => {
+    try {
+        const r = await dialog.showOpenDialog({
+            title: (titulo && typeof titulo === 'string') ? titulo : 'Seleccionar carpeta',
+            properties: ['openDirectory', 'createDirectory']
+        });
+        if (!r || r.canceled || !Array.isArray(r.filePaths) || !r.filePaths[0]) return { ok: false, cancelado: true };
+        return { ok: true, ruta: r.filePaths[0] };
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
+});
+
 ipcMain.handle('sistema:abrirCarpetaDatos', () => {
     shell.openPath(DATA_DIR);
     return { ok: true };
+});
+
+ipcMain.handle('sistema:abrirRuta', (_e, ruta) => {
+    try {
+        const r = String(ruta || '').trim();
+        if (!r) return { ok: false, error: 'Ruta vacía' };
+        shell.openPath(r);
+        return { ok: true };
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
+});
+
+ipcMain.handle('sistema:revelarEnCarpeta', (_e, ruta) => {
+    try {
+        const r = String(ruta || '').trim();
+        if (!r) return { ok: false, error: 'Ruta vacía' };
+        shell.showItemInFolder(r);
+        return { ok: true };
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
 });
 
 ipcMain.handle('whatsapp:guardar-config', async (_e, config) => {

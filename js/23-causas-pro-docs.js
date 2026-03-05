@@ -18,11 +18,15 @@ function crearCausa(datos) {
     const etapas = typeof generarEtapas === 'function'
         ? generarEtapas(datos.tipoProcedimiento || 'Ordinario Civil')
         : [];
+    const tipoExpediente = String(datos.tipoExpediente || '').toLowerCase() === 'tramite'
+        ? 'tramite'
+        : 'judicial';
 
     const nueva = {
         id: uid(),
         caratula: datos.caratula || 'Sin carátula',
         tipoProcedimiento: datos.tipoProcedimiento || 'Ordinario Civil',
+        tipoExpediente,
         rama: datos.rama || '',
         clienteId: datos.clienteId || null,
         estadoGeneral: 'En tramitación',
@@ -33,6 +37,7 @@ function crearCausa(datos) {
         etapasProcesales: etapas,
         documentos: [],
         recursos: [],
+        partes: { demandante: {}, demandado: {}, abogadoContrario: {}, juez: {} },
         estrategia: {},
         riesgo: {},
         honorarios: {},
@@ -41,13 +46,33 @@ function crearCausa(datos) {
         prioridadManual: false,
         docsCliente: [],
         docsTribunal: [],
+        docsContraparte: [],
         docsTramites: [],
-        estadoCuenta: { montoTotal: 0, pagos: [], totalPagado: 0, saldoPendiente: 0 }
+        estadoCuenta: { montoTotal: 0, pagos: [], totalPagado: 0, saldoPendiente: 0 },
+        tramiteMeta: { organismo: '', tipoTramite: '', lugarGestion: '', numeroIngreso: '' },
+        hitosTramite: {
+            fechaIngresoSistema: new Date().toISOString().slice(0, 10),
+            fechaCargaDocumentos: null,
+            fechaIngresoOrganismo: null,
+            fechaRespuestaOrganismo: null,
+            fechaFinalizacion: null
+        },
+        reparos: [],
+        iaSugerencias: null,
+        eventosProcesalesIA: [],
+        audiencias: { habilitado: false }
     };
 
-    DB.causas.push(nueva);
+    if (typeof Store !== 'undefined' && Store?.agregarCausa) {
+        Store.agregarCausa(nueva);
+    } else {
+        DB.causas.push(nueva);
+    }
     if (typeof markAppDirty === 'function') markAppDirty();
     if (typeof save === 'function') save();
+    try {
+        if (typeof renderAll === 'function') renderAll();
+    } catch (e) {}
     try {
         if (window.EventBus && typeof window.EventBus.emit === 'function') {
             window.EventBus.emit('causas:created', {
@@ -96,7 +121,8 @@ function agregarDocumento(causaId, datos) {
         archivoBase64: (!datos.archivoDocId && datos.archivoBase64) ? datos.archivoBase64 : null
     };
 
-    DB.documentos.push(doc);
+    if (typeof Store !== 'undefined' && Store?.agregarDocumento) Store.agregarDocumento(doc);
+    else DB.documentos.push(doc);
 
     // También agregar referencia embebida en la causa
     const causa = DB.causas.find(c => c.id === causaId);
@@ -128,7 +154,7 @@ function agregarDocumento(causaId, datos) {
     // Crear alerta automática si genera plazo
     if (doc.generaPlazo && fechaVencimiento) {
         const causaNombre = causa ? causa.caratula : 'Causa desconocida';
-        DB.alertas.push({
+        const alertaNueva = {
             id: uid(),
             causaId: causaId,
             tipo: 'plazo',
@@ -137,7 +163,9 @@ function agregarDocumento(causaId, datos) {
             prioridad: 'alta',
             estado: 'activa',
             fechaCreacion: new Date().toISOString()
-        });
+        };
+        if (typeof Store !== 'undefined' && Store?.agregarAlerta) Store.agregarAlerta(alertaNueva);
+        else DB.alertas.push(alertaNueva);
         if (typeof markAppDirty === 'function') markAppDirty();
         if (typeof save === 'function') save();
         try {

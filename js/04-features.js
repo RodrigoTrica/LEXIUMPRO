@@ -5,6 +5,151 @@ function setBusqFiltro(filtro, btn) {
     busquedaGlobal(document.getElementById('busq-input').value);
 }
 
+function renderConfigEstudio() {
+    const cont = document.getElementById('estudio-config-container');
+    if (!cont) return;
+
+    const cfg = (typeof AppConfig !== 'undefined' && AppConfig.get)
+        ? (AppConfig.get('estudio_config') || {})
+        : {};
+    const pdfDir = (typeof AppConfig !== 'undefined' && AppConfig.get)
+        ? (AppConfig.get('pdf_output_dir') || '')
+        : '';
+    const askSaveAs = (typeof AppConfig !== 'undefined' && AppConfig.get)
+        ? !!AppConfig.get('pdf_preguntar_guardar_como')
+        : false;
+
+    const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+    cont.innerHTML = `
+        <div class="grid" style="grid-template-columns:1.2fr 1fr; gap:16px;">
+            <div class="card" style="padding:18px;">
+                <h3 style="margin-top:0;"><i class="fas fa-building-columns" style="color:var(--cyan,#0891b2);"></i> Identidad del Estudio</h3>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                    <div>
+                        <label style="font-size:0.8rem; color:var(--text-3); font-weight:600;">Nombre / Razón Social</label>
+                        <input id="estudio-nombre" value="${esc(cfg.nombre || '')}" placeholder="Ej: Lexium Abogados SpA" style="width:100%; margin-top:6px;">
+                    </div>
+                    <div>
+                        <label style="font-size:0.8rem; color:var(--text-3); font-weight:600;">RUT</label>
+                        <input id="estudio-rut" value="${esc(cfg.rut || '')}" placeholder="Ej: 76.123.456-7" style="width:100%; margin-top:6px;">
+                    </div>
+                    <div style="grid-column:1 / -1;">
+                        <label style="font-size:0.8rem; color:var(--text-3); font-weight:600;">Domicilio Profesional</label>
+                        <input id="estudio-domicilio" value="${esc(cfg.domicilio || '')}" placeholder="Ej: Av. Apoquindo 1234, Of. 56" style="width:100%; margin-top:6px;">
+                    </div>
+                    <div>
+                        <label style="font-size:0.8rem; color:var(--text-3); font-weight:600;">Ciudad Jurisdicción</label>
+                        <input id="estudio-ciudad" value="${esc(cfg.ciudadJurisdiccion || '')}" placeholder="Ej: Santiago" style="width:100%; margin-top:6px;">
+                    </div>
+                    <div>
+                        <label style="font-size:0.8rem; color:var(--text-3); font-weight:600;">Marca de Agua (texto)</label>
+                        <input id="estudio-watermark" value="${esc(cfg.watermarkTexto || '')}" placeholder="Ej: LEXIUM" style="width:100%; margin-top:6px;">
+                    </div>
+                </div>
+                <div style="display:flex; gap:10px; align-items:center; margin-top:14px; flex-wrap:wrap;">
+                    <button class="btn btn-p" onclick="estudioGuardarConfig()"><i class="fas fa-save"></i> Guardar</button>
+                    <button class="btn" onclick="estudioLimpiarLogo()"><i class="fas fa-image"></i> Quitar Logo</button>
+                    <small style="color:var(--text-3);">Estos datos se usan en contratos y PDFs.</small>
+                </div>
+            </div>
+
+            <div class="card" style="padding:18px;">
+                <h3 style="margin-top:0;"><i class="fas fa-file-pdf" style="color:#dc2626;"></i> Documentos (PDF)</h3>
+                <div style="margin-bottom:10px;">
+                    <label style="font-size:0.8rem; color:var(--text-3); font-weight:600;">Logo (se inserta en el encabezado)</label>
+                    <div style="display:flex; align-items:center; gap:10px; margin-top:8px;">
+                        <input id="estudio-logo" type="file" accept="image/*" onchange="estudioCargarLogo(this)" />
+                    </div>
+                    <div id="estudio-logo-preview" style="margin-top:10px;">
+                        ${cfg.logoBase64 ? `<img src="${esc(cfg.logoBase64)}" style="max-width:100%; max-height:130px; border:1px solid var(--border); border-radius:8px; padding:8px; background:var(--bg);" />` : `<div style="color:var(--text-3); font-size:0.8rem;">Sin logo cargado.</div>`}
+                    </div>
+                </div>
+
+                <div style="margin-top:14px;">
+                    <label style="font-size:0.8rem; color:var(--text-3); font-weight:600;">Carpeta por defecto para PDFs</label>
+                    <div style="display:flex; gap:10px; align-items:center; margin-top:8px;">
+                        <input id="pdf-output-dir" value="${esc(pdfDir)}" placeholder="(sin configurar)" style="flex:1;" readonly>
+                        <button class="btn" onclick="pdfElegirCarpetaSalida()"><i class="fas fa-folder-open"></i> Elegir</button>
+                    </div>
+                    <label style="display:flex; gap:8px; align-items:center; margin-top:10px; font-size:0.82rem; color:var(--text-2); cursor:pointer;">
+                        <input id="pdf-ask-saveas" type="checkbox" ${askSaveAs ? 'checked' : ''} onchange="pdfTogglePreguntarGuardarComo(this.checked)">
+                        Preguntar “Guardar como…” al generar PDFs
+                    </label>
+                    <small style="display:block; margin-top:6px; color:var(--text-3); font-size:0.75rem;">
+                        Tip: Si activas esta opción, “Generar Contrato” te pedirá ubicación. Si la desactivas, verás además el botón “Guardar como…”.
+                    </small>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+window.estudioGuardarConfig = function () {
+    try {
+        const out = {
+            nombre: document.getElementById('estudio-nombre')?.value?.trim() || '',
+            rut: document.getElementById('estudio-rut')?.value?.trim() || '',
+            domicilio: document.getElementById('estudio-domicilio')?.value?.trim() || '',
+            ciudadJurisdiccion: document.getElementById('estudio-ciudad')?.value?.trim() || '',
+            watermarkTexto: document.getElementById('estudio-watermark')?.value?.trim() || '',
+            logoBase64: (AppConfig.get('estudio_config') || {}).logoBase64 || ''
+        };
+        AppConfig.set('estudio_config', out);
+        if (typeof showSuccess === 'function') showSuccess('Configuración del estudio guardada.');
+    } catch (e) {
+        if (typeof showError === 'function') showError(e.message);
+    }
+};
+
+window.estudioCargarLogo = function (input) {
+    try {
+        const file = input?.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            const b64 = String(reader.result || '');
+            const prev = AppConfig.get('estudio_config') || {};
+            AppConfig.set('estudio_config', { ...prev, logoBase64: b64 });
+            renderConfigEstudio();
+            if (typeof showSuccess === 'function') showSuccess('Logo cargado.');
+        };
+        reader.readAsDataURL(file);
+    } catch (e) {
+        if (typeof showError === 'function') showError(e.message);
+    }
+};
+
+window.estudioLimpiarLogo = function () {
+    try {
+        const prev = AppConfig.get('estudio_config') || {};
+        AppConfig.set('estudio_config', { ...prev, logoBase64: '' });
+        renderConfigEstudio();
+    } catch (_) { }
+};
+
+window.pdfElegirCarpetaSalida = async function () {
+    try {
+        if (!window.electronAPI?.sistema?.elegirCarpeta) {
+            if (typeof showError === 'function') showError('Función no disponible fuera de Electron.');
+            return;
+        }
+        const r = await window.electronAPI.sistema.elegirCarpeta({ titulo: 'Seleccionar carpeta por defecto para PDFs' });
+        if (!r || r.cancelado || !r.ok) return;
+        AppConfig.set('pdf_output_dir', r.ruta);
+        renderConfigEstudio();
+        if (typeof showSuccess === 'function') showSuccess('Carpeta por defecto para PDFs actualizada.');
+    } catch (e) {
+        if (typeof showError === 'function') showError(e.message);
+    }
+};
+
+window.pdfTogglePreguntarGuardarComo = function (checked) {
+    try {
+        AppConfig.set('pdf_preguntar_guardar_como', !!checked);
+    } catch (_) { }
+};
+
 function busquedaGlobal(texto) {
     const el = document.getElementById('busq-resultados');
     if (!el) return;
@@ -189,7 +334,8 @@ function uiDuplicarCausa(causaId) {
         alertas: [],
         etapasProcesales: generarEtapas(original.tipoProcedimiento)
     };
-    DB.causas.push(copia);
+    if (typeof Store !== 'undefined' && Store?.agregarCausa) Store.agregarCausa(copia);
+    else DB.causas.push(copia);
     if (typeof markAppDirty === "function") markAppDirty(); guardarDB();
     registrarEvento(`Causa duplicada: ${original.caratula} → ${copia.caratula}`);
     renderAll();
@@ -727,7 +873,7 @@ async function gaGuardarDoc() {
                     console.warn("IA Error in gaGuardarDoc:", iaErr);
                 }
 
-                DB.documentos.push({
+                const docNuevo = {
                     id: uid(),
                     causaId: gaCurrentCausa.id,
                     nombreOriginal: file.name,
@@ -748,7 +894,9 @@ async function gaGuardarDoc() {
                     driveFileId: driveData?.id || null,
                     driveWebLink: driveData?.webViewLink || null,
                     iaSummary: iaSummary || null
-                });
+                };
+                if (typeof Store !== 'undefined' && Store?.agregarDocumento) Store.agregarDocumento(docNuevo);
+                else DB.documentos.push(docNuevo);
                 correlativo++;
             }
 

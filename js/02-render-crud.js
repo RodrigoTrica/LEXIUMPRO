@@ -244,11 +244,12 @@
 
         function renderClientes() {
             const el = document.getElementById('client-list');
-            if (!DB.clientes.length) {
+            const lista = (DB.clientes || []).filter(c => (c && (c.estado || c.status) !== 'prospecto'));
+            if (!lista.length) {
                 el.innerHTML = '<div class="empty-state"><i class="fas fa-users"></i><p>Sin clientes registrados</p></div>';
                 return;
             }
-            el.innerHTML = DB.clientes.map(c => {
+            el.innerHTML = lista.map(c => {
                 const causasCliente = DB.causas.filter(ca => ca.clienteId === c.id).length;
                 const esProspecto = (c.estado || c.status) === 'prospecto';
                 return `
@@ -366,6 +367,14 @@
                     <input type="text" id="causa-flt-busqueda" placeholder="Escriba para filtrar..." style="width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:0.85rem; background:var(--bg-2,#f8fafc);">
                 </div>
                 <div class="db-filtro-group">
+                    <label>Tipo de gestión</label>
+                    <select id="causa-flt-tipo-exp">
+                        <option value="">Todos</option>
+                        <option value="judicial">Judiciales</option>
+                        <option value="tramite">Administrativos</option>
+                    </select>
+                </div>
+                <div class="db-filtro-group">
                     <label>Ordenar por</label>
                     <select id="causa-flt-orden">
                         <option value="fecha">Fecha última actividad</option>
@@ -382,11 +391,13 @@
             document.getElementById('causa-flt-estado').addEventListener('change', onUpdate);
             document.getElementById('causa-flt-cliente').addEventListener('change', onUpdate);
             document.getElementById('causa-flt-busqueda').addEventListener('input', onUpdate);
+            document.getElementById('causa-flt-tipo-exp').addEventListener('change', onUpdate);
             document.getElementById('causa-flt-orden').addEventListener('change', onUpdate);
             document.getElementById('causa-flt-limpiar').addEventListener('click', () => {
                 document.getElementById('causa-flt-estado').value = '';
                 document.getElementById('causa-flt-cliente').value = '';
                 document.getElementById('causa-flt-busqueda').value = '';
+                document.getElementById('causa-flt-tipo-exp').value = '';
                 document.getElementById('causa-flt-orden').value = 'fecha';
                 renderCausas();
             });
@@ -396,11 +407,18 @@
             const estadoVal = (document.getElementById('causa-flt-estado') || {}).value || '';
             const clienteVal = (document.getElementById('causa-flt-cliente') || {}).value || '';
             const busquedaVal = ((document.getElementById('causa-flt-busqueda') || {}).value || '').trim().toLowerCase();
+            const tipoExpVal = (document.getElementById('causa-flt-tipo-exp') || {}).value || '';
             const ordenVal = (document.getElementById('causa-flt-orden') || {}).value || 'fecha';
 
             let list = DB.causas.slice();
             if (estadoVal) list = list.filter(c => (c.estadoGeneral || '') === estadoVal);
             if (clienteVal) list = list.filter(c => String(c.clienteId) === String(clienteVal));
+            if (tipoExpVal) {
+                list = list.filter(c => {
+                    const tipo = String(c.tipoExpediente || (/tramite/i.test(String(c.tipoProcedimiento || '')) ? 'tramite' : 'judicial')).toLowerCase();
+                    return tipo === tipoExpVal;
+                });
+            }
             if (busquedaVal) {
                 list = list.filter(c => {
                     const caratula = (c.caratula || '').toLowerCase();
@@ -467,14 +485,39 @@
                 const rProb = c.riesgo?.probatorio || 'Medio';
                 const rProc = c.riesgo?.procesal || 'Bajo';
                 const estado = c.estadoGeneral || 'En tramitación';
-                const esTramite = /tramite/i.test(String(c.tipoProcedimiento || ''));
+                const tipoExp = String(c.tipoExpediente || (/tramite/i.test(String(c.tipoProcedimiento || '')) ? 'tramite' : 'judicial')).toLowerCase();
+                const esTramite = tipoExp === 'tramite';
                 const tipoLabel = esTramite ? 'TRÁMITE' : 'CAUSA JUDICIAL';
                 const tipoClass = esTramite ? 'badge-tramite' : 'badge-judicial';
-                const stripeColor = esTramite ? 'var(--success)' : 'var(--cyan)';
+                const stripeColor = esTramite ? '#059669' : '#2563eb';
+                const cardBg = esTramite ? 'linear-gradient(180deg, rgba(5,150,105,0.05) 0%, rgba(5,150,105,0.015) 100%)' : 'linear-gradient(180deg, rgba(37,99,235,0.05) 0%, rgba(37,99,235,0.015) 100%)';
+                const iconBg = esTramite ? 'rgba(5,150,105,0.15)' : 'rgba(37,99,235,0.15)';
+                const iconColor = esTramite ? '#047857' : '#1d4ed8';
+                const progresoTramite = esTramite
+                    ? `<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px;">
+                            <div style="font-size:10px; color:var(--text-3);">
+                                <div style="text-transform:uppercase; font-weight:700; margin-bottom:3px;">Organismo</div>
+                                <div style="font-size:11px; color:var(--text-1);">${escHtml(c.tramiteMeta?.organismoLabel || c.tramiteMeta?.organismo || '—')}</div>
+                            </div>
+                            <div style="font-size:10px; color:var(--text-3);">
+                                <div style="text-transform:uppercase; font-weight:700; margin-bottom:3px;">Tipo trámite</div>
+                                <div style="font-size:11px; color:var(--text-1);">${escHtml(c.tramiteMeta?.tipoTramite || '—')}</div>
+                            </div>
+                        </div>`
+                    : `<div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-top:14px;">
+                            <div class="risk-row" style="margin:0;">
+                                <div class="risk-label" style="font-size:9px;"><span style="color:var(--text-3)">R.PROBATORIO</span></div>
+                                <div class="risk-meter" style="height:4px;"><div class="risk-fill" style="width:${rProb === 'Alto' ? 90 : rProb === 'Medio' ? 50 : 25}%; background:${colorRiesgo(rProb)};"></div></div>
+                            </div>
+                            <div class="risk-row" style="margin:0;">
+                                <div class="risk-label" style="font-size:9px;"><span style="color:var(--text-3)">R.PROCESAL</span></div>
+                                <div class="risk-meter" style="height:4px;"><div class="risk-fill" style="width:${rProc === 'Alto' ? 90 : rProc === 'Medio' ? 50 : 25}%; background:${colorRiesgo(rProc)};"></div></div>
+                            </div>
+                        </div>`;
                 return `
-                <div class="db-kpi" style="padding:20px; cursor:pointer; border-left:4px solid ${stripeColor};" onclick="tab('causa-detail'); viewCausa('${c.id}');">
-                    <div class="icon-box-premium" style="background:var(--cyan-light); color:var(--cyan);">
-                        <i class="fas fa-gavel"></i>
+                <div class="db-kpi" style="padding:20px; cursor:pointer; border-left:4px solid ${stripeColor}; background:${cardBg};" onclick="tab('causa-detail'); viewCausa('${c.id}');">
+                    <div class="icon-box-premium" style="background:${iconBg}; color:${iconColor};">
+                        <i class="fas ${esTramite ? 'fa-folder-tree' : 'fa-gavel'}"></i>
                     </div>
                     <div class="db-kpi-data">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
@@ -485,17 +528,7 @@
                             </div>
                         </div>
                         <div style="font-size:11px; color:var(--text-3); font-family:'IBM Plex Mono',monospace;">ID: ${c.id} · ${escHtml(c.tipoProcedimiento || '')}</div>
-                        
-                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-top:14px;">
-                            <div class="risk-row" style="margin:0;">
-                                <div class="risk-label" style="font-size:9px;"><span style="color:var(--text-3)">R.PROBATORIO</span></div>
-                                <div class="risk-meter" style="height:4px;"><div class="risk-fill" style="width:${rProb === 'Alto' ? 90 : rProb === 'Medio' ? 50 : 25}%; background:${colorRiesgo(rProb)};"></div></div>
-                            </div>
-                            <div class="risk-row" style="margin:0;">
-                                <div class="risk-label" style="font-size:9px;"><span style="color:var(--text-3)">R.PROCESAL</span></div>
-                                <div class="risk-meter" style="height:4px;"><div class="risk-fill" style="width:${rProc === 'Alto' ? 90 : rProc === 'Medio' ? 50 : 25}%; background:${colorRiesgo(rProc)};"></div></div>
-                            </div>
-                        </div>
+                        ${progresoTramite}
                     </div>
                 </div>`;
             }).join('');
@@ -710,6 +743,56 @@
                 }
             }
             const rut = rutRaw ? formatRUT(rutRaw) : '';
+
+            // Si es PROSPECTO: se registra en CRM (DB.prospectos), no en DB.clientes
+            if (modoAlta !== 'tramite') {
+                if (!Array.isArray(DB.prospectos)) DB.prospectos = [];
+                const nuevoProspecto = {
+                    id: 'pros_' + Date.now(),
+                    etapa: 'contacto',
+                    fechaCreacion: new Date().toISOString(),
+                    fechaContacto: new Date().toISOString(),
+                    notas: [],
+                    nombre: nom,
+                    rut,
+                    telefono: tel,
+                    email: '',
+                    materia: 'civil',
+                    riesgo: 'medio',
+                    origen: 'cliente',
+                    descripcion: rel,
+                    estrategia: ''
+                };
+                if (typeof Store !== 'undefined' && Store?.prospectos) Store.prospectos.push(nuevoProspecto);
+                else DB.prospectos.push(nuevoProspecto);
+
+                document.getElementById('cl-nom').value = '';
+                document.getElementById('cl-rut').value = '';
+                const telEl = document.getElementById('cl-telefono');
+                if (telEl) telEl.value = '';
+                document.getElementById('cl-rel').value = '';
+                const honEl = document.getElementById('cl-honorario');
+                if (honEl) honEl.value = '';
+                const modoEl = document.getElementById('cl-alta-modo');
+                if (modoEl) modoEl.value = 'prospecto';
+                uiOnCambioModoAltaCliente();
+                const fb = document.querySelector('.rut-feedback');
+                if (fb) fb.textContent = '';
+
+                registrarEvento(`Prospecto creado (CRM): ${nom}${rut ? ' · RUT: ' + rut : ''}`);
+                if (typeof markAppDirty === "function") markAppDirty();
+                if (typeof save === 'function') save();
+                if (typeof prospectosRender === 'function') prospectosRender();
+                if (typeof renderAll === 'function') renderAll();
+                try {
+                    if (typeof window.tab === 'function') {
+                        window.tab('prospectos', document.querySelector(`[onclick="tab('prospectos',this)"]`));
+                    }
+                } catch (_) {}
+                showSuccess('Prospecto registrado en CRM.');
+                return;
+            }
+
             const nuevoCliente = {
                 id: uid(),
                 nombre: nom,
@@ -722,14 +805,16 @@
                 status: (modoAlta === 'tramite') ? 'activo' : 'prospecto',
                 fechaCreacion: new Date()
             };
-            DB.clientes.push(nuevoCliente);
+            const clienteCreado = (typeof Store !== 'undefined' && Store?.agregarCliente)
+                ? Store.agregarCliente(nuevoCliente)
+                : (DB.clientes.push(nuevoCliente), nuevoCliente);
 
             if (modoAlta === 'tramite') {
                 const nuevaCausa = {
                     id: uid(),
-                    rut: nuevoCliente.rut || '',
-                    caratula: nuevoCliente.nombre,
-                    clienteId: nuevoCliente.id,
+                    rut: clienteCreado.rut || '',
+                    caratula: clienteCreado.nombre,
+                    clienteId: clienteCreado.id,
                     tipoProcedimiento: 'Trámite Administrativo',
                     tipoExpediente: 'tramite',
                     rama: 'Administrativo',
@@ -748,11 +833,13 @@
                     revisadoHoy: false,
                     prioridadManual: false
                 };
-                DB.causas.push(nuevaCausa);
+                const causaCreada = (typeof Store !== 'undefined' && Store?.agregarCausa)
+                    ? Store.agregarCausa(nuevaCausa)
+                    : (DB.causas.push(nuevaCausa), nuevaCausa);
                 if (typeof asignarHonorarios === 'function') {
-                    asignarHonorarios(nuevaCausa.id, honorarioTramite);
+                    asignarHonorarios(causaCreada.id, honorarioTramite);
                 } else {
-                    nuevaCausa.honorarios = { montoTotal: honorarioTramite, montoBase: honorarioTramite, modalidad: 'CONTADO', pagos: [], saldoPendiente: honorarioTramite, planPagos: [] };
+                    causaCreada.honorarios = { montoTotal: honorarioTramite, montoBase: honorarioTramite, modalidad: 'CONTADO', pagos: [], saldoPendiente: honorarioTramite, planPagos: [] };
                 }
                 registrarEvento(`Cliente + trámite creados: ${nom} · Honorario $${Math.round(honorarioTramite).toLocaleString('es-CL')}`);
             }
@@ -772,7 +859,7 @@
             if (modoAlta !== 'tramite') {
                 registrarEvento(`Cliente registrado: ${nom}${rut ? ' · RUT: ' + rut : ''}`);
             }
-            _waEnviarBienvenidaAutoCliente(nuevoCliente);
+            _waEnviarBienvenidaAutoCliente(clienteCreado);
             if (typeof markAppDirty === "function") markAppDirty(); save(); renderAll();
         }
 
@@ -846,9 +933,11 @@
                     revisadoHoy: false,
                     prioridadManual: false
                 };
-                DB.causas.push(nueva);
-                evaluarRiesgoIntegral(nueva.id);
-                registrarEvento(`Causa creada desde cliente: ${nueva.caratula}`);
+                const causaCreada = (typeof Store !== 'undefined' && Store?.agregarCausa)
+                    ? Store.agregarCausa(nueva)
+                    : (DB.causas.push(nueva), nueva);
+                evaluarRiesgoIntegral(causaCreada.id);
+                registrarEvento(`Causa creada desde cliente: ${causaCreada.caratula}`);
                 if (typeof markAppDirty === "function") markAppDirty(); save(); renderAll();
                 showSuccess("Causa creada exitosamente.");
             });
@@ -991,6 +1080,111 @@
 
         let _hrEditHonorarios = false;
 
+        function _hrParseSel(val) {
+            const v = (val || '').toString().trim();
+            if (!v) return { tipo: '', id: '' };
+            if (v.includes(':')) {
+                const [tipo, ...rest] = v.split(':');
+                return { tipo: (tipo || '').trim(), id: rest.join(':').trim() };
+            }
+            // compat legacy: si viene solo ID, asumir causa
+            return { tipo: 'causa', id: v };
+        }
+
+        function _hrGetEntidad(tipo, id) {
+            const t = (tipo || '').toLowerCase();
+            const needle = String(id || '');
+            if (!needle) return null;
+            if (t === 'tramite') {
+                try {
+                    const lista = (typeof window.TramitesDB !== 'undefined' && window.TramitesDB?.todos)
+                        ? window.TramitesDB.todos()
+                        : (typeof AppConfig !== 'undefined' && AppConfig.get) ? (AppConfig.get('tramites') || []) : [];
+                    return (lista || []).find(x => String(x?.id || '') === needle) || null;
+                } catch (_) {
+                    return null;
+                }
+            }
+            return (DB.causas || []).find(c => (c?.id == needle) || (String(c?.id) === needle)) || null;
+        }
+
+        function _hrEntidadLabel(tipo, ent, idFallback) {
+            const t = (tipo || '').toLowerCase();
+            if (t === 'tramite') {
+                const tipoTr = (ent?.tipo || 'Trámite').toString();
+                const car = (ent?.caratula || '').toString();
+                return `${tipoTr}${car ? ' — ' + car : ''}`.trim() || (idFallback || 'Trámite');
+            }
+            return (ent?.caratula || idFallback || 'Causa').toString();
+        }
+
+        function _hrRenderRefresh() {
+            try {
+                if (typeof RenderBus !== 'undefined' && RenderBus?.render) {
+                    RenderBus.render('honorarios');
+                    RenderBus.render('stats');
+                    RenderBus.render('panel');
+                    RenderBus.render('selectors');
+                    return;
+                }
+            } catch (_) { }
+            try { if (typeof renderAll === 'function') renderAll(); } catch (_) { }
+        }
+
+        function _hrGetHonorarios(tipo, ent) {
+            const t = (tipo || '').toLowerCase();
+            if (!ent) return {};
+            if (t === 'tramite') {
+                if (!ent.honorarios || typeof ent.honorarios !== 'object') ent.honorarios = {};
+                const h = ent.honorarios;
+                if (h.montoTotal == null && h.monto != null) h.montoTotal = h.monto;
+                if (h.montoBase == null && h.montoTotal != null) h.montoBase = h.montoTotal;
+                if (!Array.isArray(h.planPagos) && typeof h.planPagos === 'undefined') h.planPagos = [];
+                if (!Array.isArray(h.pagos) && typeof h.pagos === 'undefined') h.pagos = [];
+                return h;
+            }
+            if (!ent.honorarios) ent.honorarios = {};
+            return ent.honorarios;
+        }
+
+        function _hrSyncTramiteHonorarios(ent) {
+            if (!ent || !ent.honorarios || typeof ent.honorarios !== 'object') return;
+            const h = ent.honorarios;
+            const montoTotal = parseFloat(h.montoTotal || h.montoBase || h.monto || 0) || 0;
+            const totalPagado = Array.isArray(h.pagos)
+                ? h.pagos.reduce((s, p) => s + (parseFloat(p?.monto) || 0), 0)
+                : 0;
+            if (typeof h.saldoPendiente !== 'number') h.saldoPendiente = Math.max(0, montoTotal - totalPagado);
+            // compat con vista de trámites
+            h.monto = montoTotal;
+            h.pagado = totalPagado;
+            try {
+                if (typeof window.TramitesDB !== 'undefined' && typeof window.TramitesDB.actualizar === 'function') {
+                    window.TramitesDB.actualizar(ent.id, { honorarios: h });
+                    return;
+                }
+            } catch (_) { }
+            try {
+                const lista = (typeof AppConfig !== 'undefined' && AppConfig.get) ? (AppConfig.get('tramites') || []) : [];
+                const idx = (lista || []).findIndex(x => String(x?.id || '') === String(ent.id || ''));
+                if (idx !== -1) {
+                    lista[idx] = { ...lista[idx], honorarios: h };
+                    if (AppConfig?.set) AppConfig.set('tramites', lista);
+                }
+            } catch (_) { }
+        }
+
+        function _hrSaveEntidad(tipo, ent) {
+            const t = (tipo || '').toLowerCase();
+            if (!ent) return;
+            if (t === 'tramite') {
+                _hrSyncTramiteHonorarios(ent);
+                return;
+            }
+            if (typeof markAppDirty === "function") markAppDirty();
+            save();
+        }
+
         function uiSetHonorariosEditMode(on) {
             _hrEditHonorarios = !!on;
             const form = document.getElementById('hr-asignar-form');
@@ -1002,7 +1196,9 @@
         }
 
         function uiCargarHonorariosEnFormulario(causa) {
-            const h = causa?.honorarios || {};
+            const sel = document.getElementById('hr-causa-sel');
+            const { tipo } = _hrParseSel(sel ? sel.value : '');
+            const h = _hrGetHonorarios(tipo || 'causa', causa);
             const modalidad = (h.modalidad || 'CONTADO').toUpperCase();
             const monto = parseFloat(h.montoTotal || h.montoBase || 0) || 0;
             const elModalidad = document.getElementById('hr-modalidad');
@@ -1043,6 +1239,22 @@
                     }
                 }
             }
+        }
+
+        function uiHonorariosModificar() {
+            const sel = document.getElementById('hr-causa-sel');
+            const parsed = _hrParseSel(sel ? sel.value : '');
+            if (!parsed?.id) {
+                showError('Seleccione una gestión.');
+                return;
+            }
+            const ent = _hrGetEntidad(parsed.tipo || 'causa', parsed.id);
+            if (!ent) {
+                showError((parsed.tipo || 'causa') === 'tramite' ? 'Trámite no encontrado.' : 'Causa no encontrada.');
+                return;
+            }
+            uiCargarHonorariosEnFormulario(ent);
+            uiSetHonorariosEditMode(true);
         }
 
         function uiVerInsightDocumento(documentoId) {
@@ -1199,7 +1411,7 @@
 
         function uiActualizarHonorariosVista() {
             const sel = document.getElementById('hr-causa-sel');
-            const causaId = sel ? (sel.value || '').toString().trim() : '';
+            const { tipo, id: causaId } = _hrParseSel(sel ? sel.value : '');
             const summary = document.getElementById('hr-asignado-summary');
             if (!summary) return;
 
@@ -1209,9 +1421,9 @@
                 return;
             }
 
-            const causa = (DB.causas || []).find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
-            const h = causa?.honorarios || {};
-            const base = parseFloat(h.montoTotal || h.montoBase || 0) || 0;
+            const ent = _hrGetEntidad(tipo || 'causa', causaId);
+            const h = _hrGetHonorarios(tipo || 'causa', ent);
+            const base = parseFloat(h.montoTotal || h.montoBase || h.base || h.monto || 0) || 0;
             const modalidad = (h.modalidad || '').toString().toUpperCase();
             const tieneHonorarios = !!base && (modalidad === 'CONTADO' || modalidad === 'CUOTAS');
 
@@ -1258,7 +1470,7 @@
                                         : '<span class="badge badge-w">PENDIENTE</span>';
                                     const hasComp = !!(cuota?.comprobanteDocumentoId || cuota?.comprobante?.base64);
                                     const btnComp = hasComp
-                                        ? `<button type="button" class="btn btn-xs" style="background:var(--bg-2); border:1px solid var(--border);" onclick="uiVerComprobanteCuota('${escHtml(String(causaId))}', ${cuota?.numero ?? 0})"><i class=\"fas fa-file-pdf\"></i></button>`
+                                        ? `<button type="button" class="btn btn-xs" style="background:var(--bg-2); border:1px solid var(--border);" onclick="uiVerComprobanteCuota('${escHtml(String(tipo||'causa'))}', '${escHtml(String(causaId))}', ${cuota?.numero ?? 0})"><i class=\"fas fa-file-pdf\"></i></button>`
                                         : '<span style="color:var(--text-3); font-size:0.75rem;">—</span>';
                                     return `
                                         <tr style="border-bottom:1px solid var(--border-1);">
@@ -1298,11 +1510,13 @@
             const fromOverride = (causaIdOverride !== undefined && causaIdOverride !== null)
                 ? causaIdOverride.toString().trim()
                 : '';
-            const causaId = fromOverride || fromSelect;
+            const parsed = _hrParseSel(fromOverride || fromSelect);
+            const tipo = parsed.tipo || 'causa';
+            const causaId = parsed.id;
 
             const modalidad = (document.getElementById('hr-modalidad')?.value || 'CONTADO').toUpperCase();
             const monto = parseFloat(document.getElementById('hr-monto').value);
-            if (!causaId) { showError('Seleccione una causa.'); return; }
+            if (!causaId) { showError('Seleccione una gestión.'); return; }
             if (!monto || monto <= 0) { showError('Ingrese un monto válido.'); return; }
 
             const autorizado = await uiAutorizarAccionCritica({
@@ -1311,10 +1525,9 @@
             });
             if (!autorizado) return;
 
-            const causa = DB.causas.find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
-            if (!causa) { showError('Causa no encontrada.'); return; }
-
-            if (!causa.honorarios) causa.honorarios = {};
+            const ent = _hrGetEntidad(tipo, causaId);
+            if (!ent) { showError(tipo === 'tramite' ? 'Trámite no encontrado.' : 'Causa no encontrada.'); return; }
+            const hEnt = _hrGetHonorarios(tipo, ent);
 
             if (modalidad === 'CUOTAS') {
                 const nCuotas = parseInt(document.getElementById('hr-cuotas-num')?.value) || 0;
@@ -1324,31 +1537,30 @@
 
                 let plan = [];
                 try {
-                    plan = generarPlanPagos(causaId, monto, nCuotas, new Date(fechaStr));
+                    plan = generarPlanPagos(`${tipo}:${causaId}`, monto, nCuotas, new Date(fechaStr));
                 } catch (e) {
                     showError(e?.message || 'No se pudo generar el plan de pagos.');
                     return;
                 }
 
-                causa.honorarios.modalidad = 'CUOTAS';
-                causa.honorarios.montoTotal = monto;
-                causa.honorarios.montoBase = monto; // compat
-                causa.honorarios.planPagos = plan;
+                hEnt.modalidad = 'CUOTAS';
+                hEnt.montoTotal = monto;
+                hEnt.montoBase = monto; // compat
+                hEnt.planPagos = plan;
                 // Mantener pagos legacy si existían
-                if (!Array.isArray(causa.honorarios.pagos)) causa.honorarios.pagos = [];
-                causa.honorarios.saldoPendiente = plan.reduce((s, c) => s + (c.estado === 'PENDIENTE' ? (c.monto || 0) : 0), 0);
+                if (!Array.isArray(hEnt.pagos)) hEnt.pagos = [];
+                hEnt.saldoPendiente = plan.reduce((s, c) => s + (c.estado === 'PENDIENTE' ? (c.monto || 0) : 0), 0);
 
-                if (typeof markAppDirty === "function") markAppDirty();
-                save();
+                _hrSaveEntidad(tipo, ent);
             } else {
                 // CONTADO: crear plan de 1 cuota con fecha editable
                 const fechaContadoStr = (document.getElementById('hr-contado-fecha')?.value || '').trim();
                 const fechaVenc = fechaContadoStr ? new Date(fechaContadoStr) : new Date();
 
-                causa.honorarios.modalidad = 'CONTADO';
-                causa.honorarios.montoTotal = monto;
-                causa.honorarios.montoBase = monto; // compat
-                causa.honorarios.planPagos = [
+                hEnt.modalidad = 'CONTADO';
+                hEnt.montoTotal = monto;
+                hEnt.montoBase = monto; // compat
+                hEnt.planPagos = [
                     {
                         numero: 1,
                         monto: monto,
@@ -1358,18 +1570,17 @@
                     }
                 ];
                 // Mantener pagos legacy si existían
-                if (!Array.isArray(causa.honorarios.pagos)) causa.honorarios.pagos = [];
-                causa.honorarios.saldoPendiente = monto;
+                if (!Array.isArray(hEnt.pagos)) hEnt.pagos = [];
+                hEnt.saldoPendiente = monto;
 
-                if (typeof markAppDirty === "function") markAppDirty();
-                save();
+                _hrSaveEntidad(tipo, ent);
             }
 
-            registrarEvento(`Honorarios asignados: $${monto.toLocaleString('es-CL')} — ${causa?.caratula}`);
+            registrarEvento(`Honorarios asignados: $${monto.toLocaleString('es-CL')} — ${_hrEntidadLabel(tipo, ent, causaId)}`);
             document.getElementById('hr-monto').value = '';
             renderHonorariosResumen();
-            uiRenderPlanPagos(causaId);
-            renderAll();
+            uiRenderPlanPagos(`${tipo}:${causaId}`);
+            _hrRenderRefresh();
 
             uiSetHonorariosEditMode(false);
             uiActualizarHonorariosVista();
@@ -1377,39 +1588,40 @@
 
         function uiEliminarCobroCausa() {
             const sel = document.getElementById('hr-causa-sel');
-            const causaId = sel ? (sel.value || '').toString().trim() : '';
-            if (!causaId) { showError('Seleccione una causa.'); return; }
+            const parsed = _hrParseSel(sel ? sel.value : '');
+            const tipo = parsed.tipo || 'causa';
+            const causaId = parsed.id;
+            if (!causaId) { showError('Seleccione una gestión.'); return; }
 
-            const causa = (DB.causas || []).find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
-            if (!causa) { showError('Causa no encontrada.'); return; }
+            const ent = _hrGetEntidad(tipo, causaId);
+            if (!ent) { showError(tipo === 'tramite' ? 'Trámite no encontrado.' : 'Causa no encontrada.'); return; }
 
-            const h = causa.honorarios || {};
+            const h = _hrGetHonorarios(tipo, ent) || {};
             const tieneCobro = !!(h.montoTotal || h.montoBase || h.base || (Array.isArray(h.planPagos) && h.planPagos.length) || (Array.isArray(h.pagos) && h.pagos.length));
             if (!tieneCobro) {
-                showInfo('La causa seleccionada no tiene cobros/honorarios registrados.');
+                showInfo('La gestión seleccionada no tiene cobros/honorarios registrados.');
                 return;
             }
 
             showConfirm(
-                '¿Eliminar cobro de la causa?',
-                `Se eliminarán honorarios, plan de pagos y pagos registrados de la causa "${causa.caratula || causaId}". Esta acción es irreversible.`,
+                '¿Eliminar cobro de la gestión?',
+                `Se eliminarán honorarios, plan de pagos y pagos registrados del expediente "${_hrEntidadLabel(tipo, ent, causaId)}". Esta acción es irreversible.`,
                 async () => {
                     const autorizado = await uiAutorizarAccionCritica({
-                        titulo: 'Eliminar cobro de causa',
-                        detalle: `Causa: ${causa.caratula || causaId}`
+                        titulo: 'Eliminar cobro de gestión',
+                        detalle: `Expediente: ${_hrEntidadLabel(tipo, ent, causaId)}`
                     });
                     if (!autorizado) return;
 
-                    causa.honorarios = {};
-                    registrarEvento(`Cobro eliminado en Control Financiero: ${causa.caratula || causaId}`);
-                    if (typeof markAppDirty === 'function') markAppDirty();
-                    save();
+                    ent.honorarios = {};
+                    _hrSaveEntidad(tipo, ent);
+                    registrarEvento(`Cobro eliminado en Control Financiero: ${_hrEntidadLabel(tipo, ent, causaId)}`);
                     renderHonorariosResumen();
                     uiActualizarHonorariosVista();
-                    uiRenderPlanPagos(causaId);
-                    uiRenderPagosList(causaId);
+                    uiRenderPlanPagos(`${tipo}:${causaId}`);
+                    uiRenderPagosList(`${tipo}:${causaId}`);
                     if (typeof renderHonorarios === 'function') renderHonorarios();
-                    renderAll();
+                    _hrRenderRefresh();
                     showSuccess('Cobro eliminado correctamente.');
                 },
                 'danger'
@@ -1559,7 +1771,8 @@
                     proveedorIA: null,
                     _origen: 'ui-comprobante'
                 };
-                DB.documentos.push(doc);
+                if (typeof Store !== 'undefined' && Store?.agregarDocumento) Store.agregarDocumento(doc);
+                else DB.documentos.push(doc);
                 return doc.id;
             } catch (e) {
                 console.error('[PAGO] Error guardando comprobante como documento:', e);
@@ -1567,9 +1780,16 @@
             }
         }
 
-        async function uiVerComprobanteCuota(causaId, numeroCuota) {
-            const causa = (DB.causas || []).find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
-            const cuota = causa?.honorarios?.planPagos?.find(c => parseInt(c.numero) === parseInt(numeroCuota));
+        async function uiVerComprobanteCuota(tipo, causaId, numeroCuota) {
+            // Back-compat: llamada legacy (causaId, numero)
+            if (numeroCuota === undefined && (typeof causaId === 'number' || typeof causaId === 'string')) {
+                numeroCuota = causaId;
+                causaId = tipo;
+                tipo = 'causa';
+            }
+            const ent = _hrGetEntidad(tipo || 'causa', causaId);
+            const h = _hrGetHonorarios(tipo || 'causa', ent);
+            const cuota = h?.planPagos?.find(c => parseInt(c.numero) === parseInt(numeroCuota));
             if (!cuota) { showError('Cuota no encontrada.'); return; }
 
             if (cuota.comprobanteDocumentoId) {
@@ -1585,9 +1805,16 @@
             uiAbrirPdfBase64(comp.base64, comp.nombre || 'comprobante.pdf');
         }
 
-        async function uiVerComprobantePago(causaId, idxPago) {
-            const causa = (DB.causas || []).find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
-            const pago = (causa?.honorarios?.pagos || [])[parseInt(idxPago)];
+        async function uiVerComprobantePago(tipo, causaId, idxPago) {
+            // Back-compat: llamada legacy (causaId, idx)
+            if (idxPago === undefined && (typeof causaId === 'number' || typeof causaId === 'string')) {
+                idxPago = causaId;
+                causaId = tipo;
+                tipo = 'causa';
+            }
+            const ent = _hrGetEntidad(tipo || 'causa', causaId);
+            const h = _hrGetHonorarios(tipo || 'causa', ent);
+            const pago = (h?.pagos || [])[parseInt(idxPago)];
             if (!pago) { showError('Pago no encontrado.'); return; }
 
             if (pago.comprobanteDocumentoId) {
@@ -1606,9 +1833,13 @@
         function uiRenderPagosList(causaId) {
             const el = document.getElementById('hr-pagos-list');
             if (!el) return;
-            const causa = (DB.causas || []).find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
-            const pagos = Array.isArray(causa?.honorarios?.pagos) ? causa.honorarios.pagos : [];
-            if (!causaId || !pagos.length) { el.innerHTML = ''; return; }
+            const parsed = _hrParseSel(causaId);
+            const tipo = parsed.tipo || 'causa';
+            const id = parsed.id;
+            const ent = _hrGetEntidad(tipo, id);
+            const h = _hrGetHonorarios(tipo, ent);
+            const pagos = Array.isArray(h?.pagos) ? h.pagos : [];
+            if (!id || !pagos.length) { el.innerHTML = ''; return; }
 
             const fmtFecha = (iso) => {
                 try {
@@ -1636,7 +1867,7 @@
                             ${pagos.map((p, idx) => {
                                 const has = !!(p?.comprobanteDocumentoId || p?.comprobante?.base64);
                                 const btn = has
-                                    ? `<button type="button" class="btn btn-xs" style="background:var(--bg-2); border:1px solid var(--border);" onclick="uiVerComprobantePago('${escHtml(String(causaId))}', ${idx})"><i class=\"fas fa-file-pdf\"></i></button>`
+                                    ? `<button type="button" class="btn btn-xs" style="background:var(--bg-2); border:1px solid var(--border);" onclick="uiVerComprobantePago('${escHtml(String(tipo))}', '${escHtml(String(id))}', ${idx})"><i class=\"fas fa-file-pdf\"></i></button>`
                                     : '<span style="color:var(--text-3); font-size:0.75rem;">—</span>';
                                 return `
                                     <tr style="border-bottom:1px solid var(--border-1);">
@@ -1655,10 +1886,13 @@
         function uiRenderPlanPagos(causaId) {
             const cont = document.getElementById('hr-plan');
             if (!cont) return;
-            const causa = (DB.causas || []).find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
-            const h = causa?.honorarios;
+            const parsed = _hrParseSel(causaId);
+            const tipo = parsed.tipo || 'causa';
+            const id = parsed.id;
+            const ent = _hrGetEntidad(tipo, id);
+            const h = _hrGetHonorarios(tipo, ent);
             const plan = Array.isArray(h?.planPagos) ? h.planPagos : [];
-            if (!causa || !h || !plan.length) { cont.innerHTML = ''; return; }
+            if (!ent || !h || !plan.length) { cont.innerHTML = ''; return; }
 
             const fmtFecha = (iso) => {
                 try { return iso ? new Date(iso).toLocaleDateString('es-CL') : '—'; }
@@ -1690,11 +1924,11 @@
                                     : '<span class="badge badge-w">PENDIENTE</span>';
                                 const hasComp = !!(cuota?.comprobanteDocumentoId || cuota?.comprobante?.base64);
                                 const btnComp = hasComp
-                                    ? `<button type="button" class="btn btn-xs" style="background:var(--bg-2); border:1px solid var(--border);" onclick="uiVerComprobanteCuota('${escHtml(String(causaId))}', ${cuota.numero})"><i class=\"fas fa-file-pdf\"></i></button>`
+                                    ? `<button type="button" class="btn btn-xs" style="background:var(--bg-2); border:1px solid var(--border);" onclick="uiVerComprobanteCuota('${escHtml(String(tipo))}', '${escHtml(String(id))}', ${cuota.numero})"><i class=\"fas fa-file-pdf\"></i></button>`
                                     : '<span style="color:var(--text-3); font-size:0.75rem;">—</span>';
                                 const btn = (estado === 'PENDIENTE')
-                                    ? `<button type="button" class="btn btn-xs btn-p" onclick="uiMarcarCuotaPagada('${causaId}', ${cuota.numero})">Marcar Pagada</button>`
-                                    : `<button type="button" class="btn btn-xs btn-d" onclick="uiDeshacerCuotaPagada('${causaId}', ${cuota.numero})">Deshacer</button>`;
+                                    ? `<button type="button" class="btn btn-xs btn-p" onclick="uiMarcarCuotaPagada('${escHtml(String(tipo))}', '${escHtml(String(id))}', ${cuota.numero})">Marcar Pagada</button>`
+                                    : `<button type="button" class="btn btn-xs btn-d" onclick="uiDeshacerCuotaPagada('${escHtml(String(tipo))}', '${escHtml(String(id))}', ${cuota.numero})">Deshacer</button>`;
                                 return `
                                     <tr style="border-bottom:1px solid var(--border-1);">
                                         <td style="padding:8px 10px; font-family:monospace;">${cuota.numero}</td>
@@ -1712,10 +1946,16 @@
             `;
         }
 
-        function uiMarcarCuotaPagada(causaId, numeroCuota) {
-            const causa = (DB.causas || []).find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
-            if (!causa || !causa.honorarios) return;
-            const h = causa.honorarios;
+        function uiMarcarCuotaPagada(tipo, causaId, numeroCuota) {
+            // Back-compat: llamada legacy (causaId, numero)
+            if (numeroCuota === undefined) {
+                numeroCuota = causaId;
+                causaId = tipo;
+                tipo = 'causa';
+            }
+            const ent = _hrGetEntidad(tipo || 'causa', causaId);
+            const h = _hrGetHonorarios(tipo || 'causa', ent);
+            if (!ent || !h) return;
             if (!Array.isArray(h.planPagos)) return;
 
             const cuota = h.planPagos.find(c => parseInt(c.numero) === parseInt(numeroCuota));
@@ -1725,7 +1965,7 @@
             (async () => {
                 const autorizado = await uiAutorizarAccionCritica({
                     titulo: 'Marcar cuota como pagada',
-                    detalle: `Causa: ${causa.caratula || causaId} · Cuota Nº ${numeroCuota}`
+                    detalle: `Expediente: ${_hrEntidadLabel(tipo, ent, causaId)} · Cuota Nº ${numeroCuota}`
                 });
                 if (!autorizado) return;
 
@@ -1736,7 +1976,8 @@
                 cuota.fechaPago = new Date().toISOString();
                 cuota.alertaEnviada = true;
                 if (comp) {
-                    const idDoc = _guardarComprobanteComoDocumento(causaId, comp, `Comprobante cuota Nº ${cuota.numero}`);
+                    const refId = `${String(tipo || 'causa')}:${String(causaId)}`;
+                    const idDoc = _guardarComprobanteComoDocumento(refId, comp, `Comprobante cuota Nº ${cuota.numero}`);
                     if (idDoc) {
                         cuota.comprobanteDocumentoId = idDoc;
                         cuota.comprobante = { nombre: comp.nombre, mime: comp.mime };
@@ -1759,21 +2000,26 @@
             const totalPagado = (h.pagos || []).reduce((s, p) => s + (parseFloat(p?.monto) || 0), 0);
             h.saldoPendiente = Math.max(0, montoTotal - totalPagado);
 
-                registrarEvento(`Cuota marcada pagada: Nº ${cuota.numero} — ${causa.caratula}`);
-                if (typeof markAppDirty === "function") markAppDirty();
-                save();
+                _hrSaveEntidad(tipo || 'causa', ent);
+                registrarEvento(`Cuota marcada pagada: Nº ${cuota.numero} — ${_hrEntidadLabel(tipo, ent, causaId)}`);
                 renderHonorariosResumen();
-                uiRenderPlanPagos(causa.id);
+                uiRenderPlanPagos(`${tipo}:${causaId}`);
                 uiActualizarHonorariosVista();
-                uiRenderPagosList(causa.id);
-                renderAll();
+                uiRenderPagosList(`${tipo}:${causaId}`);
+                _hrRenderRefresh();
             })();
         }
 
-        async function uiDeshacerCuotaPagada(causaId, numeroCuota) {
-            const causa = (DB.causas || []).find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
-            if (!causa || !causa.honorarios) return;
-            const h = causa.honorarios;
+        async function uiDeshacerCuotaPagada(tipo, causaId, numeroCuota) {
+            // Back-compat: llamada legacy (causaId, numero)
+            if (numeroCuota === undefined) {
+                numeroCuota = causaId;
+                causaId = tipo;
+                tipo = 'causa';
+            }
+            const ent = _hrGetEntidad(tipo || 'causa', causaId);
+            const h = _hrGetHonorarios(tipo || 'causa', ent);
+            if (!ent || !h) return;
             if (!Array.isArray(h.planPagos)) return;
 
             const cuota = h.planPagos.find(c => parseInt(c.numero) === parseInt(numeroCuota));
@@ -1783,7 +2029,7 @@
 
             const autorizado = await uiAutorizarAccionCritica({
                 titulo: 'Deshacer pago de cuota',
-                detalle: `Causa: ${causa.caratula || causaId} · Cuota Nº ${numeroCuota}`
+                detalle: `Expediente: ${_hrEntidadLabel(tipo, ent, causaId)} · Cuota Nº ${numeroCuota}`
             });
             if (!autorizado) return;
 
@@ -1808,14 +2054,13 @@
             const totalPagado = (h.pagos || []).reduce((s, p) => s + (parseFloat(p?.monto) || 0), 0);
             h.saldoPendiente = Math.max(0, montoTotal - totalPagado);
 
-            registrarEvento(`Pago deshecho: Cuota Nº ${cuota.numero} — ${causa.caratula}`);
-            if (typeof markAppDirty === "function") markAppDirty();
-            save();
+            _hrSaveEntidad(tipo || 'causa', ent);
+            registrarEvento(`Pago deshecho: Cuota Nº ${cuota.numero} — ${_hrEntidadLabel(tipo, ent, causaId)}`);
             renderHonorariosResumen();
-            uiRenderPlanPagos(causa.id);
+            uiRenderPlanPagos(`${tipo}:${causaId}`);
             uiActualizarHonorariosVista();
-            uiRenderPagosList(causa.id);
-            renderAll();
+            uiRenderPagosList(`${tipo}:${causaId}`);
+            _hrRenderRefresh();
         }
 
         // UI: mostrar/ocultar campos cuotas/contado
@@ -1855,9 +2100,9 @@
             if (btnMod) {
                 btnMod.addEventListener('click', () => {
                     const sel = document.getElementById('hr-causa-sel');
-                    const causaId = sel ? (sel.value || '').toString().trim() : '';
-                    const causa = (DB.causas || []).find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
-                    if (causa) uiCargarHonorariosEnFormulario(causa);
+                    const parsed = _hrParseSel(sel ? sel.value : '');
+                    const ent = _hrGetEntidad(parsed.tipo || 'causa', parsed.id);
+                    if (ent) uiCargarHonorariosEnFormulario(ent);
                     uiSetHonorariosEditMode(true);
                 });
             }
@@ -1866,18 +2111,21 @@
         })();
 
         function uiRegistrarPago() {
-            const causaId = (document.getElementById('hr-pago-causa-sel')?.value || '').toString().trim();
+            const parsed = _hrParseSel((document.getElementById('hr-pago-causa-sel')?.value || '').toString().trim());
+            const tipo = parsed.tipo || 'causa';
+            const causaId = parsed.id;
             const monto = parseFloat(document.getElementById('hr-pago-monto').value);
-            if (!causaId) { showError('Seleccione una causa.'); return; }
+            if (!causaId) { showError('Seleccione una gestión.'); return; }
             if (!monto || monto <= 0) { showError('Ingrese un monto válido.'); return; }
-            const causa = DB.causas.find(c => (c.id == causaId) || (String(c.id) === String(causaId)));
-            const montoTotal = causa?.honorarios?.montoTotal || causa?.honorarios?.montoBase || 0;
-            if (!montoTotal) { showError('Esta causa no tiene honorarios asignados. Asígnelos primero.'); return; }
+            const ent = _hrGetEntidad(tipo, causaId);
+            const h = _hrGetHonorarios(tipo, ent);
+            const montoTotal = h?.montoTotal || h?.montoBase || 0;
+            if (!montoTotal) { showError('Esta gestión no tiene honorarios asignados. Asígnelos primero.'); return; }
 
             (async () => {
                 const autorizado = await uiAutorizarAccionCritica({
                     titulo: 'Registrar pago',
-                    detalle: `Causa: ${causa?.caratula || causaId} · Monto: $${Math.round(monto).toLocaleString('es-CL')}`
+                    detalle: `Expediente: ${_hrEntidadLabel(tipo, ent, causaId)} · Monto: $${Math.round(monto).toLocaleString('es-CL')}`
                 });
                 if (!autorizado) return;
 
@@ -1895,21 +2143,76 @@
                 }
 
                 // Mantener compatibilidad con registrarPago (si existe), pero asegurando comprobante
-                if (typeof registrarPago === 'function') {
+                if (tipo === 'causa' && typeof registrarPago === 'function') {
                     registrarPago(causaId, monto);
                 } else {
-                    if (!causa.honorarios) causa.honorarios = {};
-                    if (!Array.isArray(causa.honorarios.pagos)) causa.honorarios.pagos = [];
-                    causa.honorarios.pagos.push({ monto, fecha: new Date().toISOString(), concepto: 'Pago registrado', comprobante: null });
+                    if (!h || typeof h !== 'object') { showError('Honorarios no disponibles'); return; }
+                    if (!Array.isArray(h.pagos)) h.pagos = [];
+                    h.pagos.push({ monto, fecha: new Date().toISOString(), concepto: 'Pago' });
+                }
+
+                // ── NUEVO: imputación automática a cuotas pendientes ──
+                try {
+                    if (h && Array.isArray(h.planPagos) && h.planPagos.length) {
+                        let restante = parseFloat(monto) || 0;
+                        const ahoraIso = new Date().toISOString();
+
+                        // Ordenar por número (fallback) y tomar las pendientes más antiguas primero
+                        const pendientes = [...h.planPagos]
+                            .filter(c => (c?.estado || 'PENDIENTE') !== 'PAGADA')
+                            .sort((a, b) => (parseInt(a?.numero) || 0) - (parseInt(b?.numero) || 0));
+
+                        for (const cuota of pendientes) {
+                            if (restante <= 0) break;
+                            const montoCuota = parseFloat(cuota?.monto || 0) || 0;
+                            if (montoCuota <= 0) continue;
+
+                            const abonado = parseFloat(cuota?.abonoAcumulado || 0) || 0;
+                            const falta = Math.max(0, montoCuota - abonado);
+                            if (falta <= 0) {
+                                // Si por alguna razón quedó con abono completo, la dejamos pagada
+                                cuota.abonoAcumulado = montoCuota;
+                                cuota.estado = 'PAGADA';
+                                if (!cuota.fechaPago) cuota.fechaPago = ahoraIso;
+                                continue;
+                            }
+
+                            const aplicado = Math.min(restante, falta);
+                            cuota.abonoAcumulado = Math.round((abonado + aplicado) * 100) / 100;
+                            restante = Math.round((restante - aplicado) * 100) / 100;
+
+                            if (cuota.abonoAcumulado >= montoCuota) {
+                                cuota.abonoAcumulado = montoCuota;
+                                cuota.estado = 'PAGADA';
+                                cuota.fechaPago = ahoraIso;
+                                cuota.alertaEnviada = true;
+                            } else {
+                                // Parcial: queda pendiente, pero con abono
+                                cuota.estado = 'PENDIENTE';
+                            }
+                        }
+
+                        // Ajustar concepto del último pago para trazabilidad (pago aplicado a cuotas)
+                        if (Array.isArray(h.pagos) && h.pagos.length) {
+                            const last = h.pagos[h.pagos.length - 1];
+                            const primeraPend = pendientes && pendientes.length ? pendientes[0] : null;
+                            if (last && primeraPend && parseInt(primeraPend?.numero)) {
+                                last.concepto = `Pago (imputado a cuotas desde Nº ${parseInt(primeraPend.numero)})`;
+                            } else if (last) {
+                                last.concepto = 'Pago (imputado a cuotas)';
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[PAGO] No se pudo imputar automáticamente a cuotas:', e);
                 }
 
                 // Adjuntar comprobante al último pago si corresponde
-                if (comp) {
-                    if (!causa.honorarios) causa.honorarios = {};
-                    if (!Array.isArray(causa.honorarios.pagos)) causa.honorarios.pagos = [];
-                    const last = causa.honorarios.pagos[causa.honorarios.pagos.length - 1];
+                if (comp && Array.isArray(h?.pagos) && h.pagos.length) {
+                    const last = h.pagos[h.pagos.length - 1];
                     if (last) {
-                        const idDoc = _guardarComprobanteComoDocumento(causaId, comp, `Comprobante pago (${last.concepto || 'Pago'})`);
+                        const refId = `${String(tipo)}:${String(causaId)}`;
+                        const idDoc = _guardarComprobanteComoDocumento(refId, comp, `Comprobante pago: $${Math.round(monto).toLocaleString('es-CL')}`);
                         if (idDoc) {
                             last.comprobanteDocumentoId = idDoc;
                             last.comprobante = { nombre: comp.nombre, mime: comp.mime };
@@ -1919,16 +2222,24 @@
                     }
                 }
 
-                registrarEvento(`Pago registrado: $${monto.toLocaleString('es-CL')} — ${causa?.caratula}`);
+                // recomputar saldo y compat
+                const totalPagado = Array.isArray(h?.pagos)
+                    ? h.pagos.reduce((s, p) => s + (parseFloat(p?.monto) || 0), 0)
+                    : 0;
+                const base = parseFloat(h?.montoTotal || h?.montoBase || 0) || 0;
+                h.saldoPendiente = Math.max(0, base - totalPagado);
+                _hrSaveEntidad(tipo, ent);
+
+                registrarEvento(`Pago registrado: $${monto.toLocaleString('es-CL')} — ${_hrEntidadLabel(tipo, ent, causaId)}`);
                 document.getElementById('hr-pago-monto').value = '';
                 const inp2 = document.getElementById('hr-pago-comprobante');
                 if (inp2) inp2.value = '';
 
                 renderHonorariosResumen();
                 uiActualizarHonorariosVista();
-                uiRenderPlanPagos(causaId);
-                uiRenderPagosList(causaId);
-                renderAll();
+                uiRenderPlanPagos(`${tipo}:${causaId}`);
+                uiRenderPagosList(`${tipo}:${causaId}`);
+                _hrRenderRefresh();
             })().catch(e => {
                 console.error('[PAGO] Error registrando pago:', e);
                 showError(e?.message || 'No se pudo registrar el pago.');
@@ -1938,19 +2249,35 @@
         function renderHonorariosResumen() {
             const el = document.getElementById('hr-resumen');
             if (!el) return;
-            const causasConHon = DB.causas.filter(c => (c.honorarios?.montoTotal || c.honorarios?.montoBase));
-            if (!causasConHon.length) {
+            const causasConHon = (DB.causas || []).filter(c => (c?.honorarios?.montoTotal || c?.honorarios?.montoBase || c?.honorarios?.base));
+            let tramitesConHon = [];
+            try {
+                const lista = (typeof window.TramitesDB !== 'undefined' && window.TramitesDB?.todos)
+                    ? window.TramitesDB.todos()
+                    : (typeof AppConfig !== 'undefined' && AppConfig.get) ? (AppConfig.get('tramites') || []) : [];
+                tramitesConHon = (lista || []).filter(t => {
+                    const h = t?.honorarios || {};
+                    return !!(h?.montoTotal || h?.montoBase || h?.base || h?.monto);
+                });
+            } catch (_) { }
+
+            const items = [
+                ...causasConHon.map(c => ({ tipo: 'causa', ent: c })),
+                ...tramitesConHon.map(t => ({ tipo: 'tramite', ent: t }))
+            ];
+
+            if (!items.length) {
                 el.innerHTML = '<div class="empty-state"><i class="fas fa-wallet"></i><p>Sin honorarios asignados.</p></div>'; return;
             }
-            el.innerHTML = causasConHon.map(c => {
-                const h = c.honorarios || {};
-                const base = h.montoTotal || h.montoBase || 0;
+            el.innerHTML = items.map(({ tipo, ent }) => {
+                const h = _hrGetHonorarios(tipo, ent) || {};
+                const base = h.montoTotal || h.montoBase || h.base || h.monto || 0;
                 const saldo = typeof h.saldoPendiente === 'number' ? h.saldoPendiente : (parseFloat(h.saldoPendiente) || 0);
                 const pagado = base - saldo;
                 const pct = base > 0 ? Math.round((pagado / base) * 100) : 0;
                 return `<div class="card" style="margin-bottom:12px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <strong style="font-size:0.88rem;">${escHtml(c.caratula)}</strong>
+                <strong style="font-size:0.88rem;">${escHtml(_hrEntidadLabel(tipo, ent, ent?.id))}</strong>
                 <span class="badge ${saldo <= 0 ? 'badge-s' : 'badge-w'}">${saldo <= 0 ? 'PAGADO' : 'PENDIENTE'}</span>
             </div>
             <div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${pct}%"></div></div>

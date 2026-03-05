@@ -8,6 +8,325 @@
             el.style.display = '';
             el.classList.add('open');
         }
+
+        // ───────────────────────────────────────────────────────────────────
+        // Contrato por gestión (Causa / Trámite)
+        // ───────────────────────────────────────────────────────────────────
+        window.generarContratoGestion = async function (tipo, id) {
+            const t = String(tipo || '').toLowerCase() === 'tramite' ? 'tramite' : 'causa';
+            const gid = String(id || '').trim();
+            if (!gid) {
+                if (typeof showError === 'function') showError('Gestión inválida.');
+                return;
+            }
+
+            const safe = (s) => String(s || '').replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, '_').substring(0, 80);
+            const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+            let ent = null;
+            let cliente = null;
+            let objeto = '';
+            let tipoLabel = '';
+            let honorariosTexto = '';
+
+            if (t === 'tramite') {
+                ent = (window.TramitesDB && typeof window.TramitesDB.porId === 'function')
+                    ? window.TramitesDB.porId(gid)
+                    : null;
+                if (!ent) {
+                    if (typeof showError === 'function') showError('Trámite no encontrado.');
+                    return;
+                }
+                cliente = (DB?.clientes || []).find(c => String(c?.id || '') === String(ent?.clienteId || '')) || null;
+                objeto = `${ent?.tipo || 'Trámite'}${ent?.caratula ? ' — ' + ent.caratula : ''}`.trim();
+                tipoLabel = 'Trámite Administrativo';
+            } else {
+                ent = _dcFindCausaById(gid);
+                if (!ent) {
+                    if (typeof showError === 'function') showError('Causa no encontrada.');
+                    return;
+                }
+                cliente = (DB?.clientes || []).find(c => String(c?.id || '') === String(ent?.clienteId || '')) || null;
+                objeto = String(ent?.caratula || 'Causa').trim();
+                tipoLabel = 'Causa Judicial';
+            }
+
+            const h = (ent && ent.honorarios && typeof ent.honorarios === 'object') ? ent.honorarios : {};
+            const montoBase = parseFloat(h?.montoBase ?? h?.montoTotal ?? h?.base ?? h?.monto ?? 0) || 0;
+            const modalidad = String(h?.modalidad || (Array.isArray(h?.planPagos) && h.planPagos.length > 1 ? 'CUOTAS' : 'CONTADO')).toUpperCase();
+            const plan = Array.isArray(h?.planPagos) ? h.planPagos : [];
+
+            const fmtMoney = (n) => `$${Math.round(parseFloat(n || 0) || 0).toLocaleString('es-CL')}`;
+            const fmtFecha = (iso) => {
+                try {
+                    if (!iso) return '—';
+                    const d = new Date(iso);
+                    return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-CL');
+                } catch (_) { return '—'; }
+            };
+
+            if (montoBase > 0) {
+                if (modalidad === 'CUOTAS' && plan.length) {
+                    const rows = plan.map(c => {
+                        const n = parseInt(c?.numero) || '';
+                        const m = fmtMoney(c?.monto || 0);
+                        const f = fmtFecha(c?.fechaVencimiento);
+                        return `<tr><td>${esc(n)}</td><td style="text-align:right;">${esc(m)}</td><td>${esc(f)}</td></tr>`;
+                    }).join('');
+                    honorariosTexto = `Monto base: <strong>${esc(fmtMoney(montoBase))}</strong> CLP.<br><br>
+                        <strong>Plan de pagos (${plan.length} cuota${plan.length === 1 ? '' : 's'}):</strong>
+                        <table style="width:100%; border-collapse:collapse; font-size:12px; margin-top:10px;">
+                          <thead><tr><th style="text-align:left; border-bottom:1px solid #e2e8f0; padding:6px 4px;">Nº</th><th style="text-align:right; border-bottom:1px solid #e2e8f0; padding:6px 4px;">Monto</th><th style="text-align:left; border-bottom:1px solid #e2e8f0; padding:6px 4px;">Vencimiento</th></tr></thead>
+                          <tbody>${rows}</tbody>
+                        </table>`;
+                } else {
+                    const f = plan[0]?.fechaVencimiento ? fmtFecha(plan[0].fechaVencimiento) : '—';
+                    honorariosTexto = `Monto base: <strong>${esc(fmtMoney(montoBase))}</strong> CLP.<br>Forma de pago: <strong>Contado</strong>.<br>Vencimiento: <strong>${esc(f)}</strong>.`;
+                }
+            } else {
+                honorariosTexto = 'Según acuerdo entre las partes.';
+            }
+
+            const hoy = new Date().toLocaleDateString('es-CL');
+            const clienteNombre = (cliente?.nombre || cliente?.nom || ent?.cliente || ent?.clienteNombre || 'Cliente').toString();
+            const clienteRut = (cliente?.rut || '').toString();
+            const clienteEmail = (cliente?.email || '').toString();
+            const clienteTelefono = (cliente?.telefono || '').toString();
+
+            const html = `<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Contrato de Servicios - ${esc(clienteNombre)}</title>
+<style>
+body{font-family:Arial,sans-serif;color:#0f172a;padding:28px;line-height:1.55;}
+h1{font-size:22px;margin:0 0 10px;}
+h2{font-size:13px;text-transform:uppercase;margin:20px 0 8px;color:#1e3a8a;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+td{padding:8px;border-bottom:1px solid #e2e8f0;}
+td:first-child{width:34%;font-weight:700;color:#475569}
+.box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;}
+.firmas{margin-top:38px;display:grid;grid-template-columns:1fr 1fr;gap:26px}
+.firma{border-top:1px solid #94a3b8;padding-top:7px;font-size:12px;color:#475569}
+</style></head><body>
+<h1>Contrato de Prestación de Servicios</h1>
+<div style="font-size:12px;color:#64748b;">Fecha de emisión: ${esc(hoy)} · Tipo: ${esc(tipoLabel)}</div>
+
+<h2>1. Individualización de las partes</h2>
+<table>
+<tr><td>Cliente</td><td>${esc(clienteNombre || '—')}</td></tr>
+<tr><td>RUT</td><td>${esc(clienteRut || '—')}</td></tr>
+<tr><td>Email</td><td>${esc(clienteEmail || '—')}</td></tr>
+<tr><td>Teléfono</td><td>${esc(clienteTelefono || '—')}</td></tr>
+</table>
+
+<h2>2. Objeto del encargo</h2>
+<div class="box">${esc(objeto || 'Gestión legal encomendada por el cliente.')}</div>
+
+<h2>3. Honorarios y forma de pago</h2>
+<div class="box">${honorariosTexto}</div>
+
+<h2>4. Mandato y facultades</h2>
+<div class="box">El cliente confiere patrocinio y poder para ejecutar actuaciones necesarias dentro del encargo profesional.</div>
+
+<div class="firmas">
+<div class="firma">Firma Cliente</div>
+<div class="firma">Firma Estudio / Abogado</div>
+</div>
+</body></html>`;
+
+            const pdfApi = window.electronAPI?.prospectos?.generarPDF
+                ? window.electronAPI.prospectos
+                : (window.electronAPI?.generarPDF ? window.electronAPI : null);
+            if (!pdfApi?.generarPDF) {
+                if (typeof showError === 'function') showError('La función de generar PDF no está disponible en este entorno.');
+                return;
+            }
+
+            const pdfOutputDir = (typeof AppConfig !== 'undefined' && AppConfig.get)
+                ? (AppConfig.get('pdf_output_dir') || '')
+                : '';
+            const pdfAskSaveAs = (typeof AppConfig !== 'undefined' && AppConfig.get)
+                ? !!AppConfig.get('pdf_preguntar_guardar_como')
+                : false;
+
+            const nombrePdf = `Contrato_${safe(clienteNombre)}_${safe(objeto || tipoLabel)}_${new Date().toISOString().slice(0, 10)}.pdf`;
+            let r;
+            try {
+                const forceSaveAsOnce = !!window._lexiumForceSaveAsOnce;
+                window._lexiumForceSaveAsOnce = false;
+                r = await pdfApi.generarPDF({
+                    html,
+                    defaultName: nombrePdf,
+                    nombre: nombrePdf,
+                    outputDir: pdfOutputDir,
+                    saveAs: forceSaveAsOnce || pdfAskSaveAs
+                });
+            } catch (e) {
+                if (typeof showError === 'function') showError(e?.message || 'No se pudo generar el PDF.');
+                return;
+            }
+
+            const base64 = (r && typeof r === 'object') ? (r.base64 || '') : '';
+            if (!base64) {
+                if (typeof showError === 'function') showError('No se recibió el PDF generado (base64 vacío).');
+                return;
+            }
+
+            const rutaPdf = (r && typeof r === 'object') ? (r.ruta || r.path || '') : '';
+
+            // Persistir en DB.documentos asociado a la gestión
+            try {
+                if (!DB || typeof DB !== 'object') return;
+                if (!Array.isArray(DB.documentos)) DB.documentos = [];
+
+                const refId = `${t}:${gid}`;
+                const docId = (typeof uid === 'function') ? uid() : (Date.now().toString(36) + Math.random().toString(36).slice(2));
+                DB.documentos.push({
+                    id: docId,
+                    causaId: refId,
+                    nombreOriginal: nombrePdf,
+                    tipo: 'Contrato',
+                    etapaVinculada: 'Contratación',
+                    fechaDocumento: (new Date().toISOString().split('T')[0]),
+                    generaPlazo: false,
+                    diasPlazo: 0,
+                    fechaVencimiento: null,
+                    fechaIngreso: new Date().toISOString(),
+                    descripcion: 'Contrato de prestación de servicios (por gestión).',
+                    archivoBase64: base64,
+                    archivoNombre: nombrePdf,
+                    archivoMime: 'application/pdf',
+                    proveedorIA: null,
+                    _origen: 'contrato'
+                });
+                if (typeof markAppDirty === 'function') markAppDirty();
+                if (typeof save === 'function') save();
+            } catch (_) { }
+
+            // Abrir PDF vía Electron (evita bloqueos de descargas/popups)
+            try {
+                if (rutaPdf && window.electronAPI?.sistema?.revelarEnCarpeta) {
+                    await window.electronAPI.sistema.revelarEnCarpeta(rutaPdf);
+                } else if (rutaPdf && window.electronAPI?.sistema?.abrirRuta) {
+                    await window.electronAPI.sistema.abrirRuta(rutaPdf);
+                } else {
+                    // Fallback web: descargar
+                    const bin = atob(base64);
+                    const bytes = new Uint8Array(bin.length);
+                    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                    const blob = new Blob([bytes], { type: 'application/pdf' });
+                    const blobUrl = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = blobUrl;
+                    a.download = nombrePdf;
+                    a.style.display = 'none';
+                    document.body.appendChild(a);
+                    a.click();
+                    setTimeout(() => {
+                        try { URL.revokeObjectURL(blobUrl); } catch (_) { }
+                        try { document.body.removeChild(a); } catch (_) { }
+                    }, 2500);
+                }
+            } catch (_) { }
+
+            if (typeof showSuccess === 'function') showSuccess('Contrato generado y guardado en Documentos.');
+        };
+
+        function _dcAplicarSugerenciasJudicialesIA(causa, data, nombreArchivo) {
+            if (!causa || _dcEsTramiteAdmin(causa) || !data || typeof data !== 'object') return { nuevosEventos: 0, alertasNuevas: 0, audienciasActivadas: false };
+            const prevAudienciasHabilitadas = !!causa?.audiencias?.habilitado;
+            let nuevosEventos = 0;
+            let alertasNuevas = 0;
+            const ext = (data.extraer && typeof data.extraer === 'object') ? data.extraer : {};
+
+            if (!causa.iaSugerencias || typeof causa.iaSugerencias !== 'object') causa.iaSugerencias = {};
+            causa.iaSugerencias.ultimaFuente = nombreArchivo || null;
+            causa.iaSugerencias.ultimoAnalisis = new Date().toISOString();
+            causa.iaSugerencias.extraer = ext;
+            causa.iaSugerencias.eventos = Array.isArray(data.eventos) ? data.eventos : [];
+
+            if (!causa.materia && ext.materia) causa.materia = String(ext.materia).trim();
+            if (!causa.rama && ext.rama) causa.rama = String(ext.rama).trim();
+            if (!causa.juzgado && ext.tribunal) causa.juzgado = String(ext.tribunal).trim();
+            if (!causa.rit && ext.rolRit) causa.rit = String(ext.rolRit).trim();
+
+            if (!causa.partes || typeof causa.partes !== 'object') {
+                causa.partes = { demandante: {}, demandado: {}, abogadoContrario: {}, juez: {} };
+            }
+            if (!causa.partes.demandante) causa.partes.demandante = {};
+            if (!causa.partes.demandado) causa.partes.demandado = {};
+
+            const p = ext.partes && typeof ext.partes === 'object' ? ext.partes : {};
+            if (!causa.partes.demandante.nombre && p.demandante) causa.partes.demandante.nombre = String(p.demandante).trim();
+            if (!causa.partes.demandado.nombre && p.demandado) causa.partes.demandado.nombre = String(p.demandado).trim();
+
+            const adm = String(ext.admisibilidad || '').toLowerCase();
+            if (adm.includes('no admite')) causa.iaSugerencias.estadoAdmisibilidad = 'No admite';
+            else if (adm.includes('subsan')) causa.iaSugerencias.estadoAdmisibilidad = 'Subsanar';
+            else if (adm.includes('admite')) causa.iaSugerencias.estadoAdmisibilidad = 'Admite';
+            if (causa.iaSugerencias.estadoAdmisibilidad === 'Admite') {
+                if (!causa.audiencias || typeof causa.audiencias !== 'object') causa.audiencias = {};
+                causa.audiencias.habilitado = true;
+                causa.audiencias.activadoPor = 'ia_admisibilidad';
+                causa.audiencias.activadoEn = new Date().toISOString();
+            }
+
+            const eventos = Array.isArray(data.eventos) ? data.eventos : [];
+            if (eventos.length) {
+                if (!Array.isArray(causa.eventosProcesalesIA)) causa.eventosProcesalesIA = [];
+                if (!Array.isArray(DB.alertas)) DB.alertas = [];
+
+                eventos.forEach(ev => {
+                    const tipo = String(ev?.tipo || '').toLowerCase();
+                    const titulo = String(ev?.titulo || '').trim();
+                    const fecha = String(ev?.fecha || '').trim();
+                    const detalle = String(ev?.detalle || '').trim();
+                    if (!titulo) return;
+                    const firma = `${tipo}|${titulo}|${fecha}`;
+                    const existe = causa.eventosProcesalesIA.some(e => String(e.firma || '') === firma);
+                    if (existe) return;
+
+                    const item = {
+                        id: (typeof uid === 'function' ? uid() : generarID()),
+                        firma,
+                        tipo: tipo || 'hito',
+                        titulo,
+                        fecha: /^\d{4}-\d{2}-\d{2}$/.test(fecha) ? fecha : null,
+                        detalle,
+                        fuente: nombreArchivo || null,
+                        creadoEn: new Date().toISOString()
+                    };
+                    causa.eventosProcesalesIA.push(item);
+                    nuevosEventos++;
+
+                    if (item.tipo === 'audiencia') {
+                        if (!causa.audiencias || typeof causa.audiencias !== 'object') causa.audiencias = {};
+                        causa.audiencias.habilitado = true;
+                        causa.audiencias.activadoPor = 'ia_evento_audiencia';
+                        causa.audiencias.activadoEn = new Date().toISOString();
+                    }
+
+                    if (item.fecha && (item.tipo === 'plazo' || item.tipo === 'audiencia')) {
+                        const alertaNueva = {
+                            id: (typeof uid === 'function' ? uid() : generarID()),
+                            causaId: causa.id,
+                            tipo: item.tipo,
+                            mensaje: `[IA] ${item.titulo} — ${causa.caratula || 'Causa'}`,
+                            fechaObjetivo: item.fecha,
+                            prioridad: item.tipo === 'audiencia' ? 'alta' : 'media',
+                            estado: 'activa',
+                            fechaCreacion: new Date().toISOString()
+                        };
+                        if (typeof Store !== 'undefined' && Store?.agregarAlerta) Store.agregarAlerta(alertaNueva);
+                        else DB.alertas.push(alertaNueva);
+                        alertasNuevas++;
+                    }
+                });
+            }
+            return {
+                nuevosEventos,
+                alertasNuevas,
+                audienciasActivadas: !prevAudienciasHabilitadas && !!causa?.audiencias?.habilitado
+            };
+        }
         function cerrarModal(id) {
             const el = document.getElementById(id);
             if (!el) return;
@@ -39,6 +358,162 @@
         // ─── 1. VISTA DETALLE DE CAUSA (modal completo) ───────────────────
         // ─── Tab activo en detalle de causa ──────────────────────────────
         let _dcTabActivo = 'movimientos';
+        let _dcDetalleDelegadoIniciado = false;
+
+        function _dcNormalizarId(valor) {
+            const v = String(valor ?? '').trim();
+            if (!v) return v;
+            if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+                return v.slice(1, -1);
+            }
+            return v;
+        }
+
+        function _dcFindCausaById(causaId) {
+            const id = _dcNormalizarId(causaId);
+            return DB.causas.find(c => String(c.id) === String(id));
+        }
+
+        function _dcInitDetalleDelegado() {
+            if (_dcDetalleDelegadoIniciado) return;
+            _dcDetalleDelegadoIniciado = true;
+
+            document.addEventListener('click', (ev) => {
+                const el = ev.target.closest('[data-dc-action]');
+                if (!el) return;
+
+                const action = el.dataset.dcAction;
+                const causaId = _dcNormalizarId(el.dataset.causaId);
+                const tabName = el.dataset.dcTab;
+                const idx = Number(el.dataset.idx);
+                const tipo = el.dataset.tipo;
+                const tareaId = _dcNormalizarId(el.dataset.tareaId);
+                const rolKey = el.dataset.rolKey;
+                const rolLabel = el.dataset.rolLabel;
+                const instancia = el.dataset.instancia;
+                const adjIdx = Number(el.dataset.adjIdx);
+
+                if (action === 'cerrar-modal-detalle') return cerrarModal('modal-detalle');
+                if (action === 'volver-listado-causas') { cerrarModal('modal-detalle'); tab('causas', null); return; }
+                if (action === 'cerrar-causa') return uiCerrarCausa(causaId);
+                if (action === 'reactivar-causa') return uiReactivarCausa(causaId);
+                if (action === 'exportar-pdf-causa') return exportarPDFCausa(causaId);
+                if (action === 'generar-contrato') {
+                    if (typeof window.generarContratoGestion === 'function') {
+                        return window.generarContratoGestion('causa', causaId);
+                    }
+                    if (typeof showError === 'function') showError('Generador de contrato no disponible.');
+                    return;
+                }
+                if (action === 'generar-contrato-saveas') {
+                    window._lexiumForceSaveAsOnce = true;
+                    if (typeof window.generarContratoGestion === 'function') {
+                        return window.generarContratoGestion('causa', causaId);
+                    }
+                    if (typeof showError === 'function') showError('Generador de contrato no disponible.');
+                    return;
+                }
+                if (action === 'editar-cuantia') {
+                    const causa = _dcFindCausaById(causaId);
+                    if (!causa) return;
+                    migAbrir({
+                        titulo: '<i class="fas fa-coins"></i> Cuantía / Pretensión',
+                        btnOk: 'Guardar',
+                        campos: [
+                            { id: 'mig-cuantia', label: 'Cuantía de la pretensión (CLP)', tipo: 'number', valor: String(parseFloat(causa.cuantiaPretension || 0) || 0), placeholder: '0', requerido: false }
+                        ],
+                        onOk: (vals) => {
+                            causa.cuantiaPretension = parseFloat(vals['mig-cuantia'] || 0) || 0;
+                            if (typeof markAppDirty === "function") markAppDirty();
+                            guardarDB();
+                            abrirDetalleCausa(causaId);
+                        }
+                    });
+                    return;
+                }
+                if (action === 'abrir-adjuntos') return _abrirModalAdjuntos(causaId);
+                if (action === 'abrir-lexbot') return lexbotAbrirConCausa(causaId);
+                if (action === 'exportar-pdf-pro') { cerrarModal('modal-detalle'); return exportarInformeMejorado(causaId); }
+                if (action === 'abrir-estrategia') {
+                    const causa = _dcFindCausaById(causaId);
+                    if (!causa || _dcEsTramiteAdmin(causa)) {
+                        if (typeof showInfo === 'function') showInfo('Estrategia y riesgo se gestionan solo en causas judiciales.');
+                        return;
+                    }
+                    cerrarModal('modal-detalle');
+                    tab('estrategia-pro', null);
+                    const sel = document.getElementById('ep-causa-sel');
+                    if (sel) sel.value = causaId;
+                    return uiRenderEstrategiaPro();
+                }
+                if (action === 'marcar-etapa') return uiMarcarEtapa(causaId, idx);
+                if (action === 'abrir-juris') return uiAbrirBuscarJuris(causaId);
+                if (action === 'duplicar-causa') return uiDuplicarCausa(causaId);
+                if (action === 'cambiar-tab') return dcCambiarTab(tabName, causaId);
+                if (action === 'agregar-movimiento') return dcAgregarMovimiento(causaId);
+                if (action === 'eliminar-movimiento') return dcEliminarMovimiento(causaId, idx);
+                if (action === 'toggle-tarea') return dcToggleTarea(causaId, tareaId);
+                if (action === 'eliminar-tarea') return dcEliminarTarea(causaId, tareaId);
+                if (action === 'agregar-tarea') return dcAgregarTarea(causaId);
+                if (action === 'eliminar-doc-requisito') return dcEliminarAdjuntoTarea(causaId, tareaId, adjIdx);
+                if (action === 'editar-parte') return dcEditarParte(causaId, rolKey, rolLabel);
+                if (action === 'editar-intervinientes-tramite') return dcEditarIntervinientesTramite(causaId);
+                if (action === 'editar-tribunal') return dcEditarTribunal(causaId);
+                if (action === 'ver-doc') return dcVerDocumento(causaId, tipo, idx, tareaId);
+                if (action === 'exportar-doc-pdf') return dcExportarDocumentoPDF(causaId, tipo, idx, tareaId);
+                if (action === 'analisis-dual-doc') return dcAnalisisDualDoc(causaId, tipo, idx);
+                if (action === 'insight-doc') return dcVerInsightDoc(causaId, tipo, idx);
+                if (action === 'eliminar-doc') return dcEliminarDocumento(causaId, tipo, idx);
+                if (action === 'cambiar-instancia') return dcCambiarInstancia(causaId, instancia);
+                if (action === 'agregar-instancia') return dcAgregarInstancia(causaId);
+                if (action === 'agregar-recurso') return dcAgregarRecurso(causaId);
+                if (action === 'eliminar-recurso') return dcEliminarRecurso(causaId, idx);
+                if (action === 'agregar-reparo-tramite') return dcAgregarReparoTramite(causaId);
+                if (action === 'eliminar-reparo-tramite') return dcEliminarReparoTramite(causaId, idx);
+                if (action === 'abrir-modulo-tramites') return dcAbrirModuloTramites(causaId);
+                if (action === 'crear-tramite-vinculado') return dcCrearTramiteVinculado(causaId);
+                if (action === 'aplicar-ia-sugerencias') return dcAplicarSugerenciasIA(causaId);
+                if (action === 'descartar-ia-sugerencias') return dcDescartarSugerenciasIA(causaId);
+                if (action === 'wa-alerta-audiencia') return dcEnviarAlertaAudienciaWhatsApp(causaId, _dcNormalizarId(el.dataset.eventoId));
+                if (action === 'gestionar-audiencia-ia') return dcMarcarAudienciaIAGestionada(causaId, _dcNormalizarId(el.dataset.eventoId));
+            });
+
+            document.addEventListener('input', (ev) => {
+                const causaId = ev.target?.dataset?.dcMovFilter;
+                if (causaId) dcFiltrarMovimientos(causaId);
+            });
+
+            document.addEventListener('change', (ev) => {
+                const target = ev.target;
+                if (!target) return;
+                const movCausaId = _dcNormalizarId(target.dataset?.dcMovFilter);
+                if (movCausaId) dcFiltrarMovimientos(movCausaId);
+                const prescCausaId = _dcNormalizarId(target.dataset?.dcPrescAutosave);
+                if (prescCausaId) dcGuardarPrescripcion(prescCausaId);
+                const hitoCausaId = _dcNormalizarId(target.dataset?.dcTramiteHito);
+                if (hitoCausaId) dcGuardarHitosTramite(hitoCausaId);
+                const orgCausaId = _dcNormalizarId(target.dataset?.dcTramOrg);
+                if (orgCausaId) dcActualizarTiposTramiteIngreso(orgCausaId);
+                const reqUploadCausaId = _dcNormalizarId(target.dataset?.dcReqUpload);
+                if (reqUploadCausaId) {
+                    dcAdjuntarDocRequisito(reqUploadCausaId, _dcNormalizarId(target.dataset?.tareaId), target.files);
+                    target.value = '';
+                }
+                const audFiltroCausaId = _dcNormalizarId(target.dataset?.dcAudFiltro);
+                if (audFiltroCausaId) dcCambiarFiltroAudienciasIA(audFiltroCausaId, target.value);
+            });
+
+            document.addEventListener('keydown', (ev) => {
+                const target = ev.target;
+                if (!target) return;
+
+                const tareaCausaId = _dcNormalizarId(target.dataset?.dcTaskInput);
+                if (tareaCausaId && ev.key === 'Enter') {
+                    ev.preventDefault();
+                    dcAgregarTarea(tareaCausaId);
+                }
+            });
+        }
 
         function dcCambiarTab(tab, causaId) {
             _dcTabActivo = tab;
@@ -57,6 +532,7 @@
             if (tab === 'docs-contraparte') dcRenderDocs(causaId, 'contraparte');
             if (tab === 'docs-tramites') dcRenderDocs(causaId, 'tramites');
             if (tab === 'proceso') dcRenderProceso(causaId);
+            if (tab === 'tramite') dcRenderTramiteSeguimiento(causaId);
         }
 
         function _dcGetDocsUnificados(causa) {
@@ -84,12 +560,170 @@
             return (causa.documentos || []).map(d => ({ ...d }));
         }
 
+        function _dcEsTramiteAdmin(causa) {
+            const tipoExp = String(causa?.tipoExpediente || '').toLowerCase();
+            if (tipoExp === 'tramite') return true;
+            const tipoProc = String(causa?.tipoProcedimiento || '').toLowerCase();
+            return /tr[aá]mite/.test(tipoProc);
+        }
+
+        function _dcGetTramitesStore() {
+            try {
+                if (window.TramitesDB && typeof window.TramitesDB.todos === 'function') {
+                    const listDb = window.TramitesDB.todos();
+                    return Array.isArray(listDb) ? listDb : [];
+                }
+                const appCfg = (typeof AppConfig !== 'undefined' && AppConfig) ? AppConfig : window.AppConfig;
+                const list = appCfg?.get?.('tramites');
+                return Array.isArray(list) ? list : [];
+            } catch (_) {
+                return [];
+            }
+        }
+
+        function _dcSetTramitesStore(list) {
+            try {
+                if (window.TramitesDB && typeof window.TramitesDB._guardar === 'function') {
+                    window.TramitesDB._guardar(list);
+                    return;
+                }
+                const appCfg = (typeof AppConfig !== 'undefined' && AppConfig) ? AppConfig : window.AppConfig;
+                appCfg?.set?.('tramites', list);
+            } catch (_) {}
+        }
+
+        function _dcGetTramitesVinculados(causaId) {
+            return _dcGetTramitesStore().filter(t => String(t.causaId || '') === String(causaId));
+        }
+
+        function _dcGetCatalogoOrganismos() {
+            const base = window.TRAMITES_CATALOGO || {};
+            const entries = Object.entries(base).map(([key, cfg]) => ({
+                key,
+                label: cfg?.label || key,
+                tipos: Array.isArray(cfg?.tipos) ? cfg.tipos : []
+            }));
+            if (entries.length) return entries;
+            return [
+                { key: 'CBR', label: 'Conservador de Bienes Raíces', tipos: ['Inscripción de dominio', 'Certificado de dominio vigente', 'Subinscripción'] },
+                { key: 'SII', label: 'Servicio de Impuestos Internos', tipos: ['Inicio de actividades', 'Término de giro', 'Rectificación de declaración'] },
+                { key: 'MUNICIPALIDAD', label: 'Municipalidad', tipos: ['Patente comercial', 'Permiso municipal', 'Reclamo administrativo'] },
+                { key: 'OTRO', label: 'Otro organismo', tipos: ['Trámite administrativo'] }
+            ];
+        }
+
+        async function _dcVerificarPasswordActual(pass) {
+            try {
+                const appCfg = (typeof AppConfig !== 'undefined' && AppConfig) ? AppConfig : window.AppConfig;
+                let usuarios = appCfg?.get?.('usuarios') || [];
+                if (!Array.isArray(usuarios) || usuarios.length === 0) {
+                    try {
+                        const raw = localStorage.getItem('APPBOGADO_USERS_V2');
+                        usuarios = raw ? (JSON.parse(raw) || []) : [];
+                    } catch (_) {
+                        usuarios = [];
+                    }
+                }
+                if (!Array.isArray(usuarios) || usuarios.length === 0) return false;
+
+                const activos = usuarios.filter(u => u && u.activo !== false && u.passwordHash);
+                if (!activos.length) return false;
+
+                const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(pass || '')));
+                const hashIngresado = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+                return activos.some(u => hashIngresado === String(u.passwordHash || ''));
+            } catch (_) {
+                return false;
+            }
+        }
+
+        function _dcSolicitarPassword(titulo, mensaje) {
+            return new Promise((resolve) => {
+                const prev = document.getElementById('dc-pass-overlay');
+                if (prev) prev.remove();
+
+                const overlay = document.createElement('div');
+                overlay.id = 'dc-pass-overlay';
+                overlay.style.cssText = 'position:fixed;inset:0;background:rgba(2,6,23,.62);display:flex;align-items:center;justify-content:center;z-index:2147483647;padding:16px;isolation:isolate;pointer-events:auto;';
+                overlay.innerHTML = `
+                    <div id="dc-pass-dialog" style="width:min(420px,94vw);background:var(--bg-1,#0f172a);border:1px solid var(--border,#334155);border-radius:12px;padding:16px;box-shadow:0 20px 48px rgba(0,0,0,.45);pointer-events:auto;" role="dialog" aria-modal="true" tabindex="-1">
+                        <div style="font-weight:700;font-size:.95rem;margin-bottom:8px;color:var(--text-1,#e2e8f0);">${escHtml(titulo || 'Confirmar acción')}</div>
+                        <div style="font-size:.82rem;color:var(--text-3,#94a3b8);margin-bottom:10px;">${escHtml(mensaje || 'Para continuar, ingresa tu contraseña.')}</div>
+                        <input id="dc-pass-input" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Contraseña" style="width:100%;padding:9px 11px;border:1px solid var(--border,#334155);border-radius:8px;background:var(--bg-2,#111827);color:var(--text-1,#e2e8f0);box-sizing:border-box;pointer-events:auto;user-select:text;">
+                        <div id="dc-pass-err" style="display:none;color:#ef4444;font-size:.76rem;margin-top:6px;">Contraseña incorrecta.</div>
+                        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+                            <button id="dc-pass-cancel" type="button" class="btn" style="padding:7px 12px;">Cancelar</button>
+                            <button id="dc-pass-ok" type="button" class="btn btn-d" style="padding:7px 12px;">Confirmar</button>
+                        </div>
+                    </div>`;
+
+                const close = (val) => {
+                    overlay.remove();
+                    resolve(val);
+                };
+                (document.documentElement || document.body).appendChild(overlay);
+
+                const inp = overlay.querySelector('#dc-pass-input');
+                const err = overlay.querySelector('#dc-pass-err');
+                const okBtn = overlay.querySelector('#dc-pass-ok');
+                const cancelBtn = overlay.querySelector('#dc-pass-cancel');
+                const dialog = overlay.querySelector('#dc-pass-dialog');
+
+                dialog?.addEventListener('click', (ev) => ev.stopPropagation());
+                dialog?.addEventListener('mousedown', (ev) => ev.stopPropagation());
+                dialog?.addEventListener('keydown', (ev) => ev.stopPropagation());
+
+                const onConfirm = async () => {
+                    const val = String(inp?.value || '').trim();
+                    if (!val) {
+                        if (err) { err.textContent = 'Ingresa tu contraseña.'; err.style.display = 'block'; }
+                        inp?.focus();
+                        return;
+                    }
+                    const ok = await _dcVerificarPasswordActual(val);
+                    if (!ok) {
+                        if (err) { err.textContent = 'Contraseña incorrecta.'; err.style.display = 'block'; }
+                        if (inp) { inp.value = ''; inp.focus(); }
+                        return;
+                    }
+                    close(true);
+                };
+
+                if (okBtn) okBtn.onclick = onConfirm;
+                okBtn?.addEventListener('click', onConfirm);
+                cancelBtn?.addEventListener('click', () => close(false));
+                overlay.addEventListener('click', (ev) => { if (ev.target === overlay) close(false); });
+                inp?.addEventListener('keydown', (ev) => {
+                    if (ev.key === 'Enter') onConfirm();
+                    if (ev.key === 'Escape') close(false);
+                });
+                const focusInput = () => {
+                    dialog?.focus();
+                    inp?.focus();
+                    inp?.select?.();
+                };
+                focusInput();
+                requestAnimationFrame(() => {
+                    focusInput();
+                    setTimeout(focusInput, 0);
+                });
+            });
+        }
+
+        async function _dcConfirmarAccionSegura(mensajeBase) {
+            const ok = await _dcSolicitarPassword('Validación de seguridad', `${mensajeBase} Confirma con tu contraseña para continuar.`);
+            if (!ok && typeof showError === 'function') showError('Operación cancelada o contraseña inválida.');
+            return ok;
+        }
+
         function _dcSyncLegacyDocumentos(causa) {
             if (!causa) return;
             causa.documentos = _dcGetDocsUnificados(causa);
         }
 
         function abrirDetalleCausa(causaId) {
+            _dcInitDetalleDelegado();
             // Mantener referencia global de la causa actualmente abierta (para acciones rápidas como honorarios)
             window._dcCurrentCausaId = causaId;
 
@@ -100,21 +734,34 @@
                 window._lexiumSeccionAnterior = idActivo;
             }
 
-            const causa = DB.causas.find(c => c.id === causaId);
+            const causa = _dcFindCausaById(causaId);
             if (!causa) return;
-            evaluarRiesgoIntegral(causaId);
+            const esTramiteAdmin = _dcEsTramiteAdmin(causa);
+            if (!esTramiteAdmin) evaluarRiesgoIntegral(causaId);
 
             // Inicializar estructuras si no existen
             if (!causa.tareas) causa.tareas = [];
             if (!causa.partes) causa.partes = { demandante: {}, demandado: {}, abogadoContrario: {}, juez: {} };
             if (!causa.movimientos) causa.movimientos = [];
+            if (!causa.tramiteMeta || typeof causa.tramiteMeta !== 'object') {
+                causa.tramiteMeta = { organismo: '', tipoTramite: '', lugarGestion: '', numeroIngreso: '' };
+            }
+            if (!causa.hitosTramite || typeof causa.hitosTramite !== 'object') {
+                causa.hitosTramite = {
+                    fechaIngresoSistema: causa.fechaCreacion ? String(causa.fechaCreacion).slice(0, 10) : new Date().toISOString().slice(0, 10),
+                    fechaCargaDocumentos: null,
+                    fechaIngresoOrganismo: null,
+                    fechaRespuestaOrganismo: null,
+                    fechaFinalizacion: null
+                };
+            }
+            if (!Array.isArray(causa.reparos)) causa.reparos = [];
 
             const hon = causa.honorarios || {};
             const etapas = causa.etapasProcesales || [];
             _dcSyncLegacyDocumentos(causa);
             const docs = causa.documentos || [];
             const causaIdJs = JSON.stringify(String(causaId));
-            const esTramiteAdmin = /tramite/i.test(String(causa.tipoProcedimiento || ''));
 
             // Contadores para badges
             const tareasPend = causa.tareas.filter(t => !t.done).length;
@@ -136,9 +783,9 @@
         <!-- ══ HEADER DE CAUSA ══ -->
         <div class="dc-header">
             <div class="dc-breadcrumb">
-                <a onclick="cerrarModal('modal-detalle')"><i class="fas fa-home"></i> Inicio</a>
+                <a href="#" data-dc-action="cerrar-modal-detalle"><i class="fas fa-home"></i> Inicio</a>
                 <span class="bc-sep">/</span>
-                <a onclick="cerrarModal('modal-detalle'); tab('causas',null);">Listado de Causas</a>
+                <a href="#" data-dc-action="volver-listado-causas">Listado de Causas</a>
                 <span class="bc-sep">/</span>
                 <span class="bc-current">${escHtml(causa.caratula).substring(0, 40)}${causa.caratula.length > 40 ? '…' : ''}</span>
             </div>
@@ -152,7 +799,7 @@
                     <div class="dc-meta-row">
                         <div class="dc-meta-item">
                             <div class="dc-meta-label">RIT / RUC</div>
-                            <div class="dc-meta-value">${escHtml(causa.rut || '—')}</div>
+                            <div class="dc-meta-value">${escHtml(causa.rit || causa.ruc || causa.rut || '—')}</div>
                         </div>
                         <div class="dc-meta-item">
                             <div class="dc-meta-label">Cliente</div>
@@ -180,23 +827,26 @@
 
                 <div class="dc-actions">
                     ${causa.estadoGeneral !== 'Finalizada'
-                    ? `<button class="dc-btn danger" onclick="uiCerrarCausa(${causaIdJs})"><i class="fas fa-lock"></i> Cerrar</button>`
-                    : `<button class="dc-btn success" onclick="uiReactivarCausa(${causaIdJs})"><i class="fas fa-lock-open"></i> Reactivar</button>`}
-                    <button class="dc-btn" onclick="exportarPDFCausa(${causaIdJs})"><i class="fas fa-file-pdf"></i> PDF</button>
-                    <button class="dc-btn" onclick="_abrirModalAdjuntos('${causaId}')" title="Archivos adjuntos">
+                    ? `<button class="dc-btn danger" data-dc-action="cerrar-causa" data-causa-id='${causaIdJs}'><i class="fas fa-lock"></i> Cerrar</button>`
+                    : `<button class="dc-btn success" data-dc-action="reactivar-causa" data-causa-id='${causaIdJs}'><i class="fas fa-lock-open"></i> Reactivar</button>`}
+                    <button class="dc-btn" data-dc-action="generar-contrato" data-causa-id='${causaIdJs}' title="Generar contrato de prestación de servicios">
+                        <i class="fas fa-file-signature"></i> Generar Contrato
+                    </button>
+                    <button class="dc-btn" data-dc-action="exportar-pdf-causa" data-causa-id='${causaIdJs}'><i class="fas fa-file-pdf"></i> PDF</button>
+                    <button class="dc-btn" data-dc-action="abrir-adjuntos" data-causa-id='${causaIdJs}' title="Archivos adjuntos">
                         <i class="fas fa-paperclip"></i> Adjuntos
                         <span style="background:rgba(255,255,255,0.3);border-radius:10px;padding:1px 6px;font-size:10px;margin-left:4px;">${(causa.adjuntos||[]).length || 0}</span>
                     </button>
-                    <button class="dc-btn" onclick="lexbotAbrirConCausa('${causaId}')" title="Consultar LexBot con contexto de esta causa"
+                    <button class="dc-btn" data-dc-action="abrir-lexbot" data-causa-id='${causaIdJs}' title="Consultar LexBot con contexto de esta causa"
                         style="background:linear-gradient(135deg,#0891b2,#0d5e8a);">
                         <i class="fas fa-robot"></i> LexBot
                     </button>
-                    <button class="dc-btn" onclick="cerrarModal('modal-detalle'); exportarInformeMejorado('${causaId}')" title="Generar informe PDF profesional">
+                    <button class="dc-btn" data-dc-action="exportar-pdf-pro" data-causa-id='${causaIdJs}' title="Generar informe PDF profesional">
                         <i class="fas fa-star"></i> PDF Pro
                     </button>
-                    <button class="dc-btn primary" onclick="cerrarModal('modal-detalle'); tab('estrategia-pro',null); document.getElementById('ep-causa-sel').value=${causaIdJs}; uiRenderEstrategiaPro();">
+                    ${esTramiteAdmin ? '' : `<button class="dc-btn primary" data-dc-action="abrir-estrategia" data-causa-id='${causaIdJs}'>
                         <i class="fas fa-chess"></i> Estrategia
-                    </button>
+                    </button>`}
                 </div>
             </div>
         </div>
@@ -217,7 +867,7 @@
                         ? '<p style="font-size:0.78rem; color:var(--text-3);">Trámite administrativo: no requiere etapas procesales judiciales.</p>'
                         : (etapas.length ? etapas.map((e, i) => `
                             <div class="dc-etapa-item ${e.completada ? 'done' : ''}"
-                                 onclick="uiMarcarEtapa(${causaIdJs},${i})" style="cursor:pointer;">
+                                 data-dc-action="marcar-etapa" data-causa-id='${causaIdJs}' data-idx="${i}" style="cursor:pointer;">
                                 <div class="dc-etapa-check ${e.completada ? 'done' : ''}">
                                     ${e.completada ? '<i class="fas fa-check" style="font-size:0.55rem;"></i>' : ''}
                                 </div>
@@ -230,7 +880,7 @@
                     </div>
                 </div>
 
-                <!-- Riesgo -->
+                ${esTramiteAdmin ? '' : `<!-- Riesgo -->
                 <div class="dc-sidebar-card">
                     <div class="dc-sidebar-header">
                         <span><i class="fas fa-shield-alt"></i> Riesgo</span>
@@ -244,18 +894,18 @@
                             </div>`;
                     }).join('') || '<p style="font-size:0.78rem; color:#94a3b8;">Sin evaluación.</p>'}
                     </div>
-                </div>
+                </div>`}
 
                 <!-- Acciones extra -->
                 <div class="dc-sidebar-card">
                     <div class="dc-sidebar-header"><span><i class="fas fa-bolt"></i> Acciones</span></div>
                     <div class="dc-sidebar-body" style="display:flex; flex-direction:column; gap:6px;">
                         <button class="dc-btn" style="justify-content:flex-start; font-size:0.76rem;"
-                            onclick="uiAbrirBuscarJuris(${causaIdJs})">
+                            data-dc-action="abrir-juris" data-causa-id='${causaIdJs}'>
                             <i class="fas fa-book"></i> Asociar jurisprudencia
                         </button>
                         <button class="dc-btn" style="justify-content:flex-start; font-size:0.76rem;"
-                            onclick="uiDuplicarCausa(${causaIdJs})">
+                            data-dc-action="duplicar-causa" data-causa-id='${causaIdJs}'>
                             <i class="fas fa-copy"></i> Duplicar causa
                         </button>
                     </div>
@@ -267,39 +917,44 @@
                 <!-- Tabs bar -->
                 <div class="dc-tabs-bar">
                     <button id="dctab-movimientos" class="dc-tab-btn active"
-                        onclick="dcCambiarTab('movimientos',${causaIdJs})">
+                        data-dc-action="cambiar-tab" data-causa-id='${causaIdJs}' data-dc-tab="movimientos">
                         <i class="fas fa-exchange-alt"></i> Movimientos
                         <span class="dc-tab-badge">${movCount}</span>
                     </button>
                     <button id="dctab-tareas" class="dc-tab-btn"
-                        onclick="dcCambiarTab('tareas',${causaIdJs})">
+                        data-dc-action="cambiar-tab" data-causa-id='${causaIdJs}' data-dc-tab="tareas">
                         <i class="fas fa-tasks"></i> Tareas
                         <span class="dc-tab-badge">${tareasPend > 0 ? `${tareasPend}/${tareasTotal}` : tareasTotal}</span>
                     </button>
                     <button id="dctab-partes" class="dc-tab-btn"
-                        onclick="dcCambiarTab('partes',${causaIdJs})">
-                        <i class="fas fa-users"></i> Usuarios y partes
+                        data-dc-action="cambiar-tab" data-causa-id='${causaIdJs}' data-dc-tab="partes">
+                        <i class="fas fa-users"></i> ${esTramiteAdmin ? 'Intervinientes' : 'Usuarios y partes'}
                     </button>
                     <button id="dctab-docs-cliente" class="dc-tab-btn"
-                        onclick="dcCambiarTab('docs-cliente',${causaIdJs})">
+                        data-dc-action="cambiar-tab" data-causa-id='${causaIdJs}' data-dc-tab="docs-cliente">
                         <i class="fas fa-folder"></i> Docs Cliente
                     </button>
                     <button id="dctab-docs-tribunal" class="dc-tab-btn"
-                        onclick="dcCambiarTab('docs-tribunal',${causaIdJs})">
-                        <i class="fas fa-gavel"></i> Docs Tribunal
+                        data-dc-action="cambiar-tab" data-causa-id='${causaIdJs}' data-dc-tab="docs-tribunal">
+                        <i class="fas fa-gavel"></i> ${esTramiteAdmin ? 'Docs Organismo' : 'Docs Tribunal'}
                     </button>
-                    <button id="dctab-docs-contraparte" class="dc-tab-btn"
-                        onclick="dcCambiarTab('docs-contraparte',${causaIdJs})">
+                    ${esTramiteAdmin ? '' : `<button id="dctab-docs-contraparte" class="dc-tab-btn"
+                        data-dc-action="cambiar-tab" data-causa-id='${causaIdJs}' data-dc-tab="docs-contraparte">
                         <i class="fas fa-user-shield"></i> Contraparte
-                    </button>
-                    <button id="dctab-docs-tramites" class="dc-tab-btn"
-                        onclick="dcCambiarTab('docs-tramites',${causaIdJs})">
+                    </button>`}
+                    ${esTramiteAdmin ? '' : `<button id="dctab-docs-tramites" class="dc-tab-btn"
+                        data-dc-action="cambiar-tab" data-causa-id='${causaIdJs}' data-dc-tab="docs-tramites">
                         <i class="fas fa-wrench"></i> Otros Trámites
-                    </button>
-                    <button id="dctab-proceso" class="dc-tab-btn"
-                        onclick="dcCambiarTab('proceso',${causaIdJs})">
+                    </button>`}
+                    ${esTramiteAdmin
+                    ? `<button id="dctab-tramite" class="dc-tab-btn"
+                        data-dc-action="cambiar-tab" data-causa-id='${causaIdJs}' data-dc-tab="tramite">
+                        <i class="fas fa-route"></i> Trámite
+                    </button>`
+                    : `<button id="dctab-proceso" class="dc-tab-btn"
+                        data-dc-action="cambiar-tab" data-causa-id='${causaIdJs}' data-dc-tab="proceso">
                         <i class="fas fa-sitemap"></i> Proceso
-                    </button>
+                    </button>`}
                 </div>
 
                 <!-- Tab panels -->
@@ -308,28 +963,39 @@
                 <div id="dcpanel-partes"         class="dc-tab-panel"></div>
                 <div id="dcpanel-docs-cliente"   class="dc-tab-panel"></div>
                 <div id="dcpanel-docs-tribunal"  class="dc-tab-panel"></div>
-                <div id="dcpanel-docs-contraparte"  class="dc-tab-panel"></div>
-                <div id="dcpanel-docs-tramites"  class="dc-tab-panel"></div>
-                <div id="dcpanel-proceso"           class="dc-tab-panel"></div>
+                ${esTramiteAdmin ? '' : '<div id="dcpanel-docs-contraparte"  class="dc-tab-panel"></div>'}
+                ${esTramiteAdmin ? '' : '<div id="dcpanel-docs-tramites"  class="dc-tab-panel"></div>'}
+                ${esTramiteAdmin
+                ? '<div id="dcpanel-tramite" class="dc-tab-panel"></div>'
+                : '<div id="dcpanel-proceso" class="dc-tab-panel"></div>'}
             </div>
         </div>
     `;
             abrirModal('modal-detalle');
 
             // Render tab inicial
-            dcCambiarTab('movimientos', causaId);
+            const tieneAudienciasIA = !esTramiteAdmin
+                && !!causa?.audiencias?.habilitado
+                && Array.isArray(causa?.eventosProcesalesIA)
+                && causa.eventosProcesalesIA.some(ev => String(ev?.tipo || '').toLowerCase() === 'audiencia');
+            dcCambiarTab(tieneAudienciasIA ? 'proceso' : 'movimientos', causaId);
         }
 
         // ════════════════════════════════════════════════════════
         // TAB 1: MOVIMIENTOS + DOCUMENTOS (timeline unificado)
         // ════════════════════════════════════════════════════════
         function dcRenderMovimientos(causaId) {
-            const causa = DB.causas.find(c => c.id === causaId);
+            const causa = _dcFindCausaById(causaId);
             if (!causa) return;
             const el = document.getElementById('dcpanel-movimientos');
             if (!el) return;
+            const esTramiteAdmin = _dcEsTramiteAdmin(causa);
+            const catalogoOrg = _dcGetCatalogoOrganismos();
+            const orgActual = causa.tramiteMeta?.organismo || catalogoOrg[0]?.key || 'OTRO';
+            const tiposActuales = (catalogoOrg.find(o => o.key === orgActual)?.tipos || ['Trámite administrativo']);
+            const tipoActual = causa.tramiteMeta?.tipoTramite || tiposActuales[0] || 'Trámite administrativo';
 
-            const movs = (causa.movimientos || []).map(m => ({ ...m, _origen: 'mov' }));
+            const movs = (causa.movimientos || []).map((m, i) => ({ ...m, _origen: 'mov', _idx: i }));
             const docs = _dcGetDocsUnificados(causa).map(d => ({
                 id: d.id, nombre: d.nombreOriginal || 'Documento',
                 fecha: d.fechaDocumento, tipo: d.tipo || 'Documento',
@@ -341,35 +1007,44 @@
             el.innerHTML = `
             <div class="dc-mov-toolbar">
                 <input class="dc-search-mov" id="dc-search-mov-${causaId}"
-                    placeholder="Buscar movimientos..." oninput="dcFiltrarMovimientos('${causaId}')">
-                <select class="dc-cuaderno-sel" id="dc-cuaderno-${causaId}"
-                    onchange="dcFiltrarMovimientos('${causaId}')">
+                    placeholder="${esTramiteAdmin ? 'Buscar gestiones o hitos...' : 'Buscar movimientos...'}" data-dc-mov-filter="${causaId}">
+                ${esTramiteAdmin ? '' : `<select class="dc-cuaderno-sel" id="dc-cuaderno-${causaId}"
+                    data-dc-mov-filter="${causaId}">
                     <option value="">Todos los cuadernos</option>
                     <option>Principal</option>
                     <option>Reconvencional</option>
                     <option>Incidental</option>
-                </select>
-                <span class="dc-mov-count" id="dc-mov-count-${causaId}">${todos.length} movimiento${todos.length !== 1 ? 's' : ''}</span>
+                </select>`}
+                <span class="dc-mov-count" id="dc-mov-count-${causaId}">${todos.length} ${esTramiteAdmin ? 'evento' : 'movimiento'}${todos.length !== 1 ? 's' : ''}</span>
             </div>
             <div id="dc-mov-list-${causaId}">
-                ${dcMovHtml(todos)}
+                ${dcMovHtml(todos, causaId)}
             </div>
             ${causa.estadoGeneral !== 'Finalizada' ? `
             <div style="margin-top:14px; padding-top:14px; border-top:1px dashed #e4eaf3; display:flex; gap:8px;">
-                <input id="dc-new-mov-nombre-${causaId}" placeholder="Nombre del movimiento..."
+                <input id="dc-new-mov-nombre-${causaId}" placeholder="${esTramiteAdmin ? 'Detalle del ingreso/gestión (opcional)' : 'Nombre del movimiento...'}"
                     style="flex:1; padding:7px 10px; border:1px solid #e4eaf3; border-radius:7px; font-size:0.8rem; font-family:'IBM Plex Sans',sans-serif;">
+                ${esTramiteAdmin ? `<select id="dc-tram-org-${causaId}" data-dc-tram-org="${causaId}"
+                    style="min-width:190px; padding:7px; border:1px solid #e4eaf3; border-radius:7px; font-size:0.78rem; background:#f8fafc;">
+                    ${catalogoOrg.map(o => `<option value="${o.key}" ${o.key === orgActual ? 'selected' : ''}>${escHtml(o.label)}</option>`).join('')}
+                </select>
+                <select id="dc-tram-tipo-${causaId}"
+                    style="min-width:220px; padding:7px; border:1px solid #e4eaf3; border-radius:7px; font-size:0.78rem; background:#f8fafc;">
+                    ${tiposActuales.map(t => `<option value="${escHtml(t)}" ${t === tipoActual ? 'selected' : ''}>${escHtml(t)}</option>`).join('')}
+                </select>` : ''}
                 <select id="dc-new-mov-tipo-${causaId}"
                     style="padding:7px; border:1px solid #e4eaf3; border-radius:7px; font-size:0.78rem; background:#f8fafc;">
-                    <option>Resolución</option><option>Escrito</option><option>Notificación</option>
-                    <option>Audiencia</option><option>Sentencia</option><option>Otro</option>
+                    ${esTramiteAdmin
+                    ? '<option>Ingreso</option><option>Reparo</option><option>Subsanación</option><option>Respuesta organismo</option><option>Resolución</option><option>Otro</option>'
+                    : '<option>Resolución</option><option>Escrito</option><option>Notificación</option><option>Audiencia</option><option>Sentencia</option><option>Otro</option>'}
                 </select>
-                <button class="dc-btn primary" onclick="dcAgregarMovimiento('${causaId}')">
+                <button class="dc-btn primary" data-dc-action="agregar-movimiento" data-causa-id="${causaId}">
                     <i class="fas fa-plus"></i> Agregar
                 </button>
             </div>` : ''}`;
         }
 
-        function dcMovHtml(items) {
+        function dcMovHtml(items, causaId) {
             if (!items.length) return '<div class="empty-state" style="padding:30px 0; text-align:center; color:#94a3b8;"><i class="fas fa-exchange-alt" style="font-size:1.5rem; display:block; margin-bottom:8px;"></i>Sin movimientos registrados</div>';
             const iconMap = { Resolución: '⚖️', Escrito: '📄', Notificación: '🔔', Audiencia: '🏛️', Sentencia: '📜', Documento: '📎', default: '📋' };
             return items.map(m => `
@@ -391,6 +1066,9 @@
                     <div class="dc-mov-field"><strong>Etapa:</strong> ${escHtml(m.etapa || m.etapaVinculada || '—')}</div>
                     <div class="dc-mov-field"><strong>Folio:</strong> ${escHtml(String(m.folio || '—'))}</div>
                     ${m.plazo ? `<div class="dc-mov-field" style="color:#c0392b;"><strong>Plazo:</strong> ${new Date(m.plazo).toLocaleDateString('es-CL')}</div>` : ''}
+                    ${m._origen === 'mov'
+                    ? `<div style="margin-top:8px;"><button class="btn btn-xs" data-dc-action="eliminar-movimiento" data-causa-id="${causaId}" data-idx="${m._idx}" style="background:#fee2e2;color:#b91c1c;border:none;"><i class="fas fa-trash"></i> Eliminar movimiento</button></div>`
+                    : ''}
                 </div>
             </div>`).join('');
         }
@@ -407,20 +1085,43 @@
                 if (matchQ && matchCua) visible++;
             });
             const cnt = document.getElementById(`dc-mov-count-${causaId}`);
-            if (cnt) cnt.textContent = `${visible} movimiento${visible !== 1 ? 's' : ''}`;
+            const causa = _dcFindCausaById(causaId);
+            const esTramiteAdmin = _dcEsTramiteAdmin(causa);
+            if (cnt) cnt.textContent = `${visible} ${esTramiteAdmin ? 'evento' : 'movimiento'}${visible !== 1 ? 's' : ''}`;
         }
 
         function dcAgregarMovimiento(causaId) {
-            const causa = DB.causas.find(c => c.id === causaId);
+            const causa = _dcFindCausaById(causaId);
             if (!causa) return;
-            const nombre = document.getElementById(`dc-new-mov-nombre-${causaId}`)?.value.trim();
+            const nombreInput = document.getElementById(`dc-new-mov-nombre-${causaId}`)?.value.trim();
             const tipo = document.getElementById(`dc-new-mov-tipo-${causaId}`)?.value || 'Resolución';
+            const esTramiteAdmin = _dcEsTramiteAdmin(causa);
+
+            let nombre = nombreInput;
+            if (esTramiteAdmin) {
+                const orgSel = document.getElementById(`dc-tram-org-${causaId}`);
+                const tipoSel = document.getElementById(`dc-tram-tipo-${causaId}`);
+                const catalogoOrg = _dcGetCatalogoOrganismos();
+                const orgKey = orgSel?.value || '';
+                const tipoTramite = (tipoSel?.value || '').trim();
+                if (!orgKey || !tipoTramite) {
+                    showError('Selecciona organismo y tipo de trámite antes de registrar el ingreso.');
+                    return;
+                }
+                const orgLabel = catalogoOrg.find(o => o.key === orgKey)?.label || orgKey;
+                if (!causa.tramiteMeta || typeof causa.tramiteMeta !== 'object') causa.tramiteMeta = {};
+                causa.tramiteMeta.organismo = orgKey;
+                causa.tramiteMeta.organismoLabel = orgLabel;
+                causa.tramiteMeta.tipoTramite = tipoTramite;
+                if (!nombre) nombre = `${tipo} — ${tipoTramite}`;
+            }
+
             if (!nombre) { showError('Ingrese el nombre del movimiento.'); return; }
             if (!causa.movimientos) causa.movimientos = [];
             causa.movimientos.push({
                 id: generarID(), nombre, tipo,
                 fecha: new Date().toISOString().split('T')[0],
-                cuaderno: 'Principal', etapa: '', folio: '—'
+                cuaderno: _dcEsTramiteAdmin(causa) ? 'Trámite' : 'Principal', etapa: '', folio: '—'
             });
             causa.fechaUltimaActividad = new Date();
             if (typeof markAppDirty === "function") markAppDirty(); guardarDB();
@@ -429,22 +1130,51 @@
             setTimeout(() => dcCambiarTab('movimientos', causaId), 50);
         }
 
+        async function dcEliminarMovimiento(causaId, idx) {
+            const causa = _dcFindCausaById(causaId);
+            if (!causa || !Array.isArray(causa.movimientos)) return;
+            const mov = causa.movimientos[idx];
+            if (!mov) return;
+            const ok = await _dcConfirmarAccionSegura('¿Eliminar este movimiento? Esta acción no se puede deshacer.');
+            if (!ok) return;
+            causa.movimientos.splice(idx, 1);
+            causa.fechaUltimaActividad = new Date();
+            if (typeof markAppDirty === 'function') markAppDirty();
+            _dcGuardar();
+            dcCambiarTab('movimientos', causaId);
+            if (typeof showSuccess === 'function') showSuccess('Movimiento eliminado.');
+        }
+
+        function dcActualizarTiposTramiteIngreso(causaId) {
+            const orgSel = document.getElementById(`dc-tram-org-${causaId}`);
+            const tipoSel = document.getElementById(`dc-tram-tipo-${causaId}`);
+            if (!orgSel || !tipoSel) return;
+            const catalogoOrg = _dcGetCatalogoOrganismos();
+            const org = orgSel.value || 'OTRO';
+            const tipos = (catalogoOrg.find(o => o.key === org)?.tipos || ['Trámite administrativo']);
+            tipoSel.innerHTML = tipos.map(t => `<option value="${escHtml(t)}">${escHtml(t)}</option>`).join('');
+        }
+
         // ════════════════════════════════════════════════════════
         // TAB 2: TAREAS
         // ════════════════════════════════════════════════════════
         function dcRenderTareas(causaId) {
-            const causa = DB.causas.find(c => c.id === causaId);
+            const causa = _dcFindCausaById(causaId);
             if (!causa) return;
             const el = document.getElementById('dcpanel-tareas');
             if (!el) return;
             if (!causa.tareas) causa.tareas = [];
+
+            if (_dcEsTramiteAdmin(causa)) {
+                return dcRenderTareasTramite(causaId, causa, el);
+            }
 
             const pendientes = causa.tareas.filter(t => !t.done);
             const completadas = causa.tareas.filter(t => t.done);
 
             const tareaHtml = (t) => `
             <div class="dc-task-item ${t.done ? 'done' : ''}" id="tarea-${t.id}">
-                <div class="dc-task-check ${t.done ? 'done' : ''}" onclick="dcToggleTarea('${causaId}','${t.id}')">
+                <div class="dc-task-check ${t.done ? 'done' : ''}" data-dc-action="toggle-tarea" data-causa-id="${causaId}" data-tarea-id="${t.id}">
                     ${t.done ? '<i class="fas fa-check" style="font-size:0.6rem;"></i>' : ''}
                 </div>
                 <div style="flex:1; min-width:0;">
@@ -452,7 +1182,7 @@
                     <div class="dc-task-meta">${t.fecha || ''}</div>
                 </div>
                 <span class="dc-task-prioridad dc-task-p-${t.prioridad || 'media'}">${t.prioridad || 'media'}</span>
-                <button class="dc-task-del" onclick="dcEliminarTarea('${causaId}','${t.id}')">
+                <button class="dc-task-del" data-dc-action="eliminar-tarea" data-causa-id="${causaId}" data-tarea-id="${t.id}">
                     <i class="fas fa-times"></i>
                 </button>
             </div>`;
@@ -460,14 +1190,14 @@
             el.innerHTML = `
             <div class="dc-task-add">
                 <input id="dc-task-input-${causaId}" placeholder="Nueva tarea..."
-                    onkeydown="if(event.key==='Enter') dcAgregarTarea('${causaId}')">
+                    data-dc-task-input="${causaId}">
                 <select id="dc-task-prio-${causaId}"
                     style="padding:7px 8px; border:1px solid #e4eaf3; border-radius:7px; font-size:0.78rem; background:#f8fafc; font-family:'IBM Plex Sans',sans-serif;">
                     <option value="alta">🔴 Alta</option>
                     <option value="media" selected>🟡 Media</option>
                     <option value="baja">🟢 Baja</option>
                 </select>
-                <button class="dc-btn primary" onclick="dcAgregarTarea('${causaId}')">
+                <button class="dc-btn primary" data-dc-action="agregar-tarea" data-causa-id="${causaId}">
                     <i class="fas fa-plus"></i> Agregar
                 </button>
             </div>
@@ -489,8 +1219,226 @@
                 ${completadas.map(tareaHtml).join('')}` : ''}`;
         }
 
+        function _dcPlantillaChecklistTramite(causa) {
+            const tipo = String(causa?.tramiteMeta?.tipoTramite || causa?.tipoProcedimiento || '').toLowerCase();
+            if (tipo.includes('inscrip') && tipo.includes('dominio')) {
+                return [
+                    { texto: 'Escritura pública de compraventa / permuta / donación firmada ante notario', etapa: 'preparacion', prioridad: 'alta', requiereAdjunto: true },
+                    { texto: 'Comprobante de pago de impuestos correspondientes', etapa: 'preparacion', prioridad: 'alta', requiereAdjunto: true },
+                    { texto: 'Identificación del inmueble (fojas, número y año de inscripción)', etapa: 'preparacion', prioridad: 'alta', requiereAdjunto: true },
+                    { texto: 'Formulario o minuta de ingreso al organismo preparada', etapa: 'ingreso', prioridad: 'media', requiereAdjunto: true },
+                    { texto: 'Comprobante de ingreso en organismo', etapa: 'ingreso', prioridad: 'alta', requiereAdjunto: true },
+                    { texto: 'Seguimiento de observaciones/reparos del organismo', etapa: 'seguimiento', prioridad: 'media', requiereAdjunto: false },
+                    { texto: 'Resolución final emitida por el organismo', etapa: 'cierre', prioridad: 'alta', requiereAdjunto: true }
+                ];
+            }
+            return [
+                { texto: 'Antecedentes base del trámite reunidos', etapa: 'preparacion', prioridad: 'alta', requiereAdjunto: true },
+                { texto: 'Formulario de ingreso completado', etapa: 'ingreso', prioridad: 'media', requiereAdjunto: true },
+                { texto: 'Comprobante de ingreso en organismo', etapa: 'ingreso', prioridad: 'alta', requiereAdjunto: true },
+                { texto: 'Revisión de reparos u observaciones', etapa: 'seguimiento', prioridad: 'media', requiereAdjunto: false },
+                { texto: 'Resolución final archivada', etapa: 'cierre', prioridad: 'alta', requiereAdjunto: true }
+            ];
+        }
+
+        function _dcAsegurarChecklistTramite(causa) {
+            if (!causa || causa._tramChecklistInit) return;
+            if (!Array.isArray(causa.tareas)) causa.tareas = [];
+            const existentes = causa.tareas.some(t => t && t.origen === 'checklist_tramite');
+            if (!existentes) {
+                _dcPlantillaChecklistTramite(causa).forEach(item => {
+                    causa.tareas.push({
+                        id: 't' + generarID(),
+                        texto: item.texto,
+                        prioridad: item.prioridad || 'media',
+                        done: false,
+                        fecha: new Date().toLocaleDateString('es-CL'),
+                        etapa: item.etapa,
+                        requiereAdjunto: !!item.requiereAdjunto,
+                        adjuntos: [],
+                        origen: 'checklist_tramite'
+                    });
+                });
+            }
+            causa._tramChecklistInit = true;
+            _dcGuardar();
+        }
+
+        function dcRenderTareasTramite(causaId, causa, el) {
+            _dcAsegurarChecklistTramite(causa);
+            const etapas = [
+                { key: 'preparacion', label: 'Preparación' },
+                { key: 'ingreso', label: 'Ingreso' },
+                { key: 'seguimiento', label: 'Seguimiento' },
+                { key: 'cierre', label: 'Cierre' }
+            ];
+            const total = causa.tareas.length;
+            const done = causa.tareas.filter(t => t.done).length;
+
+            const tareaHtml = (t) => {
+                const adj = Array.isArray(t.adjuntos) ? t.adjuntos : [];
+                const dropId = `dc-req-drop-${causaId}-${t.id}`;
+                const inputId = `dc-req-input-${causaId}-${t.id}`;
+                return `
+                <div class="dc-task-item ${t.done ? 'done' : ''}" style="display:block;">
+                    <div style="display:flex; gap:10px; align-items:flex-start;">
+                        <div class="dc-task-check ${t.done ? 'done' : ''}" data-dc-action="toggle-tarea" data-causa-id="${causaId}" data-tarea-id="${t.id}" style="margin-top:2px;">
+                            ${t.done ? '<i class="fas fa-check" style="font-size:0.6rem;"></i>' : ''}
+                        </div>
+                        <div style="flex:1; min-width:0;">
+                            <div class="dc-task-text">${escHtml(t.texto)}</div>
+                            <div class="dc-task-meta">${escHtml(t.etapa || 'General')} · ${t.fecha || ''}</div>
+                        </div>
+                        <span class="dc-task-prioridad dc-task-p-${t.prioridad || 'media'}">${t.prioridad || 'media'}</span>
+                    </div>
+
+                    <div style="margin-top:8px; margin-left:34px;">
+                        <div id="${dropId}" style="border:1px dashed #cbd5e1; border-radius:8px; padding:8px 10px; background:#f8fafc; cursor:pointer;"
+                             data-dc-req-drop="${causaId}::${t.id}">
+                            <div style="font-size:0.72rem; color:#475569; font-weight:600;"><i class="fas fa-cloud-upload-alt"></i> ${t.requiereAdjunto ? 'Subir documento requerido' : 'Adjuntar respaldo (opcional)'}</div>
+                            <div style="font-size:0.68rem; color:#94a3b8; margin-top:2px;">Arrastra archivo aquí o haz clic para seleccionar</div>
+                            <input id="${inputId}" type="file" multiple style="display:none;" data-dc-req-upload="${causaId}" data-tarea-id="${t.id}">
+                        </div>
+                        ${adj.length ? `<div style="margin-top:6px; display:grid; gap:6px;">${adj.map((a, i) => `
+                            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 8px; border:1px solid #e2e8f0; border-radius:7px; background:#fff;">
+                                <div style="min-width:0;">
+                                    <div style="font-size:0.74rem; color:#334155; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escHtml(a.nombre || 'Documento')}</div>
+                                    <div style="font-size:0.66rem; color:#94a3b8;">${a.fecha ? new Date(a.fecha).toLocaleString('es-CL') : ''}</div>
+                                    <div style="font-size:0.66rem; margin-top:2px; color:${a?.validacionIA?.estado === 'ok' ? (a?.validacionIA?.cumple ? '#166534' : '#b45309') : (a?.validacionIA?.estado === 'error' ? '#b91c1c' : '#64748b')};">
+                                        <i class="fas fa-robot"></i>
+                                        ${a?.validacionIA?.estado === 'ok'
+                                            ? (a?.validacionIA?.cumple ? 'IA: coincide con requisito' : `IA: posible desajuste (${escHtml(a.validacionIA.confianza || 'media')})`)
+                                            : (a?.validacionIA?.estado === 'error' ? `IA no disponible: ${escHtml(a.validacionIA.motivo || 'sin detalle')}` : 'Pendiente de validación IA')}
+                                    </div>
+                                </div>
+                                <div style="display:flex; gap:4px;">
+                                    <button class="btn btn-xs" data-dc-action="ver-doc" data-causa-id="${causaId}" data-tipo="tarea" data-idx="${i}" data-tarea-id="${t.id}" title="Ver"><i class="fas fa-eye"></i></button>
+                                    <button class="btn btn-xs" style="background:#fee2e2;color:#c0392b;border:none;" data-dc-action="eliminar-doc-requisito" data-causa-id="${causaId}" data-tarea-id="${t.id}" data-adj-idx="${i}" title="Eliminar"><i class="fas fa-trash"></i></button>
+                                </div>
+                            </div>`).join('')}</div>` : '<div style="margin-top:6px; font-size:0.68rem; color:#94a3b8;">Sin documentos adjuntos.</div>'}
+                    </div>
+                </div>`;
+            };
+
+            el.innerHTML = `
+                <div style="padding:16px; display:flex; flex-direction:column; gap:12px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <div style="font-size:0.78rem; color:#334155; font-weight:700;"><i class="fas fa-list-check" style="color:#0891b2;"></i> Checklist del trámite por etapas</div>
+                        <div style="font-size:0.72rem; color:#64748b;">Completadas: <strong>${done}/${total}</strong></div>
+                    </div>
+                    ${etapas.map(et => {
+                        const items = causa.tareas.filter(t => (t.etapa || 'preparacion') === et.key);
+                        return `<div style="border:1px solid #e2e8f0; border-radius:10px; background:var(--bg-card,#fff); padding:10px;">
+                            <div style="font-size:0.7rem; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:#64748b; margin-bottom:8px;">${et.label} <span style="font-weight:600; color:#94a3b8;">(${items.length})</span></div>
+                            ${items.length ? items.map(tareaHtml).join('') : '<div style="font-size:0.74rem; color:#94a3b8; padding:6px 2px;">Sin tareas en esta etapa.</div>'}
+                        </div>`;
+                    }).join('')}
+                </div>`;
+
+            el.querySelectorAll('[data-dc-req-drop]').forEach(dropEl => {
+                const meta = String(dropEl.dataset.dcReqDrop || '').split('::');
+                const cId = meta[0];
+                const tId = meta[1];
+                const inputEl = document.getElementById(`dc-req-input-${cId}-${tId}`);
+                if (!inputEl) return;
+                dropEl.addEventListener('click', () => inputEl.click());
+                dropEl.addEventListener('dragover', (ev) => {
+                    ev.preventDefault();
+                    dropEl.style.borderColor = '#0891b2';
+                    dropEl.style.background = '#ecfeff';
+                });
+                dropEl.addEventListener('dragleave', () => {
+                    dropEl.style.borderColor = '#cbd5e1';
+                    dropEl.style.background = '#f8fafc';
+                });
+                dropEl.addEventListener('drop', (ev) => {
+                    ev.preventDefault();
+                    dropEl.style.borderColor = '#cbd5e1';
+                    dropEl.style.background = '#f8fafc';
+                    dcAdjuntarDocRequisito(cId, tId, ev.dataTransfer?.files || []);
+                });
+            });
+        }
+
+        async function dcAdjuntarDocRequisito(causaId, tareaId, fileList) {
+            const files = Array.from(fileList || []);
+            if (!files.length) return;
+            const causa = _dcFindCausaById(causaId);
+            if (!causa || !Array.isArray(causa.tareas)) return;
+            const tarea = causa.tareas.find(t => String(t.id) === String(tareaId));
+            if (!tarea) return;
+            if (!Array.isArray(tarea.adjuntos)) tarea.adjuntos = [];
+
+            for (const file of files) {
+                const data = await _fileToBase64(file);
+                const adjunto = {
+                    id: 'adj-' + generarID(),
+                    nombre: file.name,
+                    mimetype: file.type || 'application/octet-stream',
+                    size: file.size || 0,
+                    fecha: new Date().toISOString(),
+                    data
+                };
+                tarea.adjuntos.push(adjunto);
+                adjunto.validacionIA = await _dcAnalizarAdjuntoRequisitoIA(adjunto, tarea, causa);
+            }
+
+            causa.fechaUltimaActividad = new Date().toISOString();
+            if (typeof markAppDirty === 'function') markAppDirty();
+            _dcGuardar();
+            dcRenderTareas(causaId);
+        }
+
+        async function _dcAnalizarAdjuntoRequisitoIA(adjunto, tarea, causa) {
+            try {
+                if (typeof iaCall !== 'function') {
+                    return { estado: 'error', motivo: 'Motor IA no disponible' };
+                }
+                const esPdf = String(adjunto?.mimetype || '') === 'application/pdf';
+                const texto = esPdf
+                    ? await _dcExtraerTextoPdf(String(adjunto?.data || '').split(',')[1] || '')
+                    : '';
+
+                const prompt = `Eres asistente legal chileno. Evalúa si el documento cumple el requisito.
+Responde SOLO JSON válido:
+{"cumple":true|false,"confianza":"alta|media|baja","motivo":"explicación breve"}
+
+Requisito: ${tarea?.texto || ''}
+Tipo trámite: ${causa?.tramiteMeta?.tipoTramite || causa?.tipoProcedimiento || 'Trámite administrativo'}
+Nombre archivo: ${adjunto?.nombre || ''}
+Texto documento (si existe): ${(texto || '').slice(0, 4500) || '[sin texto extraíble]'}
+`;
+
+                const raw = await iaCall(prompt);
+                const jsonStr = String(raw || '').replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+                const data = JSON.parse(jsonStr || '{}');
+                return {
+                    estado: 'ok',
+                    cumple: !!data.cumple,
+                    confianza: String(data.confianza || 'media').toLowerCase(),
+                    motivo: String(data.motivo || '').slice(0, 240),
+                    fecha: new Date().toISOString()
+                };
+            } catch (e) {
+                return { estado: 'error', motivo: e?.message || 'No se pudo validar' };
+            }
+        }
+
+        function dcEliminarAdjuntoTarea(causaId, tareaId, adjIdx) {
+            const causa = _dcFindCausaById(causaId);
+            if (!causa || !Array.isArray(causa.tareas)) return;
+            const tarea = causa.tareas.find(t => String(t.id) === String(tareaId));
+            if (!tarea || !Array.isArray(tarea.adjuntos)) return;
+            if (!confirm('¿Eliminar este documento adjunto de la tarea?')) return;
+            tarea.adjuntos.splice(adjIdx, 1);
+            causa.fechaUltimaActividad = new Date().toISOString();
+            if (typeof markAppDirty === 'function') markAppDirty();
+            _dcGuardar();
+            dcRenderTareas(causaId);
+        }
+
         function dcAgregarTarea(causaId) {
-            const causa = DB.causas.find(c => c.id === causaId);
+            const causa = _dcFindCausaById(causaId);
             if (!causa) return;
             const texto = document.getElementById(`dc-task-input-${causaId}`)?.value.trim();
             if (!texto) return;
@@ -511,7 +1459,7 @@
         }
 
         function dcToggleTarea(causaId, tareaId) {
-            const causa = DB.causas.find(c => c.id === causaId);
+            const causa = _dcFindCausaById(causaId);
             if (!causa) return;
             const t = causa.tareas.find(t => t.id === tareaId);
             if (!t) return;
@@ -521,7 +1469,7 @@
         }
 
         function dcEliminarTarea(causaId, tareaId) {
-            const causa = DB.causas.find(c => c.id === causaId);
+            const causa = _dcFindCausaById(causaId);
             if (!causa) return;
             causa.tareas = causa.tareas.filter(t => t.id !== tareaId);
             if (typeof markAppDirty === "function") markAppDirty(); guardarDB();
@@ -532,10 +1480,37 @@
         // TAB 4: USUARIOS Y PARTES
         // ════════════════════════════════════════════════════════
         function dcRenderPartes(causaId) {
-            const causa = DB.causas.find(c => c.id === causaId);
+            const causa = _dcFindCausaById(causaId);
             const el = document.getElementById('dcpanel-partes');
             if (!causa || !el) return;
             if (!causa.partes) causa.partes = { demandante: {}, demandado: {}, abogadoContrario: {}, juez: {} };
+
+            if (_dcEsTramiteAdmin(causa)) {
+                if (!causa.tramiteMeta || typeof causa.tramiteMeta !== 'object') causa.tramiteMeta = {};
+                const tm = causa.tramiteMeta;
+                el.innerHTML = `
+                <div style="padding:16px; display:grid; gap:12px;">
+                    <div style="background:var(--bg-card,#fff); border:1px solid var(--border); border-radius:10px; padding:14px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:10px;">
+                            <div style="font-size:0.72rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:#64748b;">
+                                <i class="fas fa-id-card"></i> Individualización del trámite
+                            </div>
+                            <button class="dc-btn" data-dc-action="editar-intervinientes-tramite" data-causa-id="${causaId}" style="font-size:0.74rem;">
+                                <i class="fas fa-pen"></i> Editar
+                            </button>
+                        </div>
+                        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px;">
+                            <div><div class="dc-field-label">Solicitante</div><div class="dc-field-value">${escHtml(tm.solicitanteNombre || causa.cliente || '—')}</div></div>
+                            <div><div class="dc-field-label">RUT solicitante</div><div class="dc-field-value">${escHtml(tm.solicitanteRut || '—')}</div></div>
+                            <div><div class="dc-field-label">Correo</div><div class="dc-field-value">${escHtml(tm.solicitanteEmail || '—')}</div></div>
+                            <div><div class="dc-field-label">Teléfono</div><div class="dc-field-value">${escHtml(tm.solicitanteTelefono || '—')}</div></div>
+                            <div><div class="dc-field-label">Organismo</div><div class="dc-field-value">${escHtml(tm.organismoLabel || tm.organismo || '—')}</div></div>
+                            <div><div class="dc-field-label">Sede / comuna</div><div class="dc-field-value">${escHtml(tm.organismoSede || tm.lugarGestion || '—')}</div></div>
+                        </div>
+                    </div>
+                </div>`;
+                return;
+            }
 
             const roles = [
                 { key: 'demandante', label: 'Demandante', icon: 'fas fa-user', color: '#dbeafe', colorT: '#1a3a6b' },
@@ -543,10 +1518,44 @@
                 { key: 'abogadoContrario', label: 'Abogado Contrario', icon: 'fas fa-gavel', color: '#fef3c7', colorT: '#b45309' },
                 { key: 'juez', label: 'Juez / Árbitro', icon: 'fas fa-balance-scale', color: '#d1fae5', colorT: '#0d7a5f' }
             ];
+            const extIA = causa.iaSugerencias?.extraer || null;
+            const hasIA = !!(extIA && (
+                extIA.materia || extIA.rama || extIA.tribunal || extIA.rolRit || extIA.admisibilidad ||
+                extIA.partes?.demandante || extIA.partes?.demandado
+            ));
+            const iaCard = hasIA ? `
+            <div style="margin-bottom:12px; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:10px; padding:12px 14px;">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:8px;">
+                    <div>
+                        <div style="font-size:0.7rem; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:#475569;">
+                            <i class="fas fa-brain"></i> IA sugiere completar datos
+                        </div>
+                        <div style="font-size:0.72rem; color:#64748b; margin-top:3px;">Fuente: ${escHtml(causa.iaSugerencias?.ultimaFuente || 'documento judicial')}</div>
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                        <button class="dc-btn" data-dc-action="descartar-ia-sugerencias" data-causa-id="${causaId}" style="font-size:.72rem;">
+                            <i class="fas fa-times"></i> Descartar
+                        </button>
+                        <button class="dc-btn primary" data-dc-action="aplicar-ia-sugerencias" data-causa-id="${causaId}" style="font-size:.72rem;">
+                            <i class="fas fa-check"></i> Aplicar sugerencias
+                        </button>
+                    </div>
+                </div>
+                <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:8px; font-size:.75rem; color:#334155;">
+                    ${extIA.materia ? `<div><strong>Materia:</strong> ${escHtml(extIA.materia)}</div>` : ''}
+                    ${extIA.rama ? `<div><strong>Rama:</strong> ${escHtml(extIA.rama)}</div>` : ''}
+                    ${extIA.tribunal ? `<div><strong>Tribunal:</strong> ${escHtml(extIA.tribunal)}</div>` : ''}
+                    ${extIA.rolRit ? `<div><strong>Rol/RIT:</strong> ${escHtml(extIA.rolRit)}</div>` : ''}
+                    ${extIA.admisibilidad ? `<div><strong>Admisibilidad:</strong> ${escHtml(extIA.admisibilidad)}</div>` : ''}
+                    ${extIA.partes?.demandante ? `<div><strong>Demandante:</strong> ${escHtml(extIA.partes.demandante)}</div>` : ''}
+                    ${extIA.partes?.demandado ? `<div><strong>Demandado:</strong> ${escHtml(extIA.partes.demandado)}</div>` : ''}
+                </div>
+            </div>` : '';
 
             const iniciales = nombre => (nombre || '?').split(' ').slice(0, 2).map(p => p[0]).join('').toUpperCase();
 
             el.innerHTML = `
+            ${iaCard}
             <div class="dc-partes-grid">
                 ${roles.map(r => {
                 const p = causa.partes[r.key] || {};
@@ -565,7 +1574,7 @@
                         </div>
                         ${p.email ? `<div class="dc-parte-sub" style="margin-bottom:2px;"><i class="fas fa-envelope" style="width:12px; color:#94a3b8;"></i> ${escHtml(p.email)}</div>` : ''}
                         ${p.telefono ? `<div class="dc-parte-sub"><i class="fas fa-phone" style="width:12px; color:#94a3b8;"></i> ${escHtml(p.telefono)}</div>` : ''}
-                        <button class="dc-parte-edit" onclick="dcEditarParte('${causaId}','${r.key}','${r.label}')">
+                        <button class="dc-parte-edit" data-dc-action="editar-parte" data-causa-id="${causaId}" data-rol-key="${r.key}" data-rol-label="${r.label}">
                             <i class="fas fa-pencil-alt"></i> ${tiene ? 'Editar' : 'Agregar'}
                         </button>
                     </div>`;
@@ -591,14 +1600,334 @@
                         <div class="dc-field-value">${escHtml((causa.partes || {}).secretario?.nombre || '—')}</div>
                     </div>
                 </div>
-                <button class="dc-btn" style="margin-top:10px; font-size:0.76rem;" onclick="dcEditarTribunal('${causaId}')">
+                <button class="dc-btn" style="margin-top:10px; font-size:0.76rem;" data-dc-action="editar-tribunal" data-causa-id="${causaId}">
                     <i class="fas fa-pencil-alt"></i> Editar tribunal
                 </button>
             </div>`;
         }
 
+        function dcAplicarSugerenciasIA(causaId) {
+            const causa = _dcFindCausaById(causaId);
+            if (!causa || _dcEsTramiteAdmin(causa)) return;
+            const ext = causa.iaSugerencias?.extraer;
+            if (!ext || typeof ext !== 'object') return;
+
+            if (ext.materia) causa.materia = String(ext.materia).trim();
+            if (ext.rama) causa.rama = String(ext.rama).trim();
+            if (ext.tribunal) causa.juzgado = String(ext.tribunal).trim();
+            if (ext.rolRit) causa.rit = String(ext.rolRit).trim();
+
+            if (!causa.partes || typeof causa.partes !== 'object') {
+                causa.partes = { demandante: {}, demandado: {}, abogadoContrario: {}, juez: {} };
+            }
+            if (!causa.partes.demandante) causa.partes.demandante = {};
+            if (!causa.partes.demandado) causa.partes.demandado = {};
+            if (ext.partes?.demandante) causa.partes.demandante.nombre = String(ext.partes.demandante).trim();
+            if (ext.partes?.demandado) causa.partes.demandado.nombre = String(ext.partes.demandado).trim();
+
+            causa.iaSugerencias.aplicadasEn = new Date().toISOString();
+            causa.fechaUltimaActividad = new Date().toISOString();
+            if (typeof markAppDirty === 'function') markAppDirty();
+            _dcGuardar();
+            dcRenderPartes(causaId);
+            if (typeof showSuccess === 'function') showSuccess('Sugerencias IA aplicadas en la causa.');
+        }
+
+        function dcDescartarSugerenciasIA(causaId) {
+            const causa = _dcFindCausaById(causaId);
+            if (!causa || !causa.iaSugerencias) return;
+            delete causa.iaSugerencias.extraer;
+            delete causa.iaSugerencias.eventos;
+            causa.iaSugerencias.descartadasEn = new Date().toISOString();
+            if (typeof markAppDirty === 'function') markAppDirty();
+            _dcGuardar();
+            dcRenderPartes(causaId);
+            if (typeof showInfo === 'function') showInfo('Sugerencias IA descartadas para esta causa.');
+        }
+
+        function dcEditarIntervinientesTramite(causaId) {
+            const causa = _dcFindCausaById(causaId);
+            if (!causa) return;
+            if (!causa.tramiteMeta || typeof causa.tramiteMeta !== 'object') causa.tramiteMeta = {};
+            const tm = causa.tramiteMeta;
+
+            migAbrir({
+                titulo: '<i class="fas fa-id-card"></i> Individualización del trámite',
+                btnOk: 'Guardar',
+                campos: [
+                    { id: 'mig-sol-nombre', label: 'Solicitante', valor: tm.solicitanteNombre || causa.cliente || '', requerido: true },
+                    { id: 'mig-sol-rut', label: 'RUT solicitante', valor: tm.solicitanteRut || '', tipo: 'rut' },
+                    { id: 'mig-sol-mail', label: 'Correo', valor: tm.solicitanteEmail || '', tipo: 'email' },
+                    { id: 'mig-sol-fono', label: 'Teléfono', valor: tm.solicitanteTelefono || '' },
+                    { id: 'mig-org-sede', label: 'Organismo (sede/comuna)', valor: tm.organismoSede || tm.lugarGestion || '', placeholder: 'Ej: CBR de Valparaíso' }
+                ],
+                onOk: (vals) => {
+                    tm.solicitanteNombre = String(vals['mig-sol-nombre'] || '').trim();
+                    tm.solicitanteRut = vals['mig-sol-rut'] ? formatRUT(vals['mig-sol-rut']) : '';
+                    tm.solicitanteEmail = String(vals['mig-sol-mail'] || '').trim();
+                    tm.solicitanteTelefono = String(vals['mig-sol-fono'] || '').trim();
+                    tm.organismoSede = String(vals['mig-org-sede'] || '').trim();
+                    tm.lugarGestion = tm.organismoSede || tm.lugarGestion || '';
+                    causa.fechaUltimaActividad = new Date().toISOString();
+                    if (typeof markAppDirty === 'function') markAppDirty();
+                    _dcGuardar();
+                    dcRenderPartes(causaId);
+                }
+            });
+        }
+
+        function dcAbrirModuloTramites(causaId) {
+            try { cerrarModal('modal-detalle'); } catch (_) {}
+            if (typeof tab === 'function') tab('tramites', null);
+            if (typeof tramitesRender === 'function') {
+                setTimeout(() => { try { tramitesRender(); } catch (_) {} }, 80);
+            }
+            setTimeout(() => {
+                const vinculados = _dcGetTramitesVinculados(causaId);
+                if (vinculados[0]?.id && typeof tramiteVerDetalle === 'function') {
+                    tramiteVerDetalle(vinculados[0].id);
+                }
+            }, 140);
+        }
+
+        function dcCrearTramiteVinculado(causaId) {
+            const causa = _dcFindCausaById(causaId);
+            if (!causa) return;
+            const actuales = _dcGetTramitesStore();
+            const yaExiste = actuales.find(t => String(t.causaId || '') === String(causaId));
+            if (yaExiste) {
+                if (typeof showSuccess === 'function') showSuccess('Ya existe un trámite vinculado para esta causa.');
+                return dcAbrirModuloTramites(causaId);
+            }
+
+            const nuevo = {
+                id: 'TRA-' + Date.now(),
+                fechaCreacion: new Date().toISOString(),
+                organismo: causa.tramiteMeta?.organismo || 'OTRO',
+                tipo: causa.tramiteMeta?.tipoTramite || causa.tipoProcedimiento || 'Trámite administrativo',
+                caratula: causa.caratula || '',
+                estado: 'pendiente',
+                clienteId: causa.clienteId || '',
+                cliente: causa.cliente || '',
+                causaId: causa.id,
+                fechaIngreso: causa.hitosTramite?.fechaIngresoSistema ? new Date(causa.hitosTramite.fechaIngresoSistema).toISOString() : new Date().toISOString(),
+                fechaLimite: '',
+                responsable: '',
+                oficina: causa.tramiteMeta?.lugarGestion || '',
+                observaciones: '',
+                eventos: [],
+                checklist: [],
+                documentos: [],
+                honorarios: { monto: 0, pagado: 0 }
+            };
+            _dcSetTramitesStore([nuevo, ...actuales]);
+            if (typeof showSuccess === 'function') showSuccess('Trámite vinculado creado.');
+            dcRenderTramiteSeguimiento(causaId);
+        }
+
+        function dcRenderTramiteSeguimiento(causaId) {
+            const causa = _dcFindCausaById(causaId);
+            const el = document.getElementById('dcpanel-tramite');
+            if (!causa || !el) return;
+
+            try {
+
+                if (!causa.tramiteMeta || typeof causa.tramiteMeta !== 'object') {
+                    causa.tramiteMeta = { organismo: '', tipoTramite: '', lugarGestion: '', numeroIngreso: '' };
+                }
+                if (!causa.hitosTramite || typeof causa.hitosTramite !== 'object') {
+                    causa.hitosTramite = {
+                        fechaIngresoSistema: causa.fechaCreacion ? String(causa.fechaCreacion).slice(0, 10) : new Date().toISOString().slice(0, 10),
+                        fechaCargaDocumentos: null,
+                        fechaIngresoOrganismo: null,
+                        fechaRespuestaOrganismo: null,
+                        fechaFinalizacion: null
+                    };
+                }
+                if (!Array.isArray(causa.reparos)) causa.reparos = [];
+                const tramitesVinculados = _dcGetTramitesVinculados(causaId);
+
+                const h = causa.hitosTramite;
+
+                el.innerHTML = `
+            <div style="padding:16px; display:flex; flex-direction:column; gap:16px;">
+                <div style="background:var(--bg-card,#fff); border:1px solid var(--border); border-radius:10px; padding:16px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+                        <div style="font-size:0.7rem; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:#64748b;">
+                            <i class="fas fa-link" style="color:#0284c7;"></i> Trámite(s) vinculados
+                        </div>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                            <button class="dc-btn" data-dc-action="crear-tramite-vinculado" data-causa-id="${causaId}" onclick="dcCrearTramiteVinculado('${causaId}')" style="font-size:0.74rem;">
+                                <i class="fas fa-plus"></i> Crear trámite vinculado
+                            </button>
+                            <button class="dc-btn" data-dc-action="abrir-modulo-tramites" data-causa-id="${causaId}" onclick="dcAbrirModuloTramites('${causaId}')" style="font-size:0.74rem;">
+                                <i class="fas fa-external-link-alt"></i> Abrir módulo Trámites
+                            </button>
+                        </div>
+                    </div>
+                    ${tramitesVinculados.length
+                    ? `<div style="display:grid; gap:8px;">${tramitesVinculados.map(t => {
+                        const est = escHtml(String(t.estado || 'pendiente').replace(/_/g, ' '));
+                        const lim = t.fechaLimite ? new Date(t.fechaLimite).toLocaleDateString('es-CL') : '—';
+                        return `<div style="padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                                <div style="min-width:0;">
+                                    <div style="font-size:0.82rem; font-weight:600; color:#334155;">${escHtml(t.tipo || causa.tipoProcedimiento || 'Trámite administrativo')}</div>
+                                    <div style="font-size:0.74rem; color:#64748b; margin-top:2px;">${escHtml(t.organismo || causa.tramiteMeta.organismo || 'Organismo sin definir')} · Estado: ${est}</div>
+                                </div>
+                                <div style="font-size:0.72rem; color:#64748b; white-space:nowrap;">Vence: ${lim}</div>
+                            </div>
+                        </div>`;
+                    }).join('')}</div>`
+                    : '<div style="padding:10px 12px; border:1px dashed #cbd5e1; border-radius:8px; color:#64748b; font-size:0.8rem;">No hay trámites vinculados en el módulo de Trámites para esta causa.</div>'}
+                </div>
+
+                <div style="background:var(--bg-card,#fff); border:1px solid var(--border); border-radius:10px; padding:16px;">
+                    <div style="font-size:0.7rem; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:#64748b; margin-bottom:12px;">
+                        <i class="fas fa-landmark" style="color:#0891b2;"></i> Datos del trámite
+                    </div>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px;">
+                        <div>
+                            <div class="dc-field-label">Organismo</div>
+                            <div class="dc-field-value">${escHtml(causa.tramiteMeta.organismo || '—')}</div>
+                        </div>
+                        <div>
+                            <div class="dc-field-label">Tipo de trámite</div>
+                            <div class="dc-field-value">${escHtml(causa.tramiteMeta.tipoTramite || causa.tipoProcedimiento || '—')}</div>
+                        </div>
+                        <div>
+                            <div class="dc-field-label">Lugar de gestión</div>
+                            <div class="dc-field-value">${escHtml(causa.tramiteMeta.lugarGestion || '—')}</div>
+                        </div>
+                        <div>
+                            <div class="dc-field-label">N° ingreso</div>
+                            <div class="dc-field-value">${escHtml(causa.tramiteMeta.numeroIngreso || '—')}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="background:var(--bg-card,#fff); border:1px solid var(--border); border-radius:10px; padding:16px;">
+                    <div style="font-size:0.7rem; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:#64748b; margin-bottom:12px;">
+                        <i class="fas fa-calendar-check" style="color:#16a34a;"></i> Progreso del trámite
+                    </div>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px;">
+                        <label style="font-size:0.75rem; color:#64748b;">
+                            Ingreso al sistema
+                            <input type="date" id="dc-tram-hito-sistema-${causaId}" value="${h.fechaIngresoSistema || ''}" data-dc-tramite-hito="${causaId}" style="margin-top:4px; width:100%; padding:7px 10px; border:1px solid #e2e8f0; border-radius:7px; background:var(--bg-2,#f8fafc);">
+                        </label>
+                        <label style="font-size:0.75rem; color:#64748b;">
+                            Documentos completos
+                            <input type="date" id="dc-tram-hito-carga-${causaId}" value="${h.fechaCargaDocumentos || ''}" data-dc-tramite-hito="${causaId}" style="margin-top:4px; width:100%; padding:7px 10px; border:1px solid #e2e8f0; border-radius:7px; background:var(--bg-2,#f8fafc);">
+                        </label>
+                        <label style="font-size:0.75rem; color:#64748b;">
+                            Ingreso al organismo
+                            <input type="date" id="dc-tram-hito-organismo-${causaId}" value="${h.fechaIngresoOrganismo || ''}" data-dc-tramite-hito="${causaId}" style="margin-top:4px; width:100%; padding:7px 10px; border:1px solid #e2e8f0; border-radius:7px; background:var(--bg-2,#f8fafc);">
+                        </label>
+                        <label style="font-size:0.75rem; color:#64748b;">
+                            Respuesta del organismo
+                            <input type="date" id="dc-tram-hito-respuesta-${causaId}" value="${h.fechaRespuestaOrganismo || ''}" data-dc-tramite-hito="${causaId}" style="margin-top:4px; width:100%; padding:7px 10px; border:1px solid #e2e8f0; border-radius:7px; background:var(--bg-2,#f8fafc);">
+                        </label>
+                        <label style="font-size:0.75rem; color:#64748b;">
+                            Finalización del trámite
+                            <input type="date" id="dc-tram-hito-fin-${causaId}" value="${h.fechaFinalizacion || ''}" data-dc-tramite-hito="${causaId}" style="margin-top:4px; width:100%; padding:7px 10px; border:1px solid #e2e8f0; border-radius:7px; background:var(--bg-2,#f8fafc);">
+                        </label>
+                    </div>
+                </div>
+
+                <div style="background:var(--bg-card,#fff); border:1px solid var(--border); border-radius:10px; padding:16px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <div style="font-size:0.7rem; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:#64748b;">
+                            <i class="fas fa-file-circle-exclamation" style="color:#d97706;"></i> Reparos del organismo
+                        </div>
+                        <button class="dc-btn" data-dc-action="agregar-reparo-tramite" data-causa-id="${causaId}" style="font-size:0.75rem;">
+                            <i class="fas fa-plus"></i> Nuevo reparo
+                        </button>
+                    </div>
+                    ${causa.reparos.length ? causa.reparos.map((r, i) => `
+                        <div style="padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:8px; border-left:3px solid #f59e0b;">
+                            <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
+                                <div>
+                                    <div style="font-size:0.82rem; font-weight:600; color:#334155;">${escHtml(r.titulo || 'Reparo')}</div>
+                                    <div style="font-size:0.72rem; color:#64748b; margin-top:2px;">${r.fecha ? new Date(r.fecha).toLocaleDateString('es-CL') : 'Sin fecha'}</div>
+                                    <div style="font-size:0.75rem; color:#475569; margin-top:4px;">${escHtml(r.descripcion || '')}</div>
+                                </div>
+                                <button class="btn btn-xs" data-dc-action="eliminar-reparo-tramite" data-causa-id="${causaId}" data-idx="${i}" style="background:#fee2e2; color:#c0392b; border:none;">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('') : '<div style="text-align:center; padding:14px; color:#94a3b8; font-size:0.8rem;">Sin reparos registrados.</div>'}
+                </div>
+            </div>`;
+            } catch (e) {
+                console.error('[CausaDetail] Error render Trámite:', e);
+                el.innerHTML = `
+                <div style="padding:16px;">
+                    <div class="empty-state" style="padding:24px; border:1px dashed #334155; border-radius:10px; color:#94a3b8;">
+                        <i class="fas fa-exclamation-triangle" style="margin-right:8px;"></i>
+                        No se pudo renderizar el panel de trámite.
+                        <button class="dc-btn" style="margin-left:10px;" onclick="dcRenderTramiteSeguimiento('${causaId}')">Reintentar</button>
+                    </div>
+                </div>`;
+            }
+        }
+
+        function dcGuardarHitosTramite(causaId) {
+            const causa = _dcFindCausaById(causaId);
+            if (!causa) return;
+            if (!causa.hitosTramite || typeof causa.hitosTramite !== 'object') causa.hitosTramite = {};
+
+            causa.hitosTramite.fechaIngresoSistema = document.getElementById(`dc-tram-hito-sistema-${causaId}`)?.value || null;
+            causa.hitosTramite.fechaCargaDocumentos = document.getElementById(`dc-tram-hito-carga-${causaId}`)?.value || null;
+            causa.hitosTramite.fechaIngresoOrganismo = document.getElementById(`dc-tram-hito-organismo-${causaId}`)?.value || null;
+            causa.hitosTramite.fechaRespuestaOrganismo = document.getElementById(`dc-tram-hito-respuesta-${causaId}`)?.value || null;
+            causa.hitosTramite.fechaFinalizacion = document.getElementById(`dc-tram-hito-fin-${causaId}`)?.value || null;
+
+            causa.fechaUltimaActividad = new Date().toISOString();
+            if (typeof markAppDirty === 'function') markAppDirty();
+            _dcGuardar();
+        }
+
+        function dcAgregarReparoTramite(causaId) {
+            const causa = _dcFindCausaById(causaId);
+            if (!causa) return;
+            if (!Array.isArray(causa.reparos)) causa.reparos = [];
+
+            migAbrir({
+                titulo: '<i class="fas fa-file-circle-exclamation"></i> Nuevo reparo',
+                btnOk: 'Guardar reparo',
+                campos: [
+                    { id: 'mig-reparo-titulo', label: 'Título', placeholder: 'Ej: Observación de antecedentes incompletos', requerido: true },
+                    { id: 'mig-reparo-fecha', label: 'Fecha', tipo: 'date', valor: new Date().toISOString().split('T')[0] },
+                    { id: 'mig-reparo-desc', label: 'Descripción', placeholder: 'Detalle del reparo emitido por el organismo' }
+                ],
+                onOk: (vals) => {
+                    causa.reparos.push({
+                        titulo: vals['mig-reparo-titulo'] || 'Reparo',
+                        fecha: vals['mig-reparo-fecha'] || new Date().toISOString().split('T')[0],
+                        descripcion: vals['mig-reparo-desc'] || ''
+                    });
+                    causa.fechaUltimaActividad = new Date().toISOString();
+                    if (typeof markAppDirty === 'function') markAppDirty();
+                    _dcGuardar();
+                    dcRenderTramiteSeguimiento(causaId);
+                }
+            });
+        }
+
+        function dcEliminarReparoTramite(causaId, idx) {
+            const causa = _dcFindCausaById(causaId);
+            if (!causa || !Array.isArray(causa.reparos)) return;
+            if (!confirm('¿Eliminar este reparo?')) return;
+            causa.reparos.splice(idx, 1);
+            causa.fechaUltimaActividad = new Date().toISOString();
+            if (typeof markAppDirty === 'function') markAppDirty();
+            _dcGuardar();
+            dcRenderTramiteSeguimiento(causaId);
+        }
+
         function dcEditarParte(causaId, rolKey, rolLabel) {
-            const causa = DB.causas.find(c => c.id === causaId);
+            const causa = _dcFindCausaById(causaId);
             if (!causa) return;
             if (!causa.partes) causa.partes = {};
             const p = causa.partes[rolKey] || {};
@@ -628,7 +1957,7 @@
         }
 
         function dcEditarTribunal(causaId) {
-            const causa = DB.causas.find(c => c.id === causaId);
+            const causa = _dcFindCausaById(causaId);
             if (!causa) return;
             migAbrir({
                 titulo: '<i class="fas fa-university"></i> Editar Tribunal',
@@ -653,7 +1982,7 @@
 
         // ─── 2. marcarEtapa CON UI ────────────────────────────────────────
         function uiMarcarEtapa(causaId, index) {
-            const causa = DB.causas.find(c => c.id === causaId);
+            const causa = _dcFindCausaById(causaId);
             if (!causa) return;
             const etapa = causa.etapasProcesales[index];
             if (etapa.completada) {
@@ -677,7 +2006,7 @@
 
         // ─── 3. Cerrar / Reactivar con UI ────────────────────────────────
         function uiCerrarCausa(causaId) {
-            const causa = DB.causas.find(c => c.id === causaId);
+            const causa = _dcFindCausaById(causaId);
             if (!causa) return;
             const pendientes = causa.etapasProcesales?.filter(e => !e.completada).length || 0;
             if (pendientes > 0 && !confirm(`Hay ${pendientes} etapas pendientes. ¿Cerrar igual?`)) return;
@@ -687,7 +2016,7 @@
         }
 
         function uiReactivarCausa(causaId) {
-            const causa = DB.causas.find(c => c.id === causaId);
+            const causa = _dcFindCausaById(causaId);
             if (!causa) return;
             causa.estadoGeneral = 'En tramitación'; causa.instancia = 'Segunda';
             if (typeof markAppDirty === "function") markAppDirty(); guardarDB(); registrarEvento(`Causa reactivada (2ª instancia): ${causa.caratula}`);
@@ -704,9 +2033,11 @@
 
         function dcRenderDocs(causaId, tipo) {
             const cfg   = _DOCS_CONFIG[tipo];
-            const causa = DB.causas.find(c => c.id === causaId);
+            const causa = _dcFindCausaById(causaId);
             const el    = document.getElementById(`dcpanel-docs-${tipo}`);
             if (!causa || !el || !cfg) return;
+            const esTramiteAdmin = _dcEsTramiteAdmin(causa);
+            const labelDocs = (esTramiteAdmin && tipo === 'tribunal') ? 'Docs Organismo' : cfg.label;
 
             if (!causa[cfg.campo]) causa[cfg.campo] = [];
             const docs = causa[cfg.campo];
@@ -718,17 +2049,14 @@
                 <div style="padding:16px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                         <div style="font-size:0.7rem; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:#64748b;">
-                            <i class="fas ${cfg.icono}" style="color:${cfg.color};"></i> ${cfg.label}
+                            <i class="fas ${cfg.icono}" style="color:${cfg.color};"></i> ${labelDocs}
                             <span style="background:#f1f5f9; color:#475569; padding:1px 7px; border-radius:10px; margin-left:6px;">${docs.length}</span>
                         </div>
                     </div>
                     <div id="${dropId}"
                          style="border:2px dashed #cbd5e1; border-radius:10px; padding:16px; text-align:center;
                                 cursor:pointer; transition:all 0.2s; margin-bottom:10px; background:#f8fafc;"
-                         onclick="document.getElementById('dc-file-${causaId}-${tipo}').click()"
-                         ondragover="event.preventDefault(); this.style.borderColor='${cfg.color}'; this.style.background='${cfg.color}10';"
-                         ondragleave="this.style.borderColor='#cbd5e1'; this.style.background='#f8fafc';"
-                         ondrop="_dcHandleDrop(event,'${causaId}','${tipo}')">
+                         data-dc-dropzone="${causaId}::${tipo}">
                         <i class="fas fa-cloud-upload-alt" style="font-size:1.4rem; color:${cfg.color}; margin-bottom:5px; display:block;"></i>
                         <div style="font-weight:600; font-size:0.82rem; color:#334155;">Subir archivo</div>
                         <div style="font-size:0.7rem; color:#94a3b8; margin-top:2px;">
@@ -736,19 +2064,36 @@
                             ${cfg.campo !== 'docsTramites' ? '· <span style="color:'+cfg.color+'; font-weight:600;">IA clasifica PDFs automáticamente</span>' : ''}
                         </div>
                         <input type="file" id="dc-file-${causaId}-${tipo}" accept="*/*" multiple style="display:none;"
-                               onchange="_dcHandleFiles(event,'${causaId}','${tipo}')">
+                               >
                     </div>
                     <div id="${statId}" style="display:none; margin-bottom:10px;"></div>
                     <div id="${listId}">
                         ${_dcDocsHtml(docs, causaId, tipo, cfg)}
                     </div>
                 </div>`;
+
+            const dropEl = document.getElementById(dropId);
+            const fileInput = document.getElementById(`dc-file-${causaId}-${tipo}`);
+            if (dropEl && fileInput) {
+                dropEl.addEventListener('click', () => fileInput.click());
+                dropEl.addEventListener('dragover', (event) => {
+                    event.preventDefault();
+                    dropEl.style.borderColor = cfg.color;
+                    dropEl.style.background = `${cfg.color}10`;
+                });
+                dropEl.addEventListener('dragleave', () => {
+                    dropEl.style.borderColor = '#cbd5e1';
+                    dropEl.style.background = '#f8fafc';
+                });
+                dropEl.addEventListener('drop', (event) => _dcHandleDrop(event, causaId, tipo));
+                fileInput.addEventListener('change', (event) => _dcHandleFiles(event, causaId, tipo));
+            }
         }
 
         async function _dcEnsureSidDocumentoId(causaId, tipo, idx) {
             try {
                 const cfg   = _DOCS_CONFIG[tipo];
-                const causa = DB.causas.find(c => c.id === causaId);
+                const causa = _dcFindCausaById(causaId);
                 const doc   = causa?.[cfg.campo]?.[idx];
                 if (!doc) return null;
 
@@ -780,7 +2125,7 @@
                     ? uid()
                     : (Date.now().toString(36) + Math.random().toString(36).slice(2));
 
-                DB.documentos.push({
+                const docNuevo = {
                     id: newId,
                     causaId: causaId,
                     origen: (tipo === 'tribunal') ? 'tribunal' : (tipo === 'tramites') ? 'interno' : (tipo === 'contraparte') ? 'contraparte' : 'cliente',
@@ -797,7 +2142,9 @@
                     archivoNombre: nombre,
                     archivoDocId: archivoDocId,
                     _origenDetalleCausa: { tipo: tipo, idx: idx }
-                });
+                };
+                if (typeof Store !== 'undefined' && Store?.agregarDocumento) Store.agregarDocumento(docNuevo);
+                else DB.documentos.push(docNuevo);
 
                 doc._sidDocumentoId = newId;
                 if (typeof markAppDirty === 'function') markAppDirty();
@@ -860,19 +2207,23 @@
                         ${resumenTag}
                     </div>
                     <div style="display:flex; gap:4px; flex-shrink:0;">
-                        <button class="btn btn-xs" onclick="dcVerDocumento('${causaId}','${tipo}',${i})" title="Ver">
+                        <button class="btn btn-xs" data-dc-action="ver-doc" data-causa-id="${causaId}" data-tipo="${tipo}" data-idx="${i}" title="Ver">
                             <i class="fas fa-eye"></i>
                         </button>
+                        ${d.mimetype === 'text/html' ? `<button class="btn btn-xs" style="background:#eef2ff; color:#4338ca; border:none;"
+                            data-dc-action="exportar-doc-pdf" data-causa-id="${causaId}" data-tipo="${tipo}" data-idx="${i}" title="Guardar PDF en PC">
+                            <i class="fas fa-file-pdf"></i>
+                        </button>` : ''}
                         ${esPdf ? `<button class="btn btn-xs" style="background:#eff6ff; color:#2563eb; border:none;"
-                            onclick="dcAnalisisDualDoc('${causaId}','${tipo}',${i})" title="Análisis Dual (IA A + B)">
+                            data-dc-action="analisis-dual-doc" data-causa-id="${causaId}" data-tipo="${tipo}" data-idx="${i}" title="Análisis Dual (IA A + B)">
                             <i class="fas fa-brain"></i>
                         </button>
                         <button class="btn btn-xs" style="background:#fff7ed; color:#b45309; border:none;"
-                            onclick="dcVerInsightDoc('${causaId}','${tipo}',${i})" title="Ver Insight IA">
+                            data-dc-action="insight-doc" data-causa-id="${causaId}" data-tipo="${tipo}" data-idx="${i}" title="Ver Insight IA">
                             <i class="fas fa-lightbulb"></i>
                         </button>` : ''}
                         <button class="btn btn-xs" style="background:#fee2e2; color:#c0392b; border:none;"
-                            onclick="dcEliminarDocumento('${causaId}','${tipo}',${i})" title="Eliminar">
+                            data-dc-action="eliminar-doc" data-causa-id="${causaId}" data-tipo="${tipo}" data-idx="${i}" title="Eliminar">
                             <i class="fas fa-trash"></i>
                         </button>
                     </div>
@@ -895,7 +2246,7 @@
 
         window._dcProcesarArchivos = async function(causaId, tipo, files) {
             const cfg   = _DOCS_CONFIG[tipo];
-            const causa = DB.causas.find(c => c.id === causaId);
+            const causa = _dcFindCausaById(causaId);
             if (!causa || !cfg) return;
             if (!causa[cfg.campo]) causa[cfg.campo] = [];
 
@@ -935,7 +2286,7 @@
 
         window._dcAnalizarDocIA = async function(causaId, tipo, idx) {
             const cfg   = _DOCS_CONFIG[tipo];
-            const causa = DB.causas.find(c => c.id === causaId);
+            const causa = _dcFindCausaById(causaId);
             const doc   = causa?.[cfg.campo]?.[idx];
             if (!doc || doc.mimetype !== 'application/pdf') return;
             const statEl = document.getElementById(`dc-stat-${causaId}-${tipo}`);
@@ -957,7 +2308,9 @@
                 const ramaCtx = causa.rama ? `La causa es de rama: "${causa.rama}".` : '';
                 const tipoCtx = tipo === 'cliente' ? 'aportado por el cliente'
                               : tipo === 'tribunal' ? 'emitido por el tribunal'
-                              : 'relacionado con trámites';
+                              : tipo === 'contraparte' ? 'presentado por la contraparte'
+                              : tipo === 'tramites' ? 'relacionado con otros trámites'
+                              : 'documento legal del expediente';
 
                 const prompt = `Eres un asistente jurídico especializado en derecho chileno. ${ramaCtx}
 Este documento es ${tipoCtx}.
@@ -967,7 +2320,26 @@ Analiza el texto y devuelve SOLO un objeto JSON válido, sin explicaciones ni bl
   "tipo": "uno de: Resolución | Escrito | Prueba | Sentencia | Notificación | Contrato | Otro",
   "etapa": "etapa procesal breve (ej: Demanda, Contestación, Prueba, Sentencia)",
   "plazo": "descripción del plazo si existe (ej: '10 días hábiles para contestar') o null",
-  "resumen": "resumen de 1 línea del contenido"
+  "resumen": "resumen de 1 línea del contenido",
+  "extraer": {
+    "materia": "materia principal o null",
+    "rama": "rama jurídica o null",
+    "tribunal": "tribunal/juzgado mencionado o null",
+    "rolRit": "rol/rit/ruc si aparece o null",
+    "admisibilidad": "Admite | No admite | Subsanar | No aplica",
+    "partes": {
+      "demandante": "nombre o null",
+      "demandado": "nombre o null"
+    }
+  },
+  "eventos": [
+    {
+      "tipo": "audiencia | plazo | hito",
+      "titulo": "descripción breve",
+      "fecha": "YYYY-MM-DD o null",
+      "detalle": "detalle breve"
+    }
+  ]
 }
 
 TEXTO:
@@ -984,13 +2356,22 @@ ${textoTruncado}`;
                     doc.etapaIA   = data.etapa   || null;
                     doc.plazoIA   = data.plazo   || null;
                     doc.resumenIA = data.resumen || null;
+                    doc.metaIA    = data.extraer && typeof data.extraer === 'object' ? data.extraer : null;
+                    doc.eventosIA = Array.isArray(data.eventos) ? data.eventos : [];
                 }
+
+                const iaAplicado = _dcAplicarSugerenciasJudicialesIA(causa, data, nombreArchivo) || { nuevosEventos: 0, alertasNuevas: 0, audienciasActivadas: false };
 
                 _dcGuardar();
                 _dcMostrarStat(statEl, 'success',
                     `<i class="fas fa-check-circle"></i> <strong>IA clasificó "${escHtml(nombreArchivo)}"</strong>
                      ${data.tipo ? ` — ${escHtml(data.tipo)}` : ''}
-                     ${data.resumen ? `<br><span style="font-size:0.72rem; color:#4b5563;">${escHtml(data.resumen)}</span>` : ''}`
+                     ${data.resumen ? `<br><span style="font-size:0.72rem; color:#4b5563;">${escHtml(data.resumen)}</span>` : ''}
+                     ${(iaAplicado.nuevosEventos || iaAplicado.alertasNuevas || iaAplicado.audienciasActivadas) ? `<br><span style="font-size:0.71rem; color:#1d4ed8;">
+                        ${iaAplicado.nuevosEventos ? `• ${iaAplicado.nuevosEventos} evento(s) IA` : ''}
+                        ${iaAplicado.alertasNuevas ? `${iaAplicado.nuevosEventos ? ' · ' : '• '} ${iaAplicado.alertasNuevas} alerta(s)` : ''}
+                        ${iaAplicado.audienciasActivadas ? `${(iaAplicado.nuevosEventos || iaAplicado.alertasNuevas) ? ' · ' : '• '}Módulo audiencias activado` : ''}
+                     </span>` : ''}`
                 );
                 setTimeout(() => { if (statEl) statEl.style.display = 'none'; }, 6000);
 
@@ -1051,10 +2432,16 @@ ${textoTruncado}`;
             if (files?.length) _dcProcesarArchivos(causaId, tipo, Array.from(files));
         };
 
-        window.dcVerDocumento = function(causaId, tipo, idx) {
-            const cfg   = _DOCS_CONFIG[tipo];
-            const causa = DB.causas.find(c => c.id === causaId);
-            const doc   = causa?.[cfg.campo]?.[idx];
+        window.dcVerDocumento = function(causaId, tipo, idx, tareaId) {
+            const causa = _dcFindCausaById(causaId);
+            let doc = null;
+            if (tipo === 'tarea') {
+                const tarea = causa?.tareas?.find(t => String(t.id) === String(tareaId));
+                doc = tarea?.adjuntos?.[idx] || null;
+            } else {
+                const cfg = _DOCS_CONFIG[tipo];
+                doc = causa?.[cfg?.campo]?.[idx] || null;
+            }
             if (!doc) return;
 
             let visor;
@@ -1062,6 +2449,8 @@ ${textoTruncado}`;
                 visor = `<img src="${doc.data}" style="max-width:100%; max-height:70vh; border-radius:6px;">`;
             } else if (doc.mimetype === 'application/pdf') {
                 visor = `<iframe src="${doc.data}" style="width:100%; height:70vh; border:none; border-radius:6px;"></iframe>`;
+            } else if (doc.mimetype === 'text/html') {
+                visor = `<iframe src="${doc.data}" style="width:100%; height:70vh; border:none; border-radius:6px; background:#fff;"></iframe>`;
             } else {
                 visor = `<div style="padding:20px; text-align:center; color:#64748b;">
                     <i class="fas fa-file" style="font-size:3rem; opacity:0.4;"></i>
@@ -1081,21 +2470,66 @@ ${textoTruncado}`;
                 vm.innerHTML = `<div class="modal-box" style="max-width:800px; width:90vw;">
                     <div class="modal-header">
                         <h3 id="modal-doc-viewer-titulo"></h3>
-                        <button class="modal-close" onclick="document.getElementById('modal-doc-viewer').style.display='none'">×</button>
+                        <button class="modal-close" id="modal-doc-viewer-close">×</button>
                     </div>
                     <div id="modal-doc-viewer-body"></div>
                 </div>`;
                 document.body.appendChild(vm);
+                document.getElementById('modal-doc-viewer-close')?.addEventListener('click', () => {
+                    const modal = document.getElementById('modal-doc-viewer');
+                    if (modal) modal.style.display = 'none';
+                });
             }
             document.getElementById('modal-doc-viewer-titulo').textContent = doc.nombre;
             document.getElementById('modal-doc-viewer-body').innerHTML = visor;
             vm.style.display = 'flex';
         };
 
+        window.dcExportarDocumentoPDF = async function(causaId, tipo, idx, tareaId) {
+            const causa = _dcFindCausaById(causaId);
+            let doc = null;
+            if (tipo === 'tarea') {
+                const tarea = causa?.tareas?.find(t => String(t.id) === String(tareaId));
+                doc = tarea?.adjuntos?.[idx] || null;
+            } else {
+                const cfg = _DOCS_CONFIG[tipo];
+                doc = causa?.[cfg?.campo]?.[idx] || null;
+            }
+            if (!doc) return;
+            if (String(doc.mimetype || '') !== 'text/html') {
+                if (typeof showInfo === 'function') showInfo('Solo los contratos/documentos HTML pueden exportarse a PDF desde esta opción.');
+                return;
+            }
+
+            const pdfApi = window.electronAPI?.prospectos?.generarPDF
+                ? window.electronAPI.prospectos
+                : (window.electronAPI?.generarPDF ? window.electronAPI : null);
+            if (!pdfApi?.generarPDF) {
+                if (typeof showError === 'function') showError('La función de generar PDF no está disponible en este entorno.');
+                return;
+            }
+
+            try {
+                const dataUrl = String(doc.data || '');
+                const html = dataUrl.startsWith('data:text/html')
+                    ? decodeURIComponent((dataUrl.split(',')[1] || ''))
+                    : dataUrl;
+                const defaultName = String(doc.nombre || 'documento').replace(/\.html?$/i, '') + '.pdf';
+                const r = await pdfApi.generarPDF({ html, defaultName });
+                if (r?.success) {
+                    if (typeof showSuccess === 'function') showSuccess('PDF guardado en tu PC.');
+                } else if (r?.error && r.error !== 'Cancelado por usuario') {
+                    if (typeof showError === 'function') showError(r.error || 'No se pudo generar el PDF.');
+                }
+            } catch (e) {
+                if (typeof showError === 'function') showError(e?.message || 'No se pudo generar el PDF.');
+            }
+        };
+
         window.dcEliminarDocumento = function(causaId, tipo, idx) {
             if (!confirm('¿Eliminar este documento? Esta acción no se puede deshacer.')) return;
             const cfg   = _DOCS_CONFIG[tipo];
-            const causa = DB.causas.find(c => c.id === causaId);
+            const causa = _dcFindCausaById(causaId);
             if (!causa?.[cfg.campo]) return;
             causa[cfg.campo].splice(idx, 1);
             _dcSyncLegacyDocumentos(causa);
@@ -1137,13 +2571,40 @@ ${textoTruncado}`;
         // TAB PROCESO — Instancias + Recursos + Prescripción
         // ════════════════════════════════════════════════════════
         function dcRenderProceso(causaId) {
-            const causa = DB.causas.find(c => c.id === causaId);
+            const causa = _dcFindCausaById(causaId);
             const el = document.getElementById('dcpanel-proceso');
             if (!causa || !el) return;
 
             if (!causa.instancias)   causa.instancias = [];
             if (!causa.recursos)     causa.recursos = [];
             if (!causa.prescripcion) causa.prescripcion = {};
+            const audienciasIA = (causa.eventosProcesalesIA || [])
+                .filter(ev => String(ev?.tipo || '').toLowerCase() === 'audiencia')
+                .sort((a, b) => new Date(a.fecha || 0) - new Date(b.fecha || 0));
+            const hoyAud = new Date(); hoyAud.setHours(0, 0, 0, 0);
+            const _estadoAud = (a) => {
+                const f = a.fecha ? new Date(a.fecha + 'T12:00:00') : null;
+                if (a.gestionado) return 'Gestionada';
+                if (!f) return 'Sin fecha';
+                if (f.getTime() === hoyAud.getTime()) return 'Hoy';
+                if (f < hoyAud) return 'Cumplida';
+                return 'Pendiente';
+            };
+            const audCount = {
+                pendientes: audienciasIA.filter(a => _estadoAud(a) === 'Pendiente').length,
+                hoy: audienciasIA.filter(a => _estadoAud(a) === 'Hoy').length,
+                gestionadas: audienciasIA.filter(a => _estadoAud(a) === 'Gestionada').length,
+                cumplidas: audienciasIA.filter(a => _estadoAud(a) === 'Cumplida').length
+            };
+            const audFiltro = String(causa?.audiencias?.filtroVista || 'todas').toLowerCase();
+            const audienciasMostradas = audienciasIA.filter(a => {
+                const est = _estadoAud(a).toLowerCase();
+                if (audFiltro === 'todas') return true;
+                if (audFiltro === 'pendientes') return est === 'pendiente';
+                if (audFiltro === 'hoy') return est === 'hoy';
+                if (audFiltro === 'gestionadas') return est === 'gestionada';
+                return true;
+            });
 
             const instanciaActual = causa.instancia || 'Primera';
             const instanciaColor = {
@@ -1174,7 +2635,7 @@ ${textoTruncado}`;
                                     display:flex; align-items:center; justify-content:center;
                                     font-size:0.65rem; color:${activa ? '#fff' : pasada ? color : '#94a3b8'};
                                     font-weight:700; cursor:pointer; transition:all 0.2s;"
-                                    onclick="dcCambiarInstancia('${causaId}','${inst}')"
+                                    data-dc-action="cambiar-instancia" data-causa-id="${causaId}" data-instancia="${inst}"
                                     title="Cambiar a ${inst} Instancia">
                                     ${activa ? '<i class="fas fa-check" style="font-size:0.6rem;"></i>' : i+1}
                                 </div>
@@ -1197,7 +2658,7 @@ ${textoTruncado}`;
                             <span style="color:#94a3b8; font-size:0.68rem; font-family:monospace;">${inst.fecha ? new Date(inst.fecha).toLocaleDateString('es-CL') : '—'}</span>
                         </div>`).join('')}
                     </div>` : ''}
-                    <button onclick="dcAgregarInstancia('${causaId}')"
+                    <button data-dc-action="agregar-instancia" data-causa-id="${causaId}"
                         style="margin-top:12px; padding:6px 14px; border:1px dashed #cbd5e1; border-radius:8px;
                                background:transparent; color:#64748b; font-size:0.78rem; cursor:pointer; width:100%;">
                         <i class="fas fa-plus"></i> Registrar cambio de instancia
@@ -1211,7 +2672,7 @@ ${textoTruncado}`;
                             <i class="fas fa-undo" style="color:#7c3aed;"></i> Recursos Procesales
                             <span style="background:#f1f5f9; color:#475569; padding:1px 7px; border-radius:10px; margin-left:6px;">${causa.recursos.length}</span>
                         </div>
-                        <button onclick="dcAgregarRecurso('${causaId}')"
+                        <button data-dc-action="agregar-recurso" data-causa-id="${causaId}"
                             style="padding:5px 12px; border:none; border-radius:7px; background:#7c3aed; color:#fff;
                                    font-size:0.75rem; cursor:pointer; font-weight:600;">
                             <i class="fas fa-plus"></i> Nuevo
@@ -1237,10 +2698,89 @@ ${textoTruncado}`;
                                     <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
                                         <span style="font-size:0.68rem; background:${estadoColor}18; color:${estadoColor};
                                             padding:2px 8px; border-radius:10px; font-weight:600;">${escHtml(r.estado || 'Pendiente')}</span>
-                                        <button onclick="dcEliminarRecurso('${causaId}',${i})"
+                                        <button data-dc-action="eliminar-recurso" data-causa-id="${causaId}" data-idx="${i}"
                                             style="background:transparent; border:none; color:#dc2626; cursor:pointer; font-size:0.75rem;">
                                             <i class="fas fa-trash"></i>
                                         </button>
+                                    </div>
+                                </div>
+                            </div>`;
+                        }).join('')
+                    }
+                </div>
+
+                <!-- ── AUDIENCIAS (IA) ── -->
+                <div style="background:var(--bg-card,#fff); border:1px solid var(--border); border-radius:10px; padding:16px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <div style="font-size:0.7rem; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:#64748b;">
+                            <i class="fas fa-gavel" style="color:#2563eb;"></i> Audiencias detectadas por IA
+                            <span style="background:#eff6ff; color:#1d4ed8; padding:1px 7px; border-radius:10px; margin-left:6px;">${audienciasIA.length}</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <select data-dc-aud-filtro="${causaId}" style="padding:5px 8px; border:1px solid #dbeafe; border-radius:7px; font-size:.72rem; background:#fff; color:#1e3a8a;">
+                                <option value="todas" ${audFiltro === 'todas' ? 'selected' : ''}>Todas</option>
+                                <option value="pendientes" ${audFiltro === 'pendientes' ? 'selected' : ''}>Pendientes</option>
+                                <option value="hoy" ${audFiltro === 'hoy' ? 'selected' : ''}>Hoy</option>
+                                <option value="gestionadas" ${audFiltro === 'gestionadas' ? 'selected' : ''}>Gestionadas</option>
+                            </select>
+                            <div style="font-size:0.68rem; color:#64748b;">
+                                ${causa.audiencias?.habilitado ? '<i class="fas fa-check-circle" style="color:#0d7a5f;"></i> Seguimiento habilitado' : 'Sin activar'}
+                            </div>
+                        </div>
+                    </div>
+
+                    ${audienciasIA.length ? `
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:8px; margin-bottom:10px;">
+                        <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:8px 10px;">
+                            <div style="font-size:.66rem; text-transform:uppercase; color:#1d4ed8; font-weight:800;">Pendientes</div>
+                            <div style="font-size:1rem; font-weight:800; color:#1e3a8a;">${audCount.pendientes}</div>
+                        </div>
+                        <div style="background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:8px 10px;">
+                            <div style="font-size:.66rem; text-transform:uppercase; color:#c2410c; font-weight:800;">Hoy</div>
+                            <div style="font-size:1rem; font-weight:800; color:#c2410c;">${audCount.hoy}</div>
+                        </div>
+                        <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:8px 10px;">
+                            <div style="font-size:.66rem; text-transform:uppercase; color:#166534; font-weight:800;">Gestionadas</div>
+                            <div style="font-size:1rem; font-weight:800; color:#166534;">${audCount.gestionadas}</div>
+                        </div>
+                        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 10px;">
+                            <div style="font-size:.66rem; text-transform:uppercase; color:#64748b; font-weight:800;">Cumplidas</div>
+                            <div style="font-size:1rem; font-weight:800; color:#475569;">${audCount.cumplidas}</div>
+                        </div>
+                    </div>` : ''}
+
+                    ${audienciasMostradas.length === 0
+                        ? `<div style="text-align:center; padding:18px; color:#94a3b8; font-size:0.8rem;">
+                              <i class="fas fa-calendar-day" style="font-size:1.3rem; opacity:0.35; display:block; margin-bottom:6px;"></i>
+                              No hay audiencias para el filtro seleccionado.
+                           </div>`
+                        : audienciasMostradas.map((a, i) => {
+                            const estado = _estadoAud(a);
+                            const estColor = estado === 'Gestionada' ? '#166534' : estado === 'Cumplida' ? '#64748b' : estado === 'Hoy' ? '#dc2626' : estado === 'Pendiente' ? '#2563eb' : '#d97706';
+                            return `
+                            <div style="padding:10px 12px; border:1px solid #dbeafe; border-radius:8px; margin-bottom:${i === audienciasMostradas.length - 1 ? '0' : '8px'}; border-left:3px solid #2563eb;">
+                                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+                                    <div>
+                                        <div style="font-size:0.82rem; font-weight:700; color:#1e3a8a;">${escHtml(a.titulo || 'Audiencia')}</div>
+                                        <div style="font-size:0.72rem; color:#64748b; margin-top:2px;">
+                                            ${a.fecha ? new Date(a.fecha).toLocaleDateString('es-CL') : 'Fecha por definir'}
+                                            ${a.fuente ? ` · Fuente: ${escHtml(a.fuente)}` : ''}
+                                        </div>
+                                        ${a.waAlertadoEn ? `<div style="font-size:0.68rem; color:#0f766e; margin-top:2px;"><i class="fab fa-whatsapp"></i> WhatsApp enviado: ${new Date(a.waAlertadoEn).toLocaleString('es-CL')}</div>` : ''}
+                                        ${a.detalle ? `<div style="font-size:0.72rem; color:#475569; margin-top:4px;">${escHtml(a.detalle)}</div>` : ''}
+                                    </div>
+                                    <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+                                        <span style="font-size:0.68rem; background:${estColor}18; color:${estColor}; padding:2px 8px; border-radius:10px; font-weight:700; white-space:nowrap;">${estado}</span>
+                                        <div style="display:flex; gap:5px;">
+                                            ${a.gestionado ? '' : `<button class="btn btn-xs" data-dc-action="wa-alerta-audiencia" data-causa-id="${causaId}" data-evento-id="${a.id}"
+                                                style="background:#ecfeff; color:#0f766e; border:none;" title="Enviar alerta por WhatsApp">
+                                                <i class="fab fa-whatsapp"></i>
+                                            </button>`}
+                                            ${a.gestionado ? '' : `<button class="btn btn-xs" data-dc-action="gestionar-audiencia-ia" data-causa-id="${causaId}" data-evento-id="${a.id}"
+                                                style="background:#f0fdf4; color:#166534; border:none;" title="Marcar audiencia como gestionada">
+                                                <i class="fas fa-check"></i>
+                                            </button>`}
+                                        </div>
                                     </div>
                                 </div>
                             </div>`;
@@ -1258,14 +2798,14 @@ ${textoTruncado}`;
                             <label style="font-size:0.72rem; color:#64748b; font-weight:600; display:block; margin-bottom:4px;">Fecha de prescripción</label>
                             <input type="date" id="dc-presc-fecha-${causaId}"
                                 value="${causa.prescripcion.fecha || ''}"
-                                onchange="dcGuardarPrescripcion('${causaId}')"
+                                data-dc-presc-autosave="${causaId}"
                                 style="width:100%; padding:7px 10px; border:1px solid #e2e8f0; border-radius:7px;
                                        font-size:0.8rem; background:var(--bg-2,#f8fafc); box-sizing:border-box;">
                         </div>
                         <div>
                             <label style="font-size:0.72rem; color:#64748b; font-weight:600; display:block; margin-bottom:4px;">Tipo de prescripción</label>
                             <select id="dc-presc-tipo-${causaId}"
-                                onchange="dcGuardarPrescripcion('${causaId}')"
+                                data-dc-presc-autosave="${causaId}"
                                 style="width:100%; padding:7px; border:1px solid #e2e8f0; border-radius:7px;
                                        font-size:0.78rem; background:var(--bg-2,#f8fafc); box-sizing:border-box;">
                                 <option value="">-- Seleccionar --</option>
@@ -1278,7 +2818,7 @@ ${textoTruncado}`;
                     </div>
                     <textarea id="dc-presc-obs-${causaId}"
                         placeholder="Observaciones sobre la prescripción..."
-                        onchange="dcGuardarPrescripcion('${causaId}')"
+                        data-dc-presc-autosave="${causaId}"
                         style="width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:7px;
                                font-size:0.78rem; background:var(--bg-2,#f8fafc); resize:vertical;
                                min-height:60px; box-sizing:border-box; font-family:inherit;"
@@ -1299,7 +2839,7 @@ ${textoTruncado}`;
         }
 
         window.dcCambiarInstancia = function(causaId, nuevaInstancia) {
-            const causa = DB.causas.find(c => c.id === causaId);
+            const causa = _dcFindCausaById(causaId);
             if (!causa) return;
             if (causa.instancia === nuevaInstancia) return;
             if (!confirm(`¿Cambiar instancia a "${nuevaInstancia}"?`)) return;
@@ -1317,7 +2857,7 @@ ${textoTruncado}`;
         };
 
         window.dcAgregarInstancia = function(causaId) {
-            const causa = DB.causas.find(c => c.id === causaId);
+            const causa = _dcFindCausaById(causaId);
             if (!causa) return;
             migAbrir({
                 titulo: '<i class="fas fa-sitemap"></i> Registrar cambio de instancia',
@@ -1346,7 +2886,7 @@ ${textoTruncado}`;
         };
 
         window.dcAgregarRecurso = function(causaId) {
-            const causa = DB.causas.find(c => c.id === causaId);
+            const causa = _dcFindCausaById(causaId);
             if (!causa) return;
             migAbrir({
                 titulo: '<i class="fas fa-undo"></i> Interponer Recurso',
@@ -1381,7 +2921,7 @@ ${textoTruncado}`;
 
         window.dcEliminarRecurso = function(causaId, idx) {
             if (!confirm('¿Eliminar este recurso?')) return;
-            const causa = DB.causas.find(c => c.id === causaId);
+            const causa = _dcFindCausaById(causaId);
             if (!causa?.recursos) return;
             causa.recursos.splice(idx, 1);
             if (typeof markAppDirty === 'function') markAppDirty();
@@ -1389,8 +2929,97 @@ ${textoTruncado}`;
             dcRenderProceso(causaId);
         };
 
+        window.dcCambiarFiltroAudienciasIA = function(causaId, filtro) {
+            const causa = _dcFindCausaById(causaId);
+            if (!causa) return;
+            if (!causa.audiencias || typeof causa.audiencias !== 'object') causa.audiencias = {};
+            causa.audiencias.filtroVista = String(filtro || 'todas').toLowerCase();
+            if (typeof markAppDirty === 'function') markAppDirty();
+            _dcGuardar();
+            dcRenderProceso(causaId);
+        };
+
+        window.dcEnviarAlertaAudienciaWhatsApp = async function(causaId, eventoId) {
+            const causa = _dcFindCausaById(causaId);
+            if (!causa) return;
+            const ev = (causa.eventosProcesalesIA || []).find(e => String(e.id) === String(eventoId));
+            if (!ev) return;
+            if (ev.waAlertadoEn && !confirm('Esta audiencia ya fue alertada por WhatsApp. ¿Reenviar?')) return;
+            if (!window.electronAPI?.whatsapp?.enviarAlertaA && !window.electronAPI?.whatsapp?.enviarAlerta) {
+                if (typeof showError === 'function') showError('WhatsApp no está disponible en este entorno.');
+                return;
+            }
+
+            const fecha = ev.fecha ? new Date(ev.fecha).toLocaleDateString('es-CL') : 'fecha por definir';
+            const msg = `🔔 Audiencia detectada por IA\nCausa: ${causa.caratula || causa.cliente || causa.id}\nHito: ${ev.titulo || 'Audiencia'}\nFecha: ${fecha}${ev.detalle ? `\nDetalle: ${ev.detalle}` : ''}`;
+
+            try {
+                const cli = (DB.clientes || []).find(c => {
+                    const nom = String(c?.nom || c?.nombre || '').trim().toLowerCase();
+                    const cNom = String(causa?.cliente || '').trim().toLowerCase();
+                    return nom && cNom && nom === cNom;
+                });
+                const tel = String(cli?.telefono || cli?.tel || cli?.whatsapp || '').replace(/[^\d]/g, '');
+                let resp = null;
+                if (tel && window.electronAPI?.whatsapp?.enviarAlertaA) {
+                    resp = await window.electronAPI.whatsapp.enviarAlertaA(tel, msg);
+                } else if (window.electronAPI?.whatsapp?.enviarAlerta) {
+                    resp = await window.electronAPI.whatsapp.enviarAlerta(msg);
+                } else {
+                    if (typeof showError === 'function') showError('No hay teléfono del cliente ni destinatarios globales para WhatsApp.');
+                    return;
+                }
+                if (resp?.ok) {
+                    const nowIso = new Date().toISOString();
+                    ev.waAlertadoEn = nowIso;
+                    if (Array.isArray(DB.alertas)) {
+                        DB.alertas.forEach(a => {
+                            if (String(a.causaId) !== String(causa.id)) return;
+                            if (String(a.tipo || '').toLowerCase() !== 'audiencia') return;
+                            const sameFecha = !ev.fecha || String(a.fechaObjetivo || '') === String(ev.fecha || '');
+                            const sameTitulo = String(a.mensaje || '').toLowerCase().includes(String(ev.titulo || '').toLowerCase());
+                            if (sameFecha || sameTitulo) a.waAlertadoEn = nowIso;
+                        });
+                    }
+                    if (typeof markAppDirty === 'function') markAppDirty();
+                    _dcGuardar();
+                    dcRenderProceso(causaId);
+                    if (typeof showSuccess === 'function') showSuccess('Alerta de audiencia enviada por WhatsApp.');
+                } else if (typeof showError === 'function') {
+                    showError(resp?.error || 'No se pudo enviar alerta por WhatsApp.');
+                }
+            } catch (e) {
+                if (typeof showError === 'function') showError(e?.message || 'No se pudo enviar alerta por WhatsApp.');
+            }
+        };
+
+        window.dcMarcarAudienciaIAGestionada = function(causaId, eventoId) {
+            const causa = _dcFindCausaById(causaId);
+            if (!causa) return;
+            const ev = (causa.eventosProcesalesIA || []).find(e => String(e.id) === String(eventoId));
+            if (!ev || ev.gestionado) return;
+
+            ev.gestionado = true;
+            ev.gestionadoEn = new Date().toISOString();
+            if (Array.isArray(DB.alertas)) {
+                DB.alertas.forEach(a => {
+                    if (String(a.causaId) !== String(causa.id)) return;
+                    if (String(a.tipo || '').toLowerCase() !== 'audiencia') return;
+                    const sameFecha = !ev.fecha || String(a.fechaObjetivo || '') === String(ev.fecha || '');
+                    const sameTitulo = String(a.mensaje || '').toLowerCase().includes(String(ev.titulo || '').toLowerCase());
+                    if (sameFecha || sameTitulo) a.estado = 'cerrada';
+                });
+            }
+
+            causa.fechaUltimaActividad = new Date().toISOString();
+            if (typeof markAppDirty === 'function') markAppDirty();
+            _dcGuardar();
+            dcRenderProceso(causaId);
+            if (typeof showInfo === 'function') showInfo('Audiencia marcada como gestionada.');
+        };
+
         window.dcGuardarPrescripcion = function(causaId) {
-            const causa = DB.causas.find(c => c.id === causaId);
+            const causa = _dcFindCausaById(causaId);
             if (!causa) return;
             if (!causa.prescripcion) causa.prescripcion = {};
             causa.prescripcion.fecha        = document.getElementById(`dc-presc-fecha-${causaId}`)?.value || null;
@@ -1412,6 +3041,81 @@ ${textoTruncado}`;
         window.openCausa          = abrirDetalleCausa;
         window.goCausa            = abrirDetalleCausa;
         window.detalleCausa       = abrirDetalleCausa;
+        window.dcAbrirModuloTramites = dcAbrirModuloTramites;
+        window.dcCrearTramiteVinculado = dcCrearTramiteVinculado;
+        window.dcRenderTramiteSeguimiento = dcRenderTramiteSeguimiento;
+        window._dcConfirmarAccionSegura = _dcConfirmarAccionSegura;
+        window.cerrarModal        = cerrarModal;
+        window.abrirModal         = abrirModal;
+        window.renderDetalleCausa = function(causaId) {
+            const el = document.getElementById('detalle-causa-content');
+            if (!causaId) {
+                if (el) el.innerHTML = '<div class="empty-state card"><i class="fas fa-gavel"></i><p>Seleccione una causa.</p></div>';
+                return;
+            }
+            abrirDetalleCausa(causaId);
+        };
+
+        // Botón cerrar fijo — siempre visible sobre el modal fullscreen
+        function _inyectarBotonCerrarModal() {
+            if (document.getElementById('modal-detalle-close-fixed')) return;
+            const btn = document.createElement('button');
+            btn.id = 'modal-detalle-close-fixed';
+            btn.innerHTML = '<i class="fas fa-times"></i>';
+            btn.title = 'Cerrar detalle de causa (Esc)';
+            btn.style.display = 'none';
+            btn.onclick = () => cerrarModal('modal-detalle');
+            document.body.appendChild(btn);
+            const modal = document.getElementById('modal-detalle');
+            if (modal) {
+                const observer = new MutationObserver(() => {
+                    const isOpen = modal.classList.contains('open') || modal.style.display === 'flex' || modal.style.display === 'block';
+                    btn.style.display = isOpen ? 'flex' : 'none';
+                });
+                observer.observe(modal, { attributes: true, attributeFilter: ['class', 'style'] });
+            }
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    const m = document.getElementById('modal-detalle');
+                    if (m && (m.classList.contains('open') || m.style.display === 'flex' || m.style.display === 'block')) {
+                        cerrarModal('modal-detalle');
+                    }
+                }
+            });
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', _inyectarBotonCerrarModal);
+        } else {
+            _inyectarBotonCerrarModal();
+        }
+
+        window.dcGuardarPrescripcion = function(causaId) {
+            const causa = _dcFindCausaById(causaId);
+            if (!causa) return;
+            if (!causa.prescripcion) causa.prescripcion = {};
+            causa.prescripcion.fecha        = document.getElementById(`dc-presc-fecha-${causaId}`)?.value || null;
+            causa.prescripcion.tipo         = document.getElementById(`dc-presc-tipo-${causaId}`)?.value || null;
+            causa.prescripcion.observaciones = document.getElementById(`dc-presc-obs-${causaId}`)?.value || '';
+            if (typeof markAppDirty === 'function') markAppDirty();
+            _dcGuardar();
+            dcRenderProceso(causaId);
+        };
+
+        // ════════════════════════════════════════════════════════
+        // ALIASES DE COMPATIBILIDAD
+        // Exponer funciones clave a window para uso global (17-claude-legal.js y otros)
+        // ════════════════════════════════════════════════════════
+        window.abrirDetalleCausa  = abrirDetalleCausa;
+        window.viewCausa          = abrirDetalleCausa;
+        window.verCausa           = abrirDetalleCausa;
+        window.verDetalleCausa    = abrirDetalleCausa;
+        window.openCausa          = abrirDetalleCausa;
+        window.goCausa            = abrirDetalleCausa;
+        window.detalleCausa       = abrirDetalleCausa;
+        window.dcAbrirModuloTramites = dcAbrirModuloTramites;
+        window.dcCrearTramiteVinculado = dcCrearTramiteVinculado;
+        window.dcRenderTramiteSeguimiento = dcRenderTramiteSeguimiento;
+        window._dcConfirmarAccionSegura = _dcConfirmarAccionSegura;
         window.cerrarModal        = cerrarModal;
         window.abrirModal         = abrirModal;
         window.renderDetalleCausa = function(causaId) {
