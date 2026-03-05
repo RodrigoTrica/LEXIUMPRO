@@ -612,9 +612,86 @@ function cleanupReferenciasHuerfanasDeCausas() {
 
 window.cleanupReferenciasHuerfanasDeCausas = cleanupReferenciasHuerfanasDeCausas;
 
+function cleanupAlertasPlantillaAntiguas(opts) {
+    try {
+        if (!DB || !Array.isArray(DB.causas) || !Array.isArray(DB.alertas)) return { ok: false, reason: 'db_no_disponible' };
+
+        const cfg = opts && typeof opts === 'object' ? opts : {};
+        const strictSameDay = cfg.strictSameDay !== false;
+
+        const patrones = [
+            'contestaci',
+            'r\u00e9plica',
+            'du\u00faplica',
+            't\u00e9rmino probatorio',
+            'vencimiento t\u00e9rmino probatorio'
+        ];
+        const rx = new RegExp(patrones.join('|'), 'i');
+
+        const causasById = new Map((DB.causas || []).filter(Boolean).map(c => [String(c.id), c]));
+        const docsGlobal = Array.isArray(DB.documentos) ? DB.documentos : [];
+
+        const hasDocs = (causaId) => {
+            const c = causasById.get(String(causaId));
+            if (!c) return false;
+            const inCausa = (Array.isArray(c.documentos) && c.documentos.length)
+                || (Array.isArray(c.docsCliente) && c.docsCliente.length)
+                || (Array.isArray(c.docsTribunal) && c.docsTribunal.length)
+                || (Array.isArray(c.docsContraparte) && c.docsContraparte.length)
+                || (Array.isArray(c.docsTramites) && c.docsTramites.length);
+            if (inCausa) return true;
+            return docsGlobal.some(d => d && String(d.causaId) === String(causaId));
+        };
+
+        const dayKey = (d) => {
+            try {
+                const x = (d instanceof Date) ? d : new Date(d);
+                if (Number.isNaN(x.getTime())) return null;
+                x.setHours(0, 0, 0, 0);
+                return x.getTime();
+            } catch (_) {
+                return null;
+            }
+        };
+
+        const alertasAntes = DB.alertas.length;
+        DB.alertas = DB.alertas.filter(a => {
+            if (!a || typeof a !== 'object') return true;
+            if (String(a.tipo || '').toLowerCase() !== 'plazo') return true;
+            if (!a.causaId) return true;
+            const msg = String(a.mensaje || '');
+            if (!rx.test(msg)) return true;
+
+            const causa = causasById.get(String(a.causaId));
+            if (!causa) return true;
+            if (hasDocs(a.causaId)) return true;
+
+            if (!strictSameDay) return false;
+
+            const kC = dayKey(causa.fechaCreacion);
+            const kA = dayKey(a.fechaCreacion || a.fechaObjetivo);
+            if (kC === null || kA === null) return true;
+            return kC !== kA;
+        });
+
+        const alertasDespues = DB.alertas.length;
+        const borradas = Math.max(0, alertasAntes - alertasDespues);
+        if (borradas > 0) {
+            try { if (typeof markAppDirty === 'function') markAppDirty(); } catch (_) {}
+            try { save(); } catch (_) {}
+        }
+        return { ok: true, borradas };
+    } catch (e) {
+        return { ok: false, error: e?.message || String(e) };
+    }
+}
+
+window.cleanupAlertasPlantillaAntiguas = cleanupAlertasPlantillaAntiguas;
+
 // Cleanup defensivo al inicio: evita “fantasmas” en alertas/semáforos.
 // Se ejecuta ANTES de los renders principales.
 try { cleanupReferenciasHuerfanasDeCausas(); } catch (_) {}
+try { cleanupAlertasPlantillaAntiguas({ strictSameDay: true }); } catch (_) {}
 
 // ── Migración Fase 3A: documentos a archivoDocId (cifrado en disco) ──────────
 const DOCS_MIGRATION_FLAG = 'docs_migracion_archivoDocId_2026_03_02';

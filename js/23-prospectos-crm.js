@@ -942,7 +942,21 @@
         document.getElementById('crm-btn-cancel').addEventListener('click', () => modal.style.display = 'none');
         document.getElementById('crm-btn-close').addEventListener('click', () => modal.style.display = 'none');
 
+        const _cerrar = () => {
+            modal.classList.remove('open');
+            modal.style.display = 'none';
+        };
+        document.getElementById('crm-btn-cancel').addEventListener('click', _cerrar);
+        document.getElementById('crm-btn-close').addEventListener('click', _cerrar);
+
         modal.style.display = 'flex';
+        modal.classList.add('open');
+        setTimeout(() => {
+            try {
+                const first = document.getElementById('crm-f-nombre');
+                if (first && typeof first.focus === 'function') first.focus();
+            } catch (_) {}
+        }, 60);
     };
 
     // ═════════════════════════════════════════════════════════════════════════

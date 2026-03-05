@@ -206,25 +206,9 @@
                     asignarHonorarios(causaCreada.id, montoBaseOpt);
                 }
 
-                // Crear alertas automáticas de la plantilla
-                const hoy = new Date();
-                plantilla.alertas.forEach(a => {
-                    const fechaVenc = new Date(hoy);
-                    fechaVenc.setDate(fechaVenc.getDate() + a.diasDesdeHoy);
-                    const alertaNueva = {
-                        id: uid(),
-                        causaId: causaCreada.id,
-                        tipo: 'plazo',
-                        mensaje: `[${causaCreada.caratula}] ${a.nombre}`,
-                        fechaVencimiento: fechaVenc.toISOString(),
-                        fechaObjetivo: fechaVenc.toISOString().slice(0, 10),
-                        prioridad: a.prioridad,
-                        estado: 'activa',
-                        fechaCreacion: hoy.toISOString()
-                    };
-                    if (typeof Store !== 'undefined' && Store?.agregarAlerta) Store.agregarAlerta(alertaNueva);
-                    else DB.alertas.push(alertaNueva);
-                });
+                causaCreada.alertasPlantillaPendientes = Array.isArray(plantilla.alertas)
+                    ? plantilla.alertas.map(a => ({ ...a }))
+                    : [];
 
                 registrarEvento(`Causa creada (${tipoProcedimiento}) para ${cliente.nombre || cliente.nom}`);
 
@@ -240,7 +224,7 @@
                 if (typeof markAppDirty === "function") markAppDirty();
                 save();
                 renderAll();
-                showSuccess(`✓ Causa creada con ${nueva.etapasProcesales.length} etapas y ${plantilla.alertas.length} alertas automáticas.`);
+                showSuccess(`✓ Causa creada con ${nueva.etapasProcesales.length} etapas. Alertas configuradas: ${plantilla.alertas.length}.`);
             };
 
             // Preguntar por honorarios iniciales (opcional). Si cancela, se crea igual sin honorarios.

@@ -6,6 +6,14 @@
             const el = document.getElementById('alert-container');
             let html = '';
 
+            html += `
+                <div style="display:flex; justify-content:flex-end; margin:6px 0 12px;">
+                    <button class="btn" style="padding:7px 10px;" onclick="try{const r=window.cleanupAlertasPlantillaAntiguas&&window.cleanupAlertasPlantillaAntiguas({strictSameDay:true}); if(r&&r.ok){(typeof showSuccess==='function')&&showSuccess('Alertas auto eliminadas: '+(r.borradas||0));} else {(typeof showInfo==='function')&&showInfo('No fue posible ejecutar la limpieza.');}}catch(e){(typeof showError==='function')&&showError('No se pudo limpiar alertas auto.');} try{renderAlerts();}catch(_){}">
+                        Limpiar alertas auto
+                    </button>
+                </div>
+            `;
+
             // Alertas del sistema centralizado
             const today = new Date(); today.setHours(0, 0, 0, 0);
             DB.alertas.filter(a => a.estado === 'activa').forEach(a => {
@@ -1575,6 +1583,43 @@
 
                 _hrSaveEntidad(tipo, ent);
             }
+
+            try {
+                if (!Array.isArray(DB.alertas)) DB.alertas = [];
+                const alertaCausaId = (tipo === 'causa') ? causaId : `${tipo}:${causaId}`;
+                const plan = Array.isArray(hEnt?.planPagos) ? hEnt.planPagos : [];
+                const cuotaPend = plan.find(c => String(c?.estado || '').toUpperCase() === 'PENDIENTE') || plan[0] || null;
+                const fechaVenc = cuotaPend?.fechaVencimiento ? new Date(cuotaPend.fechaVencimiento) : null;
+                if (fechaVenc && !Number.isNaN(fechaVenc.getTime())) {
+                    const fechaObj = fechaVenc.toISOString().slice(0, 10);
+                    const msg = `Cobro pendiente: Honorarios — $${Math.round(monto).toLocaleString('es-CL')}`;
+                    const existing = DB.alertas.find(a => a && a._cobro && String(a.causaId) === String(alertaCausaId));
+                    if (existing) {
+                        existing.tipo = 'pago';
+                        existing.prioridad = 'alta';
+                        existing.estado = 'activa';
+                        existing.mensaje = msg;
+                        existing.fechaObjetivo = fechaObj;
+                        existing.fechaVencimiento = fechaVenc.toISOString();
+                    } else {
+                        DB.alertas.push({
+                            id: generarID(),
+                            causaId: alertaCausaId,
+                            tipo: 'pago',
+                            prioridad: 'alta',
+                            estado: 'activa',
+                            mensaje: msg,
+                            fechaObjetivo: fechaObj,
+                            fechaVencimiento: fechaVenc.toISOString(),
+                            _cobro: true,
+                            alertaEnviadaWA: false,
+                            fechaCreacion: new Date().toISOString()
+                        });
+                    }
+                    if (typeof markAppDirty === 'function') markAppDirty();
+                    guardarDB();
+                }
+            } catch (_) {}
 
             registrarEvento(`Honorarios asignados: $${monto.toLocaleString('es-CL')} — ${_hrEntidadLabel(tipo, ent, causaId)}`);
             document.getElementById('hr-monto').value = '';

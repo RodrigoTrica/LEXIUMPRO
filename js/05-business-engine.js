@@ -657,6 +657,42 @@ function asignarHonorarios(causaId, montoBase) {
             window.EventBus.emit('honorarios:updated', { causaId });
         }
     } catch (_) {}
+
+    try {
+        if (!Array.isArray(DB.alertas)) DB.alertas = [];
+        const plan = Array.isArray(causa?.honorarios?.planPagos) ? causa.honorarios.planPagos : [];
+        const cuotaPend = plan.find(c => String(c?.estado || '').toUpperCase() === 'PENDIENTE') || plan[0] || null;
+        const fechaVenc = cuotaPend?.fechaVencimiento ? new Date(cuotaPend.fechaVencimiento) : null;
+        if (fechaVenc && !Number.isNaN(fechaVenc.getTime())) {
+            const fechaObj = fechaVenc.toISOString().slice(0, 10);
+            const msg = `Cobro pendiente: Honorarios — $${Math.round(montoTotal).toLocaleString('es-CL')}`;
+            const existing = DB.alertas.find(a => a && a._cobro && String(a.causaId) === String(causaId));
+            if (existing) {
+                existing.tipo = 'pago';
+                existing.prioridad = 'alta';
+                existing.estado = 'activa';
+                existing.mensaje = msg;
+                existing.fechaObjetivo = fechaObj;
+                existing.fechaVencimiento = fechaVenc.toISOString();
+            } else {
+                DB.alertas.push({
+                    id: generarID(),
+                    causaId,
+                    tipo: 'pago',
+                    prioridad: 'alta',
+                    estado: 'activa',
+                    mensaje: msg,
+                    fechaObjetivo: fechaObj,
+                    fechaVencimiento: fechaVenc.toISOString(),
+                    _cobro: true,
+                    alertaEnviadaWA: false,
+                    fechaCreacion: new Date().toISOString()
+                });
+            }
+            if (typeof markAppDirty === 'function') markAppDirty();
+            guardarDB();
+        }
+    } catch (_) {}
 }
 
 function registrarPago(causaId, monto) {

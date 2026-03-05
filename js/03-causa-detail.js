@@ -451,6 +451,18 @@ td:first-child{width:34%;font-weight:700;color:#475569}
                 if (action === 'duplicar-causa') return uiDuplicarCausa(causaId);
                 if (action === 'cambiar-tab') return dcCambiarTab(tabName, causaId);
                 if (action === 'agregar-movimiento') return dcAgregarMovimiento(causaId);
+                if (action === 'dc-doc-open') {
+                    const inp = document.getElementById(`dc-doc-file-${causaId}`);
+                    if (inp) inp.click();
+                    return;
+                }
+                if (action === 'dc-doc-cancel') {
+                    dcDocsClearForm(causaId);
+                    return;
+                }
+                if (action === 'dc-doc-save') {
+                    return dcDocsGuardarDocumento(causaId);
+                }
                 if (action === 'eliminar-movimiento') return dcEliminarMovimiento(causaId, idx);
                 if (action === 'toggle-tarea') return dcToggleTarea(causaId, tareaId);
                 if (action === 'eliminar-tarea') return dcEliminarTarea(causaId, tareaId);
@@ -546,12 +558,18 @@ td:first-child{width:34%;font-weight:700;color:#475569}
             const docsTabs = campos.flatMap(({ campo, origen }) =>
                 (causa[campo] || []).map((d, i) => ({
                     id: d.id || `${campo}-${i}`,
-                    nombreOriginal: d.nombre || 'Documento',
-                    fechaDocumento: d.fecha ? String(d.fecha).slice(0, 10) : null,
-                    tipo: d.tipoIA || 'Documento',
-                    cuaderno: 'Principal',
-                    etapaVinculada: d.etapaIA || '—',
+                    nombreOriginal: d.nombreOriginal || d.nombre || 'Documento',
+                    fechaDocumento: d.fechaDocumento ? String(d.fechaDocumento).slice(0, 10) : (d.fecha ? String(d.fecha).slice(0, 10) : null),
+                    tipo: d.tipo || d.tipoIA || 'Documento',
+                    cuaderno: d.cuaderno || 'Principal',
+                    etapaVinculada: d.etapaVinculada || d.etapaIA || '—',
                     folio: d.folio || '—',
+                    generaPlazo: !!d.generaPlazo,
+                    diasPlazo: Number(d.diasPlazo || 0) || 0,
+                    fechaVencimiento: d.fechaVencimiento || null,
+                    archivoMime: d.archivoMime || null,
+                    archivoNombre: d.archivoNombre || null,
+                    archivoBase64: d.archivoBase64 || null,
                     origen
                 }))
             );
@@ -989,6 +1007,7 @@ td:first-child{width:34%;font-weight:700;color:#475569}
             if (!causa) return;
             const el = document.getElementById('dcpanel-movimientos');
             if (!el) return;
+            try { dcEnsureMovNormalizeCss(); } catch (_) {}
             const esTramiteAdmin = _dcEsTramiteAdmin(causa);
             const catalogoOrg = _dcGetCatalogoOrganismos();
             const orgActual = causa.tramiteMeta?.organismo || catalogoOrg[0]?.key || 'OTRO';
@@ -1017,13 +1036,82 @@ td:first-child{width:34%;font-weight:700;color:#475569}
                 </select>`}
                 <span class="dc-mov-count" id="dc-mov-count-${causaId}">${todos.length} ${esTramiteAdmin ? 'evento' : 'movimiento'}${todos.length !== 1 ? 's' : ''}</span>
             </div>
+            <div id="dc-doc-drop-${causaId}" style="margin:0 0 14px; padding:12px; border:1px dashed var(--border,#334155); border-radius:12px; background:var(--bg-2,#0b1220);">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px;">
+                    <div style="font-weight:800; font-size:0.9rem; color:var(--text-1,#e2e8f0);">Gestión de Documentos e IA</div>
+                    <button type="button" class="btn" style="padding:7px 10px;" data-dc-action="dc-doc-open" data-causa-id="${causaId}">Subir archivo</button>
+                </div>
+                <div id="dc-doc-dropzone-${causaId}" style="border:1px dashed var(--border,#334155); border-radius:10px; padding:14px; text-align:center; color:var(--text-3,#94a3b8); background:rgba(2,6,23,.25);">
+                    <div style="font-size:0.82rem; font-weight:700; color:var(--text-2,#cbd5e1);">Arrastra y suelta un archivo</div>
+                    <div style="font-size:0.74rem; margin-top:4px;">PDF, DOCX, JPG, PNG</div>
+                    <input id="dc-doc-file-${causaId}" type="file" accept=".pdf,.docx,.jpg,.jpeg,.png,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png" style="display:none;" />
+                </div>
+                <div id="dc-doc-form-${causaId}" style="display:none; margin-top:12px;">
+                    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                        <div style="flex:1; min-width:220px;">
+                            <div style="font-size:0.72rem; font-weight:800; color:var(--text-3,#94a3b8); margin-bottom:6px;">Archivo</div>
+                            <div id="dc-doc-filename-${causaId}" style="padding:9px 10px; border:1px solid var(--border,#334155); border-radius:10px; background:var(--bg-1,#0f172a); color:var(--text-1,#e2e8f0); font-size:0.82rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></div>
+                        </div>
+                        <div style="width:170px;">
+                            <div style="font-size:0.72rem; font-weight:800; color:var(--text-3,#94a3b8); margin-bottom:6px;">Fecha</div>
+                            <input id="dc-doc-fecha-${causaId}" type="date" style="width:100%; padding:9px 10px; border:1px solid var(--border,#334155); border-radius:10px; background:var(--bg-1,#0f172a); color:var(--text-1,#e2e8f0);" />
+                        </div>
+                        <div style="width:190px;">
+                            <div style="font-size:0.72rem; font-weight:800; color:var(--text-3,#94a3b8); margin-bottom:6px;">Tipo sugerido</div>
+                            <select id="dc-doc-tipo-${causaId}" style="width:100%; padding:9px 10px; border:1px solid var(--border,#334155); border-radius:10px; background:var(--bg-1,#0f172a); color:var(--text-1,#e2e8f0);">
+                                <option>Escrito</option>
+                                <option>Resolución</option>
+                                <option>Notificación</option>
+                                <option>Audiencia</option>
+                                <option>Sentencia</option>
+                                <option>Otro</option>
+                            </select>
+                        </div>
+                        <div style="width:190px;">
+                            <div style="font-size:0.72rem; font-weight:800; color:var(--text-3,#94a3b8); margin-bottom:6px;">Cuaderno</div>
+                            <select id="dc-doc-cuaderno-${causaId}" style="width:100%; padding:9px 10px; border:1px solid var(--border,#334155); border-radius:10px; background:var(--bg-1,#0f172a); color:var(--text-1,#e2e8f0);">
+                                <option>Principal</option>
+                                <option>Reconvencional</option>
+                                <option>Incidental</option>
+                            </select>
+                        </div>
+                        <div style="width:140px;">
+                            <div style="font-size:0.72rem; font-weight:800; color:var(--text-3,#94a3b8); margin-bottom:6px;">Folio</div>
+                            <input id="dc-doc-folio-${causaId}" type="text" placeholder="Ej: 123" style="width:100%; padding:9px 10px; border:1px solid var(--border,#334155); border-radius:10px; background:var(--bg-1,#0f172a); color:var(--text-1,#e2e8f0);" />
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; align-items:flex-start;">
+                        <div style="flex:1; min-width:320px;">
+                            <div style="font-size:0.72rem; font-weight:800; color:var(--text-3,#94a3b8); margin-bottom:6px;">Descripción (opcional)</div>
+                            <textarea id="dc-doc-desc-${causaId}" rows="2" style="width:100%; padding:9px 10px; border:1px solid var(--border,#334155); border-radius:10px; background:var(--bg-1,#0f172a); color:var(--text-1,#e2e8f0); line-height:1.25; resize:vertical;"></textarea>
+                        </div>
+                        <div style="width:260px;">
+                            <div style="font-size:0.72rem; font-weight:800; color:var(--text-3,#94a3b8); margin-bottom:6px;">Plazo (heurístico)</div>
+                            <label style="display:flex; gap:8px; align-items:center; padding:9px 10px; border:1px solid var(--border,#334155); border-radius:10px; background:var(--bg-1,#0f172a); color:var(--text-1,#e2e8f0);">
+                                <input id="dc-doc-gplazo-${causaId}" type="checkbox" />
+                                <span style="font-size:0.82rem;">Genera plazo</span>
+                            </label>
+                            <div style="display:flex; gap:8px; margin-top:8px;">
+                                <input id="dc-doc-dias-${causaId}" type="number" min="0" placeholder="días" style="flex:1; padding:9px 10px; border:1px solid var(--border,#334155); border-radius:10px; background:var(--bg-1,#0f172a); color:var(--text-1,#e2e8f0);" />
+                                <input id="dc-doc-venc-${causaId}" type="date" style="flex:1; padding:9px 10px; border:1px solid var(--border,#334155); border-radius:10px; background:var(--bg-1,#0f172a); color:var(--text-1,#e2e8f0);" />
+                            </div>
+                        </div>
+                    </div>
+                    <div id="dc-doc-status-${causaId}" style="display:none; margin-top:10px; padding:10px; border-radius:10px; font-size:0.8rem;"></div>
+                    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
+                        <button type="button" class="btn" style="padding:8px 12px;" data-dc-action="dc-doc-cancel" data-causa-id="${causaId}">Cancelar</button>
+                        <button type="button" class="btn btn-p" style="padding:8px 12px;" data-dc-action="dc-doc-save" data-causa-id="${causaId}">Guardar documento</button>
+                    </div>
+                </div>
+            </div>
             <div id="dc-mov-list-${causaId}">
                 ${dcMovHtml(todos, causaId)}
             </div>
             ${causa.estadoGeneral !== 'Finalizada' ? `
-            <div style="margin-top:14px; padding-top:14px; border-top:1px dashed #e4eaf3; display:flex; gap:8px;">
-                <input id="dc-new-mov-nombre-${causaId}" placeholder="${esTramiteAdmin ? 'Detalle del ingreso/gestión (opcional)' : 'Nombre del movimiento...'}"
-                    style="flex:1; padding:7px 10px; border:1px solid #e4eaf3; border-radius:7px; font-size:0.8rem; font-family:'IBM Plex Sans',sans-serif;">
+            <div style="margin-top:14px; padding-top:14px; border-top:1px dashed #e4eaf3; display:flex; gap:8px; align-items:stretch;">
+                <textarea id="dc-new-mov-nombre-${causaId}" rows="1" placeholder="${esTramiteAdmin ? 'Detalle del ingreso/gestión (opcional)' : 'Nombre del movimiento...'}"
+                    style="flex:1; height:44px; min-height:44px; max-height:160px; padding:10px 10px; border:1px solid #e4eaf3; border-radius:7px; font-size:0.85rem; font-family:'IBM Plex Sans',sans-serif; line-height:1.15; resize:none; overflow:hidden;"
+                    oninput="this.style.height='44px'; this.style.height=(this.scrollHeight)+'px';"></textarea>
                 ${esTramiteAdmin ? `<select id="dc-tram-org-${causaId}" data-dc-tram-org="${causaId}"
                     style="min-width:190px; padding:7px; border:1px solid #e4eaf3; border-radius:7px; font-size:0.78rem; background:#f8fafc;">
                     ${catalogoOrg.map(o => `<option value="${o.key}" ${o.key === orgActual ? 'selected' : ''}>${escHtml(o.label)}</option>`).join('')}
@@ -1033,15 +1121,668 @@ td:first-child{width:34%;font-weight:700;color:#475569}
                     ${tiposActuales.map(t => `<option value="${escHtml(t)}" ${t === tipoActual ? 'selected' : ''}>${escHtml(t)}</option>`).join('')}
                 </select>` : ''}
                 <select id="dc-new-mov-tipo-${causaId}"
-                    style="padding:7px; border:1px solid #e4eaf3; border-radius:7px; font-size:0.78rem; background:#f8fafc;">
+                    style="height:44px; padding:7px 10px; border:1px solid #e4eaf3; border-radius:7px; font-size:0.8rem; background:#f8fafc;">
                     ${esTramiteAdmin
                     ? '<option>Ingreso</option><option>Reparo</option><option>Subsanación</option><option>Respuesta organismo</option><option>Resolución</option><option>Otro</option>'
                     : '<option>Resolución</option><option>Escrito</option><option>Notificación</option><option>Audiencia</option><option>Sentencia</option><option>Otro</option>'}
                 </select>
-                <button class="dc-btn primary" data-dc-action="agregar-movimiento" data-causa-id="${causaId}">
+                <button class="dc-btn primary" style="height:44px; white-space:nowrap;" data-dc-action="agregar-movimiento" data-causa-id="${causaId}">
                     <i class="fas fa-plus"></i> Agregar
                 </button>
             </div>` : ''}`;
+
+            try {
+                dcDocsInitUploadUI(causaId);
+            } catch (_) {}
+
+            try {
+                requestAnimationFrame(() => {
+                    try { dcFixMovEntryLayout(causaId); } catch (_) {}
+                    setTimeout(() => { try { dcFixMovEntryLayout(causaId); } catch (_) {} }, 0);
+                });
+            } catch (_) {}
+        }
+
+        function dcFixMovEntryLayout(causaId) {
+            const ta = document.getElementById(`dc-new-mov-nombre-${causaId}`);
+            const sel = document.getElementById(`dc-new-mov-tipo-${causaId}`);
+            const btn = document.querySelector(`#dcpanel-movimientos button[data-dc-action="agregar-movimiento"][data-causa-id="${CSS.escape(String(causaId))}"]`);
+            const row = ta ? ta.closest('div') : null;
+
+            if (row && row.style) {
+                row.style.setProperty('display', 'flex', 'important');
+                row.style.setProperty('gap', '8px', 'important');
+                row.style.setProperty('align-items', 'stretch', 'important');
+            }
+
+            const setBase = (el, extra) => {
+                if (!el || !el.style) return;
+                el.style.setProperty('box-sizing', 'border-box', 'important');
+                el.style.setProperty('height', '44px', 'important');
+                el.style.setProperty('min-height', '44px', 'important');
+                el.style.setProperty('line-height', '1.15', 'important');
+                if (extra) {
+                    for (const [k, v] of Object.entries(extra)) {
+                        el.style.setProperty(k, v, 'important');
+                    }
+                }
+            };
+
+            setBase(ta, {
+                'flex': '1 1 auto',
+                'width': 'auto',
+                'padding': '10px 10px',
+                'overflow': 'hidden',
+                'resize': 'none'
+            });
+            setBase(sel, {
+                'flex': '0 0 220px',
+                'width': '220px',
+                'min-width': '220px',
+                'padding': '7px 10px',
+                'line-height': '1'
+            });
+            setBase(btn, {
+                'flex': '0 0 110px',
+                'width': '110px',
+                'padding': '0 12px',
+                'white-space': 'nowrap',
+                'justify-content': 'center'
+            });
+        }
+
+        function dcEnsureMovNormalizeCss() {
+            const id = 'dc-mov-normalize-style';
+            if (document.getElementById(id)) return;
+            const st = document.createElement('style');
+            st.id = id;
+            st.textContent = `
+#dcpanel-movimientos textarea[id^="dc-new-mov-nombre-"],
+#dcpanel-movimientos select[id^="dc-new-mov-tipo-"],
+#dcpanel-movimientos button.dc-btn.primary[data-dc-action="agregar-movimiento"]{box-sizing:border-box!important;}
+
+#dcpanel-movimientos textarea[id^="dc-new-mov-nombre-"]{height:44px!important;min-height:44px!important;line-height:1.15!important;padding:10px 10px!important;border-width:1px!important;}
+#dcpanel-movimientos select[id^="dc-new-mov-tipo-"]{height:44px!important;line-height:1!important;padding:7px 10px!important;border-width:1px!important;appearance:auto!important;-webkit-appearance:menulist!important;}
+#dcpanel-movimientos button.dc-btn.primary[data-dc-action="agregar-movimiento"]{height:44px!important;line-height:1!important;padding:0 12px!important;border-width:1px!important;}
+`;
+            document.head.appendChild(st);
+        }
+
+        const _dcDocsUploadState = {
+            files: {},
+            extractedText: {},
+            analysis: {}
+        };
+
+        function dcDocsInitUploadUI(causaId) {
+            const dz = document.getElementById(`dc-doc-dropzone-${causaId}`);
+            const inp = document.getElementById(`dc-doc-file-${causaId}`);
+            if (!dz || !inp) return;
+
+            const setDz = (active) => {
+                dz.style.borderColor = active ? 'var(--cyan,#06b6d4)' : 'var(--border,#334155)';
+                dz.style.background = active ? 'rgba(6,182,212,.08)' : 'rgba(2,6,23,.25)';
+            };
+
+            dz.addEventListener('click', () => inp.click());
+            dz.addEventListener('dragover', (e) => { e.preventDefault(); setDz(true); });
+            dz.addEventListener('dragleave', (e) => { e.preventDefault(); setDz(false); });
+            dz.addEventListener('drop', (e) => {
+                e.preventDefault();
+                setDz(false);
+                const f = e.dataTransfer?.files?.[0];
+                if (f) dcDocsHandleFile(causaId, f);
+            });
+            inp.addEventListener('change', (e) => {
+                const f = e.target?.files?.[0];
+                if (f) dcDocsHandleFile(causaId, f);
+            });
+
+            const hoy = new Date().toISOString().slice(0, 10);
+            const fechaEl = document.getElementById(`dc-doc-fecha-${causaId}`);
+            if (fechaEl && !fechaEl.value) fechaEl.value = hoy;
+        }
+
+        function dcDocsSetStatus(causaId, kind, text) {
+            const el = document.getElementById(`dc-doc-status-${causaId}`);
+            if (!el) return;
+            const css = {
+                loading: 'display:block;background:rgba(59,130,246,.10);border:1px solid rgba(59,130,246,.35);color:var(--text-1,#e2e8f0);',
+                success: 'display:block;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);color:var(--text-1,#e2e8f0);',
+                warning: 'display:block;background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.35);color:var(--text-1,#e2e8f0);',
+                error: 'display:block;background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.35);color:var(--text-1,#e2e8f0);'
+            };
+            el.style.cssText = `${css[kind] || css.loading} padding:10px;border-radius:10px;font-size:.8rem;line-height:1.4;`;
+            el.textContent = String(text || '');
+        }
+
+        async function dcDocsHandleFile(causaId, file) {
+            const okExt = /\.(pdf|docx|jpe?g|png)$/i.test(String(file?.name || ''));
+            const okMime = /pdf|wordprocessingml\.document|image\/(jpeg|png)/i.test(String(file?.type || ''));
+            if (!okExt && !okMime) {
+                dcDocsSetStatus(causaId, 'error', 'Formato no soportado. Sube PDF, DOCX, JPG o PNG.');
+                return;
+            }
+            if (file.size > 15 * 1024 * 1024) {
+                dcDocsSetStatus(causaId, 'error', 'El archivo supera los 15MB.');
+                return;
+            }
+
+            _dcDocsUploadState.files[causaId] = file;
+            _dcDocsUploadState.extractedText[causaId] = '';
+            _dcDocsUploadState.analysis[causaId] = null;
+
+            const form = document.getElementById(`dc-doc-form-${causaId}`);
+            const fn = document.getElementById(`dc-doc-filename-${causaId}`);
+            if (fn) fn.textContent = String(file.name || '');
+            if (form) form.style.display = 'block';
+
+            dcDocsSetStatus(causaId, 'loading', 'Pre-clasificando documento...');
+
+            let texto = '';
+            try {
+                if (/\.pdf$/i.test(file.name) || /pdf/i.test(file.type)) {
+                    texto = await dcDocsExtractTextFromPdf(file);
+                } else if (/\.docx$/i.test(file.name) || /wordprocessingml\.document/i.test(file.type)) {
+                    texto = await dcDocsExtractTextFromDocx(file);
+                } else if (/\.(png|jpe?g)$/i.test(file.name) || /image\/(jpeg|png)/i.test(file.type)) {
+                    texto = await dcDocsExtractTextFromImage(file, causaId);
+                }
+            } catch (_) {
+                texto = '';
+            }
+
+            _dcDocsUploadState.extractedText[causaId] = texto;
+            const analysis = dcDocsHeuristicAnalyze({
+                filename: String(file.name || ''),
+                text: String(texto || '')
+            });
+            _dcDocsUploadState.analysis[causaId] = analysis;
+
+            dcDocsApplySuggestions(causaId, analysis);
+
+            if (analysis?.plazo?.dias && analysis.plazo.dias > 0) {
+                dcDocsSetStatus(causaId, 'success', `Sugerencias listas. Se detectó plazo: ${analysis.plazo.dias} día(s).`);
+            } else {
+                dcDocsSetStatus(causaId, 'success', 'Sugerencias listas. Revisa y guarda.');
+            }
+        }
+
+        async function dcDocsExtractTextFromDocx(file) {
+            const ab = await file.arrayBuffer();
+            if (!window.mammoth) {
+                await new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = 'https://unpkg.com/mammoth/mammoth.browser.min.js';
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+            }
+            const result = await window.mammoth.extractRawText({ arrayBuffer: ab });
+            return String(result?.value || '').trim();
+        }
+
+        async function dcDocsExtractTextFromImage(file, causaId) {
+            if (file.size > 8 * 1024 * 1024) return '';
+            if (!window.Tesseract) {
+                await new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = 'https://unpkg.com/tesseract.js@5/dist/tesseract.min.js';
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+            }
+            dcDocsSetStatus(causaId, 'loading', 'OCR en progreso (imagen)...');
+            const { data } = await window.Tesseract.recognize(file, 'spa', {
+                logger: (m) => {
+                    try {
+                        if (m && m.status === 'recognizing text' && typeof m.progress === 'number') {
+                            const pct = Math.round(m.progress * 100);
+                            dcDocsSetStatus(causaId, 'loading', `OCR en progreso (imagen)... ${pct}%`);
+                        }
+                    } catch (_) {}
+                }
+            });
+            return String(data?.text || '').trim();
+        }
+
+        async function dcDocsDeepAnalyzeWithProvider(_input) {
+            return null;
+        }
+
+        async function dcDocsExtractTextFromPdf(file) {
+            const ab = await file.arrayBuffer();
+            const bytes = new Uint8Array(ab);
+            if (!window.pdfjsLib) {
+                await new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+                window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+                    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            }
+            const pdf = await window.pdfjsLib.getDocument({ data: bytes }).promise;
+            let out = '';
+            const maxPages = Math.min(pdf.numPages, 10);
+            for (let p = 1; p <= maxPages; p++) {
+                const page = await pdf.getPage(p);
+                const content = await page.getTextContent();
+                out += content.items.map(i => i.str).join(' ') + '\n';
+            }
+            return out.trim();
+        }
+
+        function dcDocsHeuristicAnalyze({ filename, text }) {
+            const src = `${String(filename || '')}\n${String(text || '')}`.toUpperCase();
+
+            const score = {
+                escrito: 0,
+                resolucion: 0,
+                notificacion: 0,
+                audiencia: 0,
+                sentencia: 0
+            };
+
+            const rx = {
+                resol: /(RESUELVO|SE RESUELVE|VISTOS|TENIENDO PRESENTE|RESOLUCI[ÓO]N)/,
+                notif: /(NOTIF[IÍ]QUESE|NOTIFICACI[ÓO]N|C[ÉE]DULA|POR EL ESTADO DIARIO|SE NOTIFICA)/,
+                escrito: /(EN LO PRINCIPAL|PRIMER OTROS[IÍ]|SEGUNDO OTROS[IÍ]|TERCER OTROS[IÍ]|CUARTO OTROS[IÍ]|A S\.S\.|S\.S\.|S\.S\.A\.|SE[ÑN]OR JUEZ|SOLICITO|SOLICITA|VENGO EN|POR TANTO)/,
+                audiencia: /(AUDIENCIA|CITACI[ÓO]N A AUDIENCIA|COMPARECENCIA)/,
+                sentencia: /(SENTENCIA DEFINITIVA|SE ACOGE|SE RECHAZA|SE CONDENA|FALLO)/,
+                contesta: /(CONTESTA\s+DEMANDA|VENGO\s+EN\s+CONTESTAR|CONTESTACI[ÓO]N\s+DE\s+DEMANDA|EVAC[ÚU]A\s+TRASLADO|EVACUAR\s+TRASLADO|TRASLADO\s+CONFERIDO|DENTRO\s+DE\s+PLAZO\s+VENGO\s+EN\s+CONTESTAR)/
+            };
+
+            if (rx.sentencia.test(src)) score.sentencia += 6;
+            if (rx.audiencia.test(src)) score.audiencia += 5;
+
+            if (rx.escrito.test(src)) score.escrito += 4;
+            if (rx.contesta.test(src)) score.escrito += 6;
+
+            if (rx.resol.test(src)) score.resolucion += 3;
+            if (rx.notif.test(src)) score.notificacion += 2;
+
+            if (/\.PDF\b/.test(src)) score.escrito += 0;
+            if (/(CONTESTA|CONTESTACI[ÓO]N|TRASLADO|DEMANDA)/.test(src)) score.escrito += 2;
+            if (/(RESOLUCI[ÓO]N|AUTOS|PROVIDENCIA)/.test(src)) score.resolucion += 1;
+            if (/(C[ÉE]DULA|NOTIF)/.test(src)) score.notificacion += 1;
+
+            let tipo = 'Otro';
+            const pairs = [
+                { k: 'sentencia', t: 'Sentencia', s: score.sentencia },
+                { k: 'audiencia', t: 'Audiencia', s: score.audiencia },
+                { k: 'escrito', t: 'Escrito', s: score.escrito },
+                { k: 'resolucion', t: 'Resolución', s: score.resolucion },
+                { k: 'notificacion', t: 'Notificación', s: score.notificacion }
+            ].sort((a, b) => b.s - a.s);
+
+            if (pairs[0] && pairs[0].s >= 3) tipo = pairs[0].t;
+
+            let etapaVinculada = '';
+            if (rx.contesta.test(src)) etapaVinculada = 'Contestación';
+            else if (/DEMANDA\b/.test(src) && tipo === 'Escrito') etapaVinculada = 'Demanda';
+
+            let cuaderno = 'Principal';
+            if (/RECONVENC/.test(src)) cuaderno = 'Reconvencional';
+            if (/INCIDENTAL|INCIDENTE/.test(src)) cuaderno = 'Incidental';
+
+            let folio = '';
+            const mFolio = src.match(/FOLIO\s*[:#-]?\s*(\d{1,6})/);
+            if (mFolio && mFolio[1]) folio = mFolio[1];
+
+            const plazo = dcDocsExtractPlazo(src);
+
+            return {
+                tipo,
+                cuaderno,
+                folio,
+                plazo,
+                etapaVinculada,
+                provider: 'heuristica',
+                confidence: (tipo === 'Otro') ? 0.35 : 0.72,
+                deepAnalysisReady: true
+            };
+        }
+
+        function dcDocsExtractPlazo(src) {
+            const s = String(src || '');
+
+            const mNumeroDias = s.match(/DENTRO\s+DE\s+(\d{1,2})\s+D[IÍ]A(S)?/);
+            if (mNumeroDias && mNumeroDias[1]) return { dias: parseInt(mNumeroDias[1], 10) || 0, raw: mNumeroDias[0] };
+
+            const mDiasSimples = s.match(/(\d{1,2})\s+D[IÍ]A(S)?\s+(H[ÁA]BIL(ES)?|CORRIDO(S)?)/);
+            if (mDiasSimples && mDiasSimples[1]) return { dias: parseInt(mDiasSimples[1], 10) || 0, raw: mDiasSimples[0] };
+
+            if (/QUINTO\s+D[IÍ]A/.test(s)) return { dias: 5, raw: 'QUINTO DÍA' };
+            if (/TERCER\s+D[IÍ]A/.test(s)) return { dias: 3, raw: 'TERCER DÍA' };
+            if (/FATAL/.test(s)) return { dias: 3, raw: 'FATAL' };
+
+            return { dias: 0, raw: null };
+        }
+
+        function dcDocsApplySuggestions(causaId, analysis) {
+            const tipoEl = document.getElementById(`dc-doc-tipo-${causaId}`);
+            const cuaEl = document.getElementById(`dc-doc-cuaderno-${causaId}`);
+            const folEl = document.getElementById(`dc-doc-folio-${causaId}`);
+            const chk = document.getElementById(`dc-doc-gplazo-${causaId}`);
+            const diasEl = document.getElementById(`dc-doc-dias-${causaId}`);
+            const vencEl = document.getElementById(`dc-doc-venc-${causaId}`);
+            const descEl = document.getElementById(`dc-doc-desc-${causaId}`);
+
+            if (tipoEl && analysis?.tipo) tipoEl.value = analysis.tipo;
+            if (cuaEl && analysis?.cuaderno) cuaEl.value = analysis.cuaderno;
+            if (folEl && analysis?.folio) folEl.value = analysis.folio;
+
+            const dias = Number(analysis?.plazo?.dias || 0);
+            if (chk) chk.checked = dias > 0;
+            if (diasEl) diasEl.value = dias > 0 ? String(dias) : '';
+
+            const fechaDoc = document.getElementById(`dc-doc-fecha-${causaId}`)?.value;
+            if (vencEl && fechaDoc && dias > 0) {
+                const base = new Date(`${fechaDoc}T12:00:00`);
+                base.setDate(base.getDate() + dias);
+                vencEl.value = base.toISOString().slice(0, 10);
+            }
+
+            if (descEl && analysis?.etapaVinculada) {
+                const existing = String(descEl.value || '').trim();
+                if (!existing) descEl.value = `Etapa sugerida: ${analysis.etapaVinculada}`;
+            }
+        }
+
+        function dcDocsClearForm(causaId) {
+            const form = document.getElementById(`dc-doc-form-${causaId}`);
+            const fileInp = document.getElementById(`dc-doc-file-${causaId}`);
+            const status = document.getElementById(`dc-doc-status-${causaId}`);
+            if (fileInp) fileInp.value = '';
+            if (form) form.style.display = 'none';
+            if (status) status.style.display = 'none';
+            _dcDocsUploadState.files[causaId] = null;
+            _dcDocsUploadState.extractedText[causaId] = '';
+            _dcDocsUploadState.analysis[causaId] = null;
+        }
+
+        function _dcDocsFileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                try {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        const res = String(reader.result || '');
+                        const b64 = res.includes(',') ? (res.split(',')[1] || '') : res;
+                        resolve(b64);
+                    };
+                    reader.onerror = () => reject(new Error('No se pudo leer el archivo.'));
+                    reader.readAsDataURL(file);
+                } catch (e) {
+                    reject(e);
+                }
+            });
+        }
+
+        async function dcDocsGuardarDocumento(causaId) {
+            const causa = _dcFindCausaById(causaId);
+            if (!causa) return;
+
+            const file = _dcDocsUploadState.files[causaId];
+            if (!file) {
+                dcDocsSetStatus(causaId, 'error', 'Primero sube un archivo.');
+                return;
+            }
+
+            const fecha = (document.getElementById(`dc-doc-fecha-${causaId}`)?.value || '').trim();
+            const tipo = (document.getElementById(`dc-doc-tipo-${causaId}`)?.value || 'Documento').trim();
+            const cuaderno = (document.getElementById(`dc-doc-cuaderno-${causaId}`)?.value || 'Principal').trim();
+            const folio = (document.getElementById(`dc-doc-folio-${causaId}`)?.value || '').trim() || '—';
+            const desc = (document.getElementById(`dc-doc-desc-${causaId}`)?.value || '').trim();
+            const generaPlazo = !!document.getElementById(`dc-doc-gplazo-${causaId}`)?.checked;
+            const diasPlazo = parseInt(document.getElementById(`dc-doc-dias-${causaId}`)?.value || '0', 10) || 0;
+            const fechaVenc = (document.getElementById(`dc-doc-venc-${causaId}`)?.value || '').trim();
+
+            if (!fecha) {
+                dcDocsSetStatus(causaId, 'error', 'Ingresa la fecha del documento.');
+                return;
+            }
+
+            dcDocsSetStatus(causaId, 'loading', 'Guardando documento...');
+
+            let base64 = null;
+            try {
+                base64 = await _dcDocsFileToBase64(file);
+            } catch (_) {
+                base64 = null;
+            }
+
+            const analysis = _dcDocsUploadState.analysis[causaId] || null;
+            const etapaSug = (analysis && analysis.etapaVinculada) ? String(analysis.etapaVinculada) : '';
+            const extractedText = String(_dcDocsUploadState.extractedText[causaId] || '');
+
+            const doc = {
+                id: generarID(),
+                nombreOriginal: String(file.name || 'Documento'),
+                nombre: String(file.name || 'Documento'),
+                tipo,
+                etapaVinculada: etapaSug,
+                fechaDocumento: fecha,
+                cuaderno,
+                folio,
+                descripcion: desc,
+                generaPlazo: generaPlazo && diasPlazo > 0 && !!fechaVenc,
+                diasPlazo: diasPlazo,
+                fechaVencimiento: (generaPlazo && diasPlazo > 0 && fechaVenc) ? fechaVenc : null,
+                archivoMime: String(file.type || ''),
+                archivoNombre: String(file.name || ''),
+                archivoBase64: base64
+            };
+
+            try {
+                if (!_dcEsTramiteAdmin(causa)) {
+                    const propuesta = dcDocsExtraerPropuestaPartesDesdeTexto({
+                        filename: String(file.name || ''),
+                        text: extractedText,
+                        tipo: tipo,
+                        etapa: etapaSug
+                    });
+                    if (propuesta && typeof propuesta === 'object') {
+                        if (!causa.iaSugerencias || typeof causa.iaSugerencias !== 'object') causa.iaSugerencias = {};
+                        causa.iaSugerencias.ultimaFuente = String(file.name || '') || null;
+                        causa.iaSugerencias.ultimoAnalisis = new Date().toISOString();
+                        causa.iaSugerencias.extraer = propuesta;
+                    }
+                }
+            } catch (_) {}
+
+            if (!Array.isArray(causa.docsTribunal)) causa.docsTribunal = [];
+            if (!Array.isArray(causa.docsTramites)) causa.docsTramites = [];
+            const destCampo = _dcEsTramiteAdmin(causa) ? 'docsTramites' : 'docsTribunal';
+            causa[destCampo].push(doc);
+
+            if (!Array.isArray(causa.movimientos)) causa.movimientos = [];
+            const movLabel = doc.etapaVinculada ? `${tipo} (${doc.etapaVinculada})` : tipo;
+            causa.movimientos.push({
+                id: generarID(),
+                nombre: `${movLabel}: ${String(file.name || 'Documento')}`,
+                tipo,
+                fecha: fecha,
+                cuaderno: cuaderno || 'Principal',
+                etapa: '',
+                folio: folio || '—',
+                docId: doc.id
+            });
+
+            causa.fechaUltimaActividad = new Date().toISOString();
+            _dcSyncLegacyDocumentos(causa);
+            if (typeof markAppDirty === 'function') markAppDirty();
+            _dcGuardar();
+
+            if (doc.generaPlazo && doc.fechaVencimiento && typeof crearAlerta === 'function') {
+                try {
+                    crearAlerta({
+                        causaId,
+                        tipo: 'plazo',
+                        mensaje: `Plazo de ${doc.diasPlazo} días: "${doc.nombreOriginal}" — ${causa.caratula}`,
+                        prioridad: 'alta',
+                        fechaObjetivo: doc.fechaVencimiento
+                    });
+                } catch (_) {}
+            }
+
+            dcDocsSetStatus(causaId, 'success', 'Documento guardado y vinculado al movimiento.');
+            dcDocsClearForm(causaId);
+            abrirDetalleCausa(causaId);
+            setTimeout(() => dcCambiarTab('movimientos', causaId), 50);
+        }
+
+        function dcDocsExtraerPropuestaPartesDesdeTexto(input) {
+            try {
+                const filename = String(input?.filename || '');
+                const raw = String(input?.text || '');
+                const src = `${filename}\n${raw}`.replace(/\r/g, '');
+                const up = src.toUpperCase();
+
+                const out = {
+                    tribunal: null,
+                    rolRit: null,
+                    juez: null,
+                    admisibilidad: null,
+                    partes: {
+                        demandante: null,
+                        demandado: null,
+                        abogadoDemandante: null,
+                        abogadoDemandado: null
+                    },
+                    rut: {
+                        demandante: null,
+                        demandado: null
+                    },
+                    domicilio: {
+                        demandante: null,
+                        demandado: null
+                    }
+                };
+
+                const _clean = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+                const _cap = (s, n) => {
+                    const v = _clean(s);
+                    return v.length > n ? v.slice(0, n) : v;
+                };
+                const _pickRut = (s) => {
+                    const m = String(s || '').match(/\b(\d{1,2}\.\d{3}\.\d{3}\-[0-9Kk]|\d{7,8}\-[0-9Kk])\b/);
+                    return m && m[1] ? _clean(m[1]) : null;
+                };
+                const _pickDom = (s) => {
+                    const m = String(s || '').match(/\bDOMICILIO\b\s*[:\-]?\s*([^\n]{10,180})/i)
+                        || String(s || '').match(/\bDOMICILIAD[OA]\b\s*(?:EN)?\s*([^,\n]{10,180})/i);
+                    return m && m[1] ? _cap(m[1], 160) : null;
+                };
+
+                const mTrib = src.match(/(\d{1,2}\s*(?:°|\b)\s*)?JUZGADO\s+[A-ZÁÉÍÓÚÑ ]{3,120}?\s+DE\s+[A-ZÁÉÍÓÚÑ ]{3,80}/i)
+                    || src.match(/CORTE\s+(?:SUPREMA|DE\s+APELACIONES)\s+DE\s+[A-ZÁÉÍÓÚÑ ]{3,80}/i);
+                if (mTrib && mTrib[0]) out.tribunal = _clean(mTrib[0]);
+
+                const mRol = src.match(/\b(RIT|ROL)\s*[:#-]?\s*([A-Z]{1,3}\-?\d{1,6}\-\d{4})\b/i)
+                    || src.match(/\b([A-Z]{1,3}\-?\d{1,6}\-\d{4})\b/);
+                if (mRol && (mRol[2] || mRol[1])) out.rolRit = _clean(mRol[2] || mRol[1]);
+
+                const mJuez = src.match(/JUEZ(?:A)?\s*(?:TITULAR)?\s*[:\-]?\s*([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s\.]{6,80})/i)
+                    || src.match(/MINISTRO\s*[:\-]?\s*([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s\.]{6,80})/i);
+                if (mJuez && mJuez[1]) out.juez = _clean(mJuez[1]);
+
+                if (/NO\s+HA\s+LUGAR|NO\s+SE\s+DA\s+CURSO|NO\s+ADMITE/.test(up)) out.admisibilidad = 'No admite';
+                else if (/SUBSANE|SUBSANAR|ACOMPA\u00d1E/.test(up)) out.admisibilidad = 'Subsanar';
+                else if (/ADM\b|SE\s+ADMITE|ADMIT[EI]DA|T\u00c9NGASE\s+POR\s+INTERPUESTA|PROVE[ER]SE/.test(up) && /DEMANDA/.test(up)) out.admisibilidad = 'Admite';
+
+                const rxDem = /(DEMANDANTE|DEMANDANTES)\s*[:\-]\s*(.+)/i;
+                const rxDed = /(DEMANDADO|DEMANDADOS)\s*[:\-]\s*(.+)/i;
+                const mDem = src.match(rxDem);
+                const mDed = src.match(rxDed);
+                if (mDem && mDem[2]) out.partes.demandante = _cap(mDem[2], 140);
+                if (mDed && mDed[2]) out.partes.demandado = _cap(mDed[2], 140);
+
+                const mBloque = src.match(/\bMATERIA\b[\s\S]{0,1200}?\bDEMANDANTE\b[\s\S]{0,800}?\bDEMANDAD[AO]\b[\s\S]{0,800}?(?=\n\s*EN\s+LO\s+PRINCIPAL|\n\s*S\.J\.L\.|\n\s*S\.S\.|$)/i);
+                if (mBloque && mBloque[0]) {
+                    const bloque = mBloque[0];
+                    const dm = bloque.match(/\bDEMANDANTE\b\s*[:\-]?\s*([^\n]{3,160})/i);
+                    const dd = bloque.match(/\bDEMANDAD[AO]\b\s*[:\-]?\s*([^\n]{3,160})/i);
+                    if (!out.partes.demandante && dm && dm[1]) out.partes.demandante = _cap(dm[1], 140);
+                    if (!out.partes.demandado && dd && dd[1]) out.partes.demandado = _cap(dd[1], 140);
+
+                    const rutDte = bloque.match(/\bDEMANDANTE\b[\s\S]{0,120}?\bRUT\b\s*[:\-]?\s*([^\n]{3,30})/i);
+                    const rutDdo = bloque.match(/\bDEMANDAD[AO]\b[\s\S]{0,120}?\bRUT\b\s*[:\-]?\s*([^\n]{3,30})/i);
+                    if (!out.rut.demandante && rutDte && rutDte[1]) out.rut.demandante = _pickRut(rutDte[1]);
+                    if (!out.rut.demandado && rutDdo && rutDdo[1]) out.rut.demandado = _pickRut(rutDdo[1]);
+
+                    const domDte = bloque.match(/\bDEMANDANTE\b[\s\S]{0,200}?\bDOMICILIO\b\s*[:\-]?\s*([^\n]{10,180})/i);
+                    const domDdo = bloque.match(/\bDEMANDAD[AO]\b[\s\S]{0,200}?\bDOMICILIO\b\s*[:\-]?\s*([^\n]{10,180})/i);
+                    if (!out.domicilio.demandante && domDte && domDte[1]) out.domicilio.demandante = _cap(domDte[1], 160);
+                    if (!out.domicilio.demandado && domDdo && domDdo[1]) out.domicilio.demandado = _cap(domDdo[1], 160);
+                }
+
+                if (!out.partes.demandante) {
+                    const m = src.match(/COMPARECE\s*[:\-]?\s*([^\n]{10,160})/i);
+                    if (m && m[1]) out.partes.demandante = _clean(m[1]).slice(0, 120);
+                }
+
+                if (!out.partes.demandado) {
+                    const m = src.match(/\bEN\s+CONTRA\s+DE\s+([^,\n]{6,160})/i);
+                    if (m && m[1]) out.partes.demandado = _cap(m[1], 140);
+                }
+
+                if (!out.partes.demandante) {
+                    const m = src.match(/\b([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s]{10,120}),\s*c[ée]dula\s+(?:de\s+identidad|nacional\s+de\s+identidad)/i);
+                    if (m && m[1]) out.partes.demandante = _cap(m[1], 140);
+                }
+
+                if (!out.rut.demandante && out.partes.demandante) {
+                    const idx = up.indexOf(String(out.partes.demandante).toUpperCase());
+                    if (idx >= 0) {
+                        const frag = src.slice(idx, idx + 300);
+                        out.rut.demandante = _pickRut(frag) || out.rut.demandante;
+                        out.domicilio.demandante = _pickDom(frag) || out.domicilio.demandante;
+                    }
+                }
+                if (!out.rut.demandado && out.partes.demandado) {
+                    const idx = up.indexOf(String(out.partes.demandado).toUpperCase());
+                    if (idx >= 0) {
+                        const frag = src.slice(idx, idx + 300);
+                        out.rut.demandado = _pickRut(frag) || out.rut.demandado;
+                        out.domicilio.demandado = _pickDom(frag) || out.domicilio.demandado;
+                    }
+                }
+
+                const rutRx = /\b(\d{1,2}\.\d{3}\.\d{3}\-[0-9Kk]|\d{7,8}\-[0-9Kk])\b/g;
+                const ruts = Array.from(src.matchAll(rutRx)).map(x => _clean(x[1]));
+                if (!out.rut.demandante && ruts.length >= 1 && out.partes.demandante) out.rut.demandante = ruts[0];
+                if (!out.rut.demandado && ruts.length >= 2) out.rut.demandado = ruts[1];
+
+                const domRx = /(DOMICILIO|DOMICILIADO|DOMICILIADA|DOMICILIO\s+EN)\s*[:\-]?\s*([^\n]{10,160})/ig;
+                const doms = Array.from(src.matchAll(domRx)).map(m => _clean(m[2]));
+                if (!out.domicilio.demandante && doms.length >= 1 && out.partes.demandante) out.domicilio.demandante = _cap(doms[0], 160);
+                if (!out.domicilio.demandado && doms.length >= 2) out.domicilio.demandado = _cap(doms[1], 160);
+
+                const meaningful = !!(out.tribunal || out.rolRit || out.juez || out.partes.demandante || out.partes.demandado || out.admisibilidad);
+                if (!meaningful) return null;
+
+                return {
+                    tribunal: out.tribunal,
+                    rolRit: out.rolRit,
+                    juez: out.juez,
+                    admisibilidad: out.admisibilidad,
+                    partes: {
+                        demandante: out.partes.demandante,
+                        demandado: out.partes.demandado,
+                        rutDemandante: out.rut.demandante,
+                        rutDemandado: out.rut.demandado,
+                        domicilioDemandante: out.domicilio.demandante,
+                        domicilioDemandado: out.domicilio.demandado
+                    }
+                };
+            } catch (_) {
+                return null;
+            }
         }
 
         function dcMovHtml(items, causaId) {
@@ -1622,8 +2363,18 @@ Texto documento (si existe): ${(texto || '').slice(0, 4500) || '[sin texto extra
             }
             if (!causa.partes.demandante) causa.partes.demandante = {};
             if (!causa.partes.demandado) causa.partes.demandado = {};
-            if (ext.partes?.demandante) causa.partes.demandante.nombre = String(ext.partes.demandante).trim();
-            if (ext.partes?.demandado) causa.partes.demandado.nombre = String(ext.partes.demandado).trim();
+            if (ext.partes?.demandante && !causa.partes.demandante.nombre) causa.partes.demandante.nombre = String(ext.partes.demandante).trim();
+            if (ext.partes?.demandado && !causa.partes.demandado.nombre) causa.partes.demandado.nombre = String(ext.partes.demandado).trim();
+
+            if (ext.partes?.rutDemandante && !causa.partes.demandante.rut) causa.partes.demandante.rut = String(ext.partes.rutDemandante).trim();
+            if (ext.partes?.rutDemandado && !causa.partes.demandado.rut) causa.partes.demandado.rut = String(ext.partes.rutDemandado).trim();
+            if (ext.partes?.domicilioDemandante && !causa.partes.demandante.domicilio) causa.partes.demandante.domicilio = String(ext.partes.domicilioDemandante).trim();
+            if (ext.partes?.domicilioDemandado && !causa.partes.demandado.domicilio) causa.partes.demandado.domicilio = String(ext.partes.domicilioDemandado).trim();
+
+            if (ext.juez) {
+                if (!causa.partes.juez) causa.partes.juez = {};
+                if (!causa.partes.juez.nombre) causa.partes.juez.nombre = String(ext.juez).trim();
+            }
 
             causa.iaSugerencias.aplicadasEn = new Date().toISOString();
             causa.fechaUltimaActividad = new Date().toISOString();
