@@ -48,8 +48,8 @@ function renderConfigEstudio() {
                     </div>
                 </div>
                 <div style="display:flex; gap:10px; align-items:center; margin-top:14px; flex-wrap:wrap;">
-                    <button class="btn btn-p" onclick="estudioGuardarConfig()"><i class="fas fa-save"></i> Guardar</button>
-                    <button class="btn" onclick="estudioLimpiarLogo()"><i class="fas fa-image"></i> Quitar Logo</button>
+                    <button class="btn btn-p" data-action="estudio-guardar-config"><i class="fas fa-save"></i> Guardar</button>
+                    <button class="btn" data-action="estudio-limpiar-logo"><i class="fas fa-image"></i> Quitar Logo</button>
                     <small style="color:var(--text-3);">Estos datos se usan en contratos y PDFs.</small>
                 </div>
             </div>
@@ -59,7 +59,7 @@ function renderConfigEstudio() {
                 <div style="margin-bottom:10px;">
                     <label style="font-size:0.8rem; color:var(--text-3); font-weight:600;">Logo (se inserta en el encabezado)</label>
                     <div style="display:flex; align-items:center; gap:10px; margin-top:8px;">
-                        <input id="estudio-logo" type="file" accept="image/*" onchange="estudioCargarLogo(this)" />
+                        <input id="estudio-logo" type="file" accept="image/*" data-action="estudio-cargar-logo" />
                     </div>
                     <div id="estudio-logo-preview" style="margin-top:10px;">
                         ${cfg.logoBase64 ? `<img src="${esc(cfg.logoBase64)}" style="max-width:100%; max-height:130px; border:1px solid var(--border); border-radius:8px; padding:8px; background:var(--bg);" />` : `<div style="color:var(--text-3); font-size:0.8rem;">Sin logo cargado.</div>`}
@@ -70,10 +70,10 @@ function renderConfigEstudio() {
                     <label style="font-size:0.8rem; color:var(--text-3); font-weight:600;">Carpeta por defecto para PDFs</label>
                     <div style="display:flex; gap:10px; align-items:center; margin-top:8px;">
                         <input id="pdf-output-dir" value="${esc(pdfDir)}" placeholder="(sin configurar)" style="flex:1;" readonly>
-                        <button class="btn" onclick="pdfElegirCarpetaSalida()"><i class="fas fa-folder-open"></i> Elegir</button>
+                        <button class="btn" data-action="pdf-elegir-carpeta-salida"><i class="fas fa-folder-open"></i> Elegir</button>
                     </div>
                     <label style="display:flex; gap:8px; align-items:center; margin-top:10px; font-size:0.82rem; color:var(--text-2); cursor:pointer;">
-                        <input id="pdf-ask-saveas" type="checkbox" ${askSaveAs ? 'checked' : ''} onchange="pdfTogglePreguntarGuardarComo(this.checked)">
+                        <input id="pdf-ask-saveas" type="checkbox" ${askSaveAs ? 'checked' : ''} data-action="pdf-toggle-preguntar-guardar-como">
                         Preguntar “Guardar como…” al generar PDFs
                     </label>
                     <small style="display:block; margin-top:6px; color:var(--text-3); font-size:0.75rem;">

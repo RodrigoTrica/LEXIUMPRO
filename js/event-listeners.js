@@ -71,90 +71,556 @@
     }
 
     function _bindGlobalModals() {
-        document.addEventListener('click', (ev) => {
-            const el = ev.target;
-            const overlayWa = _closest(el, '[data-action="close-modal-overlay-wa"]');
-            if (overlayWa) {
-                if (ev.target === overlayWa) {
-                    if (typeof window.cerrarModalWA === 'function') window.cerrarModalWA();
-                }
-                return;
-            }
+        document.addEventListener('click', async (e) => {
+            try {
+                const t = e.target;
 
-            const overlay = _closest(el, '[data-action="close-modal-overlay"]');
-            if (overlay) {
-                if (ev.target === overlay) {
-                    const modalId = overlay.getAttribute('data-modal-id');
+                const waToggle = _closest(t, '[data-action="wa-toggle"]');
+                if (waToggle) {
+                    if (typeof window.waToggle === 'function') window.waToggle();
+                    return;
+                }
+
+                const waReset = _closest(t, '[data-action="wa-reset"]');
+                if (waReset) {
+                    if (typeof window.waReset === 'function') window.waReset();
+                    return;
+                }
+
+                const dashGoAlertas = _closest(t, '[data-action="dash-go-alertas"]');
+                if (dashGoAlertas) {
+                    if (typeof window.tab === 'function') window.tab('calendario');
+                    setTimeout(() => {
+                        const cont = document.getElementById('calendarioEventos') || document.getElementById('calendarioMes');
+                        if (cont && typeof cont.scrollIntoView === 'function') {
+                            cont.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
+                    }, 120);
+                    return;
+                }
+
+                const overlayWa = _closest(t, '[data-action="close-modal-overlay-wa"]');
+                if (overlayWa) {
+                    if (t === overlayWa) {
+                        if (typeof window.cerrarModalWA === 'function') window.cerrarModalWA();
+                        return;
+                    }
+                }
+
+                const alertMonitorAction = _closest(t, '[data-action^="alertas-"]');
+                if (alertMonitorAction) {
+                    const action = alertMonitorAction.getAttribute('data-action');
+                    if (action === 'alertas-set-filtro' || action === 'alertas-set-orden') {
+                        // Estos <select> se manejan por 'change' (no por 'click') para evitar que el re-render cierre el dropdown.
+                        return;
+                    }
+                    if (action === 'alertas-limpiar-auto') {
+                        try {
+                            const r = window.cleanupAlertasPlantillaAntiguas && window.cleanupAlertasPlantillaAntiguas({ strictSameDay: true });
+                            if (r && r.ok) {
+                                if (typeof window.showSuccess === 'function') window.showSuccess('Alertas auto eliminadas: ' + (r.borradas || 0));
+                            } else {
+                                if (typeof window.showInfo === 'function') window.showInfo('No fue posible ejecutar la limpieza.');
+                            }
+                        } catch (_) {
+                            if (typeof window.showError === 'function') window.showError('No se pudo limpiar alertas auto.');
+                        }
+                        try {
+                            if (typeof window.renderAlerts === 'function') window.renderAlerts();
+                        } catch (_) {}
+                        return;
+                    }
+
+                    if (action === 'alertas-archivar') {
+                        const alertaId = alertMonitorAction.getAttribute('data-alerta-id');
+                        if (alertaId && typeof window.archivarAlerta === 'function') {
+                            try {
+                                window.archivarAlerta(alertaId);
+                            } catch (_) {}
+                            try {
+                                if (typeof window.renderAlerts === 'function') window.renderAlerts();
+                            } catch (_) {}
+                        }
+                        return;
+                    }
+
+                    if (action === 'alertas-open') {
+                        const alertaId = alertMonitorAction.getAttribute('data-alerta-id');
+                        if (!alertaId) return;
+                        let dbRef = null;
+                        try {
+                            if (window.DB) dbRef = window.DB;
+                            else if (typeof DB !== 'undefined') dbRef = DB;
+                        } catch (_) { dbRef = null; }
+
+                        const a = (dbRef?.alertas || []).find(x => String(x?.id) === String(alertaId));
+                        if (!a) {
+                            if (typeof window.tab === 'function') window.tab('calendario');
+                            return;
+                        }
+
+                        const tipo = String(a.tipo || '').toLowerCase();
+                        const msg = String(a.mensaje || '').toLowerCase();
+                        const causaId = a.causaId;
+
+                        // 1) Causa -> detalle
+                        if (causaId !== null && causaId !== undefined && String(causaId).trim() !== '') {
+                            if (typeof window.tab === 'function') window.tab('detalle-causa');
+                            setTimeout(() => {
+                                if (typeof window.abrirDetalleCausa === 'function') window.abrirDetalleCausa(String(causaId));
+                            }, 80);
+                            return;
+                        }
+
+                        // 2) Financiero
+                        if (tipo === 'honorario' || tipo === 'economica' || msg.includes('cuota') || msg.includes('honorario')) {
+                            if (typeof window.tab === 'function') window.tab('honorarios');
+                            return;
+                        }
+
+                        // 3) Negocios/Propuestas
+                        if (tipo === 'vencimiento' && (msg.includes('propuesta') || msg.includes('prospecto'))) {
+                            if (typeof window.tab === 'function') window.tab('prospectos');
+                            return;
+                        }
+
+                        // 4) Trámites
+                        if (tipo === 'plazo' && (msg.includes('trámite') || msg.includes('tramite'))) {
+                            if (typeof window.tab === 'function') window.tab('tramites');
+                            return;
+                        }
+
+                        // 5) Fallback
+                        if (typeof window.tab === 'function') window.tab('calendario');
+                        return;
+                    }
+                }
+
+                const overlay = _closest(t, '[data-action="close-modal-overlay"]');
+                if (overlay) {
+                    if (t === overlay) {
+                        const modalId = overlay.getAttribute('data-modal-id');
+                        if (modalId && typeof window.cerrarModal === 'function') window.cerrarModal(modalId);
+                        return;
+                    }
+                }
+
+                const closeWa = _closest(t, '[data-action="close-modal-wa"]');
+                if (closeWa) {
+                    if (typeof window.cerrarModalWA === 'function') window.cerrarModalWA();
+                    return;
+                }
+
+                const waConfirm = _closest(t, '[data-action="wa-confirmar-sesion"]');
+                if (waConfirm) {
+                    if (typeof window.waConfirmarSesion === 'function') window.waConfirmarSesion();
+                    return;
+                }
+
+                const waActionEl = _closest(t, '[data-action^="wa-"]');
+                if (waActionEl) {
+                    const action = waActionEl.getAttribute('data-action');
+
+                    if (action === 'wa-enviar-resumen') {
+                        if (typeof window.waEnviarResumen === 'function') window.waEnviarResumen();
+                        return;
+                    }
+                    if (action === 'wa-revisar-cobros') {
+                        if (typeof window.waRevisarCobrosAhora === 'function') window.waRevisarCobrosAhora();
+                        return;
+                    }
+
+                    if (action === 'wa-guardar-principal') {
+                        if (typeof window.waGuardarPrincipal === 'function') window.waGuardarPrincipal();
+                        return;
+                    }
+                    if (action === 'wa-cancelar-principal') {
+                        if (typeof window.waCancelarEdicionPrincipal === 'function') window.waCancelarEdicionPrincipal();
+                        return;
+                    }
+                    if (action === 'wa-limpiar-destinos') {
+                        if (typeof window.waLimpiarDestino === 'function') window.waLimpiarDestino();
+                        return;
+                    }
+                    if (action === 'wa-guardar-dest') {
+                        if (typeof window.waGuardarDestino === 'function') window.waGuardarDestino();
+                        return;
+                    }
+                    if (action === 'wa-cancelar-dest') {
+                        if (typeof window.waCancelarEdicionDestinatario === 'function') window.waCancelarEdicionDestinatario();
+                        return;
+                    }
+
+                    if (action === 'wa-templates-restaurar') {
+                        if (typeof window.waTemplatesRestaurarDefaults === 'function') window.waTemplatesRestaurarDefaults();
+                        return;
+                    }
+                    if (action === 'wa-templates-guardar') {
+                        if (typeof window.waTemplatesGuardar === 'function') window.waTemplatesGuardar();
+                        return;
+                    }
+                    if (action === 'wa-tpl-insert-var') {
+                        const varName = waActionEl.getAttribute('data-var');
+                        if (typeof window.waTplInsertVar === 'function') window.waTplInsertVar(varName);
+                        return;
+                    }
+                    if (action === 'wa-brand-guardar') {
+                        if (typeof window.waBrandingGuardar === 'function') window.waBrandingGuardar();
+                        return;
+                    }
+                    if (action === 'wa-brand-clear-logo') {
+                        if (typeof window.waBrandingClearLogo === 'function') window.waBrandingClearLogo();
+                        return;
+                    }
+
+                    if (action === 'wa-limpiar-logs') {
+                        if (typeof window.waLimpiarLogs === 'function') window.waLimpiarLogs();
+                        return;
+                    }
+
+                    if (action === 'wa-chat-enviar') {
+                        if (typeof window.waChatEnviar === 'function') window.waChatEnviar();
+                        return;
+                    }
+                    if (action === 'wa-chat-abrir') {
+                        const chatId = waActionEl.getAttribute('data-chat-id');
+                        if (typeof window.waChatAbrir === 'function') window.waChatAbrir(chatId);
+                        return;
+                    }
+
+                    if (action === 'wa-templates-select') {
+                        const key = waActionEl.getAttribute('data-wa-tpl');
+                        if (typeof window.waTemplatesSelect === 'function') window.waTemplatesSelect(key);
+                        return;
+                    }
+
+                    if (action === 'wa-principal-edit') {
+                        const numero = waActionEl.getAttribute('data-num');
+                        if (typeof window.waEditarPrincipal === 'function') window.waEditarPrincipal(numero);
+                        return;
+                    }
+                    if (action === 'wa-principal-delete') {
+                        const numero = waActionEl.getAttribute('data-num');
+                        if (typeof window.waEliminarPrincipal === 'function') window.waEliminarPrincipal(numero);
+                        return;
+                    }
+
+                    if (action === 'wa-dest-edit') {
+                        const numero = waActionEl.getAttribute('data-num');
+                        if (typeof window.waEditarDestinatario === 'function') window.waEditarDestinatario(numero);
+                        return;
+                    }
+                    if (action === 'wa-dest-delete') {
+                        const numero = waActionEl.getAttribute('data-num');
+                        if (typeof window.waEliminarDestinatario === 'function') window.waEliminarDestinatario(numero);
+                        return;
+                    }
+                }
+
+                const closeBtn = _closest(t, '[data-action="close-modal"]');
+                if (closeBtn) {
+                    const modalId = closeBtn.getAttribute('data-modal-id');
                     if (modalId && typeof window.cerrarModal === 'function') window.cerrarModal(modalId);
                 }
-                return;
-            }
 
-            const closeWa = _closest(el, '[data-action="close-modal-wa"]');
-            if (closeWa) {
-                if (typeof window.cerrarModalWA === 'function') window.cerrarModalWA();
-                return;
-            }
+                const bibGuardar = _closest(t, '[data-action="bib-guardar"]');
+                if (bibGuardar) {
+                    if (typeof window.bibGuardarDocumento === 'function') window.bibGuardarDocumento();
+                    return;
+                }
 
-            const waConfirm = _closest(el, '[data-action="wa-confirmar-sesion"]');
-            if (waConfirm) {
-                if (typeof window.waConfirmarSesion === 'function') window.waConfirmarSesion();
-                return;
-            }
+                const migConfirm = _closest(t, '[data-action="mig-confirm"]');
+                if (migConfirm) {
+                    if (typeof window.migConfirmar === 'function') window.migConfirmar();
+                    return;
+                }
+                const migCancel = _closest(t, '[data-action="mig-cancel"]');
+                if (migCancel) {
+                    if (typeof window.migCancelar === 'function') window.migCancelar();
+                    return;
+                }
 
-            const closeBtn = _closest(el, '[data-action="close-modal"]');
-            if (closeBtn) {
-                const modalId = closeBtn.getAttribute('data-modal-id');
-                if (modalId && typeof window.cerrarModal === 'function') window.cerrarModal(modalId);
-            }
+                const backupManual = _closest(t, '[data-action="backup-crear-manual"]');
+                if (backupManual) {
+                    try {
+                        if (window.AutoBackup && typeof window.AutoBackup.crearSnapshot === 'function') {
+                            window.AutoBackup.crearSnapshot('manual');
+                        }
+                        if (typeof window.abrirHistorialBackups === 'function') window.abrirHistorialBackups();
+                    } catch (_) { }
+                    return;
+                }
 
-            const bibGuardar = _closest(el, '[data-action="bib-guardar"]');
-            if (bibGuardar) {
-                if (typeof window.bibGuardarDocumento === 'function') window.bibGuardarDocumento();
-                return;
-            }
+                const adjAbrir = _closest(t, '[data-action="adjuntos-abrir"]');
+                if (adjAbrir) {
+                    try {
+                        const causaId = document.getElementById('adjunto-causa-id')?.value;
+                        if (typeof window.adjuntosAbrir === 'function') window.adjuntosAbrir(causaId);
+                    } catch (_) { }
+                    return;
+                }
 
-            const migConfirm = _closest(el, '[data-action="mig-confirm"]');
-            if (migConfirm) {
-                if (typeof window.migConfirmar === 'function') window.migConfirmar();
-                return;
-            }
-            const migCancel = _closest(el, '[data-action="mig-cancel"]');
-            if (migCancel) {
-                if (typeof window.migCancelar === 'function') window.migCancelar();
-                return;
-            }
+                const iaAction = _closest(t, '[data-action^="ia-"]');
+                if (iaAction) {
+                    const action = iaAction.getAttribute('data-action');
 
-            const backupManual = _closest(el, '[data-action="backup-crear-manual"]');
-            if (backupManual) {
-                try {
-                    if (window.AutoBackup && typeof window.AutoBackup.crearSnapshot === 'function') {
-                        window.AutoBackup.crearSnapshot('manual');
+                    if (action === 'ia-key-toggle') {
+                        const pid = iaAction.getAttribute('data-provider');
+                        if (typeof window._iaToggleVerKey === 'function') window._iaToggleVerKey(pid);
+                        return;
                     }
-                    if (typeof window.abrirHistorialBackups === 'function') window.abrirHistorialBackups();
-                } catch (_) { }
-                return;
-            }
+                    if (action === 'ia-key-save') {
+                        const pid = iaAction.getAttribute('data-provider');
+                        if (typeof window._iaGuardarKeyUI === 'function') window._iaGuardarKeyUI(pid);
+                        return;
+                    }
+                    if (action === 'ia-key-test') {
+                        const pid = iaAction.getAttribute('data-provider');
+                        if (typeof window._iaTestKeyUI === 'function') window._iaTestKeyUI(pid);
+                        return;
+                    }
+                }
 
-            const adjAbrir = _closest(el, '[data-action="adjuntos-abrir"]');
-            if (adjAbrir) {
-                try {
-                    const causaId = document.getElementById('adjunto-causa-id')?.value;
-                    if (typeof window.adjuntosAbrir === 'function') window.adjuntosAbrir(causaId);
-                } catch (_) { }
-                return;
-            }
-        });
+                const estudioAction = _closest(t, '[data-action^="estudio-"]');
+                if (estudioAction) {
+                    const action = estudioAction.getAttribute('data-action');
+                    if (action === 'estudio-guardar-config') {
+                        if (typeof window.estudioGuardarConfig === 'function') window.estudioGuardarConfig();
+                        return;
+                    }
+                    if (action === 'estudio-limpiar-logo') {
+                        if (typeof window.estudioLimpiarLogo === 'function') window.estudioLimpiarLogo();
+                        return;
+                    }
+                }
+
+                const pdfAction = _closest(t, '[data-action^="pdf-"]');
+                if (pdfAction) {
+                    const action = pdfAction.getAttribute('data-action');
+                    if (action === 'pdf-elegir-carpeta-salida') {
+                        if (typeof window.pdfElegirCarpetaSalida === 'function') await window.pdfElegirCarpetaSalida();
+                        return;
+                    }
+                }
+
+                const calAction = _closest(t, '[data-action^="cal-"]');
+                if (calAction) {
+                    const action = calAction.getAttribute('data-action');
+                    if (action === 'cal-actualizar-alertas') {
+                        if (typeof window.actualizarSistema === 'function') window.actualizarSistema();
+                        else {
+                            if (typeof window.evaluarAlertas === 'function') window.evaluarAlertas();
+                            if (typeof window.renderCalendario === 'function') window.renderCalendario();
+                        }
+                        return;
+                    }
+                    if (action === 'cal-ver-causa') {
+                        const causaId = calAction.getAttribute('data-causa-id');
+                        if (causaId) {
+                            if (typeof window.tab === 'function') window.tab('detalle-causa');
+                            setTimeout(() => {
+                                if (typeof window.abrirDetalleCausa === 'function') window.abrirDetalleCausa(causaId);
+                            }, 80);
+                        }
+                        return;
+                    }
+                    if (action === 'cal-wa-alerta') {
+                        const alertaId = calAction.getAttribute('data-alerta-id');
+                        if (alertaId && typeof window.beEnviarAlertaWhatsApp === 'function') window.beEnviarAlertaWhatsApp(alertaId);
+                        return;
+                    }
+                    if (action === 'cal-cerrar-alerta') {
+                        const alertaId = calAction.getAttribute('data-alerta-id');
+                        if (alertaId && typeof window.beCerrarAlerta === 'function') window.beCerrarAlerta(alertaId);
+                        return;
+                    }
+                    if (action === 'cal-eliminar-alerta') {
+                        const alertaId = calAction.getAttribute('data-alerta-id');
+                        if (alertaId && typeof window.beEliminarAlerta === 'function') await window.beEliminarAlerta(alertaId);
+                        return;
+                    }
+                    if (action === 'cal-crear-alerta') {
+                        try {
+                            const causaId = (document.getElementById('cal-causa-sel')?.value || '').toString().trim();
+                            const tipo = (document.getElementById('cal-tipo')?.value || 'evento').toString().trim().toLowerCase();
+                            const mensaje = (document.getElementById('cal-msg')?.value || '').toString().trim();
+                            const fecha = (document.getElementById('cal-fecha')?.value || '').toString().trim();
+                            const prioridad = (document.getElementById('cal-prioridad')?.value || 'media').toString().trim().toLowerCase();
+
+                            if (!mensaje) {
+                                if (typeof window.showError === 'function') window.showError('Ingrese un mensaje para la alerta.');
+                                return;
+                            }
+                            if (!fecha) {
+                                if (typeof window.showError === 'function') window.showError('Seleccione una fecha objetivo.');
+                                return;
+                            }
+
+                            if (typeof window.crearAlerta === 'function') {
+                                window.crearAlerta({
+                                    causaId: causaId || null,
+                                    tipo,
+                                    mensaje,
+                                    fechaObjetivo: fecha,
+                                    prioridad,
+                                    origen: 'manual'
+                                });
+                                if (typeof window.renderCalendario === 'function') window.renderCalendario();
+                                if (typeof window.showSuccess === 'function') window.showSuccess('Alerta creada.');
+                                const msgEl = document.getElementById('cal-msg');
+                                if (msgEl) msgEl.value = '';
+                            } else {
+                                if (typeof window.showError === 'function') window.showError('No está disponible el motor de alertas.');
+                            }
+                        } catch (e) {
+                            console.warn('[CAL] Error creando alerta manual:', e);
+                            if (typeof window.showError === 'function') window.showError('No se pudo crear la alerta.');
+                        }
+                        return;
+                    }
+                    if (action === 'cal-export-ics') {
+                        if (typeof window.exportCalendarioICS === 'function') window.exportCalendarioICS();
+                        return;
+                    }
+                    if (action === 'cal-mes-prev') {
+                        if (typeof window.calendarioMesPrev === 'function') window.calendarioMesPrev();
+                        return;
+                    }
+                    if (action === 'cal-mes-next') {
+                        if (typeof window.calendarioMesNext === 'function') window.calendarioMesNext();
+                        return;
+                    }
+                }
+
+                const usersAction = _closest(t, '[data-action^="users-"]');
+                if (usersAction) {
+                    const action = usersAction.getAttribute('data-action');
+                    if (action === 'users-nuevo') {
+                        if (typeof window.uiCrearUsuario === 'function') window.uiCrearUsuario(null);
+                        return;
+                    }
+                    if (action === 'users-edit') {
+                        const userId = usersAction.getAttribute('data-user-id');
+                        if (typeof window.uiCrearUsuario === 'function') window.uiCrearUsuario(userId);
+                        return;
+                    }
+                    if (action === 'users-delete') {
+                        const userId = usersAction.getAttribute('data-user-id');
+                        if (typeof window.eliminarUsuario === 'function') window.eliminarUsuario(userId);
+                        return;
+                    }
+                    if (action === 'users-save') {
+                        if (typeof window.guardarUsuario === 'function') await window.guardarUsuario();
+                        return;
+                    }
+                    if (action === 'users-cancel') {
+                        const modalId = usersAction.getAttribute('data-modal-id') || 'modal-nuevo-usuario';
+                        if (typeof window.cerrarModal === 'function') window.cerrarModal(modalId);
+                        return;
+                    }
+                    if (action === 'users-avatar-color') {
+                        if (typeof window.selectAvatarColor === 'function') window.selectAvatarColor(usersAction);
+                        return;
+                    }
+                    if (action === 'users-overrides-clear') {
+                        if (typeof window.uiLimpiarPermOverrides === 'function') window.uiLimpiarPermOverrides();
+                        return;
+                    }
+                }
+
+                const adminKeyAction = _closest(t, '[data-action^="admin-clave-temp-"]');
+                if (adminKeyAction) {
+                    const action = adminKeyAction.getAttribute('data-action');
+                    if (action === 'admin-clave-temp-generar') {
+                        if (typeof window.uiGenerarClaveTemporalAdmin === 'function') await window.uiGenerarClaveTemporalAdmin();
+                        return;
+                    }
+                    if (action === 'admin-clave-temp-revocar') {
+                        if (typeof window.uiRevocarClaveTemporalAdmin === 'function') window.uiRevocarClaveTemporalAdmin();
+                        return;
+                    }
+                }
+            } catch (_) { }
+        }, true);
     }
 
     function _bindGlobalInputs() {
-        const inp = document.getElementById('adjunto-file-input');
-        if (inp && !inp._cspBound) {
-            inp._cspBound = true;
-            inp.addEventListener('change', () => {
-                if (typeof window.adjuntosOnFileSelect === 'function') window.adjuntosOnFileSelect(inp);
+        const waTplText = document.getElementById('wa-tpl-texto');
+        if (waTplText && !waTplText._cspBound) {
+            waTplText._cspBound = true;
+            const run = () => { if (typeof window.waTemplatesOnChange === 'function') window.waTemplatesOnChange(); };
+            waTplText.addEventListener('input', run);
+            waTplText.addEventListener('change', run);
+        }
+
+        const waWeb = document.getElementById('wa-brand-weblink');
+        if (waWeb && !waWeb._cspBound) {
+            waWeb._cspBound = true;
+            const run = () => { if (typeof window.waBrandingOnWebInput === 'function') window.waBrandingOnWebInput(); };
+            waWeb.addEventListener('input', run);
+            waWeb.addEventListener('change', run);
+        }
+
+        const waLogo = document.getElementById('wa-brand-logo');
+        if (waLogo && !waLogo._cspBound) {
+            waLogo._cspBound = true;
+            waLogo.addEventListener('change', (ev) => {
+                if (typeof window.waBrandingOnLogoChange === 'function') window.waBrandingOnLogoChange(ev);
             });
         }
+
+        const waChatSearch = document.getElementById('wa-chat-search');
+        if (waChatSearch && !waChatSearch._cspBound) {
+            waChatSearch._cspBound = true;
+            const run = () => { if (typeof window.waChatFiltrarLista === 'function') window.waChatFiltrarLista(); };
+            waChatSearch.addEventListener('input', run);
+            waChatSearch.addEventListener('change', run);
+        }
+
+        document.addEventListener('change', (ev) => {
+            try {
+                const t = ev.target;
+                if (!t) return;
+                const action = (typeof t.getAttribute === 'function') ? t.getAttribute('data-action') : null;
+                if (!action) return;
+
+                if (action === 'alertas-set-filtro') {
+                    const val = String(t.value || 'todas');
+                    window._alertMonitorState = window._alertMonitorState || { filtro: 'todas', orden: 'prioridad' };
+                    window._alertMonitorState.filtro = val;
+                    try { if (typeof window.renderAlerts === 'function') window.renderAlerts(); } catch (_) {}
+                    return;
+                }
+                if (action === 'alertas-set-orden') {
+                    const val = String(t.value || 'prioridad');
+                    window._alertMonitorState = window._alertMonitorState || { filtro: 'todas', orden: 'prioridad' };
+                    window._alertMonitorState.orden = val;
+                    try { if (typeof window.renderAlerts === 'function') window.renderAlerts(); } catch (_) {}
+                    return;
+                }
+
+                if (action === 'estudio-cargar-logo') {
+                    if (typeof window.estudioCargarLogo === 'function') window.estudioCargarLogo(t);
+                    return;
+                }
+                if (action === 'pdf-toggle-preguntar-guardar-como') {
+                    if (typeof window.pdfTogglePreguntarGuardarComo === 'function') {
+                        window.pdfTogglePreguntarGuardarComo(!!t.checked);
+                    }
+                    return;
+                }
+
+                if (action === 'users-rol-change') {
+                    if (typeof window.uiUpdatePermisosPrev === 'function') window.uiUpdatePermisosPrev();
+                    return;
+                }
+
+                if (action === 'users-override-select') {
+                    if (typeof window.uiUpdatePermisosPrev === 'function') window.uiUpdatePermisosPrev();
+                    return;
+                }
+            } catch (_) { }
+        });
     }
 
     function _bindInteligenciaEstrategiaCalculadoras() {

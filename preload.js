@@ -183,6 +183,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
         }
     },
 
+    audit: {
+        exportPdf: (args) => {
+            assertObject(args, 'args');
+            assertStringOrEmpty(String(args.html || ''), 'html', 2 * 1024 * 1024);
+            if (args.defaultName !== undefined && args.defaultName !== null) {
+                assertStringOrEmpty(String(args.defaultName), 'defaultName', 200);
+            }
+            if (args.outputDir !== undefined && args.outputDir !== null) {
+                assertStringOrEmpty(String(args.outputDir), 'outputDir', 2000);
+            }
+            if (args.outputPath !== undefined && args.outputPath !== null) {
+                assertStringOrEmpty(String(args.outputPath), 'outputPath', 2000);
+            }
+            return ipcRenderer.invoke('audit:export-pdf', args);
+        }
+    },
+
     // ── CRM Prospectos ────────────────────────────────────────────────────────
     prospectos: {
         generarPDF: (args) => ipcRenderer.invoke('prospectos:generar-pdf', args),

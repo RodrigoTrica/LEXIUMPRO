@@ -235,7 +235,7 @@ function _waTemplatesRenderList() {
     el.innerHTML = WA_TPL_KEYS.map(x => {
         const active = x.key === _waTplSelectedKey;
         return `
-            <button data-wa-tpl="${x.key}" onclick="waTemplatesSelect('${x.key}')"
+            <button data-action="wa-templates-select" data-wa-tpl="${x.key}"
                 class="btn" style="text-align:left; justify-content:flex-start; background:transparent; border:1px solid ${active ? '#25D366' : 'var(--border)'}; padding:8px 10px;">
                 <div style="display:flex; flex-direction:column; gap:2px; width:100%;">
                     <div style="font-weight:700; font-size:12px;">${escHtml(x.label)}</div>
@@ -1076,12 +1076,12 @@ function _renderListaPrincipales() {
                     background:var(--bg-1);">
             <label style="display:flex; align-items:center; cursor:pointer; flex-shrink:0;" title="Auto (alertas automáticas)">
                 <input type="checkbox" ${a.autoEnvio !== false ? 'checked' : ''}
-                       onchange="waToggleAutoEnvioPrincipal('${_waNumeroLimpio(a.numero)}')"
+                       data-action="wa-principal-toggle-auto" data-num="${escHtml(_waNumeroLimpio(a.numero))}"
                        style="width:16px; height:16px; accent-color:#25d366; cursor:pointer;" />
             </label>
             <label style="display:flex; align-items:center; cursor:pointer; flex-shrink:0;" title="Manual (envíos por botones)">
                 <input type="checkbox" ${a.envioManual !== false ? 'checked' : ''}
-                       onchange="waToggleEnvioManualPrincipal('${_waNumeroLimpio(a.numero)}')"
+                       data-action="wa-principal-toggle-manual" data-num="${escHtml(_waNumeroLimpio(a.numero))}"
                        style="width:16px; height:16px; accent-color:#0ea5e9; cursor:pointer;" />
             </label>
             <div style="width:30px; height:30px; border-radius:50%; background:#0891b218;
@@ -1092,12 +1092,12 @@ function _renderListaPrincipales() {
                 <div style="font-weight:600; font-size:0.82rem;">${escHtml(a.nombre || '(Sin nombre)')}</div>
                 <div style="font-size:0.72rem; color:var(--text-3); font-family:monospace;">+${escHtml(_waNumeroLimpio(a.numero))}</div>
             </div>
-            <button onclick="waEditarPrincipal('${_waNumeroLimpio(a.numero)}')"
+            <button data-action="wa-principal-edit" data-num="${escHtml(_waNumeroLimpio(a.numero))}"
                     style="background:transparent; border:none; color:var(--text-2); cursor:pointer; padding:4px 6px; border-radius:4px; font-size:0.75rem;"
                     title="Editar">
                 <i class="fas fa-pen"></i>
             </button>
-            <button onclick="waEliminarPrincipal('${_waNumeroLimpio(a.numero)}')"
+            <button data-action="wa-principal-delete" data-num="${escHtml(_waNumeroLimpio(a.numero))}"
                     style="background:transparent; border:none; color:#dc2626; cursor:pointer; padding:4px 6px; border-radius:4px; font-size:0.75rem;"
                     title="Eliminar">
                 <i class="fas fa-times"></i>
@@ -1126,12 +1126,12 @@ function _renderListaDestinatarios() {
                     opacity:${d.autoEnvio ? '1' : '0.6'};">
             <label style="display:flex; align-items:center; cursor:pointer; flex-shrink:0;" title="Activar envío automático 8AM">
                 <input type="checkbox" ${d.autoEnvio ? 'checked' : ''}
-                       onchange="waToggleAutoEnvio('${d.numero}')"
+                       data-action="wa-dest-toggle-auto" data-num="${escHtml(_waNumeroLimpio(d.numero))}"
                        style="width:16px; height:16px; accent-color:#25d366; cursor:pointer;" />
             </label>
             <label style="display:flex; align-items:center; cursor:pointer; flex-shrink:0;" title="Recibir envíos manuales">
                 <input type="checkbox" ${d.envioManual !== false ? 'checked' : ''}
-                       onchange="waToggleEnvioManualDestinatario('${d.numero}')"
+                       data-action="wa-dest-toggle-manual" data-num="${escHtml(_waNumeroLimpio(d.numero))}"
                        style="width:16px; height:16px; accent-color:#0ea5e9; cursor:pointer;" />
             </label>
             <div style="width:30px; height:30px; border-radius:50%; background:#25d36618;
@@ -1146,12 +1146,12 @@ function _renderListaDestinatarios() {
                          background:${d.autoEnvio ? '#dcfce7' : '#f3f4f6'}; color:${d.autoEnvio ? '#166534' : '#6b7280'};">
                 ${d.autoEnvio ? '8AM ✓' : 'pausado'}
             </span>
-            <button onclick="waEditarDestinatario('${d.numero}')"
+            <button data-action="wa-dest-edit" data-num="${escHtml(_waNumeroLimpio(d.numero))}"
                     style="background:transparent; border:none; color:var(--text-2); cursor:pointer; padding:4px 6px; border-radius:4px; font-size:0.75rem;"
                     title="Editar">
                 <i class="fas fa-pen"></i>
             </button>
-            <button onclick="waEliminarDestinatario('${d.numero}')"
+            <button data-action="wa-dest-delete" data-num="${escHtml(_waNumeroLimpio(d.numero))}"
                     style="background:transparent; border:none; color:#dc2626; cursor:pointer; padding:4px 6px; border-radius:4px; font-size:0.75rem;"
                     title="Eliminar">
                 <i class="fas fa-times"></i>

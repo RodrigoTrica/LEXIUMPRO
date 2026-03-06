@@ -229,52 +229,99 @@
         },
 
         exportarPdf() {
-            // Para PDF: usar el print nativo con "Guardar como PDF".
-            // Renderizamos una tabla simple en una nueva ventana.
             const rows = this.obtenerFiltrados().slice(0, 1000);
+            const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+
+            const rango = _getEl('audit-rango')?.value || 'todo';
+            const tipo = _getEl('audit-tipo')?.value || 'todo';
+            const q = (_getEl('audit-q')?.value || '').trim();
+
             const html = `
                 <html><head><meta charset="utf-8"/>
                 <title>Auditoría y Reportes</title>
                 <style>
-                    body{font-family:Arial, sans-serif; font-size:12px; padding:18px;}
-                    h1{font-size:16px; margin:0 0 10px;}
+                    body{font-family:Arial, sans-serif; font-size:11px; padding:18px; color:#111;}
+                    h1{font-size:16px; margin:0 0 6px;}
+                    .meta{color:#555; font-size:11px; margin-bottom:12px;}
+                    .pill{display:inline-block; padding:2px 8px; border-radius:999px; background:#f1f5f9; border:1px solid #e2e8f0; margin-right:6px;}
                     table{width:100%; border-collapse:collapse;}
-                    th,td{border:1px solid #ddd; padding:6px; vertical-align:top;}
-                    th{background:#f5f5f5;}
-                    .muted{color:#666; font-size:11px;}
+                    th,td{border:1px solid #e5e7eb; padding:6px; vertical-align:top;}
+                    th{background:#f8fafc; font-size:10px; text-transform:uppercase; letter-spacing:.04em;}
+                    .ok{color:#166534; font-weight:700;}
+                    .err{color:#b91c1c; font-weight:700;}
+                    .mono{font-family:Consolas, Menlo, monospace;}
                 </style>
                 </head><body>
                 <h1>Auditoría y Reportes</h1>
-                <div class="muted">Generado: ${new Date().toLocaleString('es-CL')}</div>
+                <div class="meta">
+                    <div>Generado: ${new Date().toLocaleString('es-CL')}</div>
+                    <div style="margin-top:6px;">
+                        <span class="pill">Rango: ${_safeStr(rango)}</span>
+                        <span class="pill">Tipo: ${_safeStr(tipo)}</span>
+                        <span class="pill">Búsqueda: ${_safeStr(q || '—')}</span>
+                        <span class="pill">Eventos: ${rows.length}</span>
+                    </div>
+                </div>
                 <table>
                     <thead><tr>
-                        <th>Fecha/Hora</th><th>Usuario</th><th>Acción</th><th>Detalles</th><th>Ref ID</th>
+                        <th>Fecha/Hora</th>
+                        <th>Usuario</th>
+                        <th>Acción</th>
+                        <th>Estado</th>
+                        <th>Ref ID</th>
+                        <th>Detalles</th>
                     </tr></thead>
                     <tbody>
-                        ${rows.map(e => `
-                            <tr>
-                                <td>${_fmtFecha(e.ts)}</td>
-                                <td>${_safeStr(e.usuario || '—')}</td>
-                                <td>${_safeStr(e.accion || '—')}</td>
-                                <td>${_safeStr(_resumenDetalles(e))}</td>
-                                <td>${_safeStr(e.referenciaId || '—')}</td>
-                            </tr>
-                        `).join('')}
+                        ${rows.map(e => {
+                            const ok = (e.ok === false) ? false : true;
+                            const estado = ok ? '<span class="ok">OK</span>' : '<span class="err">ERROR</span>';
+                            let det = '';
+                            try {
+                                det = (typeof e.detalles === 'string')
+                                    ? e.detalles
+                                    : JSON.stringify(e.detalles || null);
+                            } catch (_) { det = _resumenDetalles(e); }
+                            return `
+                                <tr>
+                                    <td>${_fmtFecha(e.ts)}</td>
+                                    <td>${_safeStr(e.usuario || '—')}<div class="meta" style="margin:0;">${_safeStr(e.rol || '')}</div></td>
+                                    <td>${_safeStr(e.accion || '—')}<div class="meta" style="margin:0;">${_safeStr(e.entidad || '')}</div></td>
+                                    <td>${estado}${!ok && e.error ? `<div class="meta" style="margin:0;">${_safeStr(e.error)}</div>` : ''}</td>
+                                    <td class="mono">${_safeStr(e.referenciaId || '—')}</td>
+                                    <td class="mono" style="white-space:pre-wrap; word-break:break-word;">${_safeStr(det)}</td>
+                                </tr>`;
+                        }).join('')}
                     </tbody>
                 </table>
                 </body></html>
             `;
 
-            const w = window.open('', '_blank');
-            if (!w) {
-                if (typeof showError === 'function') showError('No se pudo abrir la ventana de impresión.');
+            if (!window.electronAPI?.audit?.exportPdf) {
+                if (window.EventBus?.emit) {
+                    EventBus.emit('notificacion', { tipo: 'error', mensaje: 'Exportación PDF no disponible (electronAPI.audit.exportPdf).' });
+                }
                 return;
             }
-            w.document.open();
-            w.document.write(html);
-            w.document.close();
-            w.focus();
-            setTimeout(() => w.print(), 250);
+
+            window.electronAPI.audit.exportPdf({
+                html,
+                defaultName: `auditoria-${stamp}`,
+                saveAs: true
+            }).then((r) => {
+                if (r?.ok) {
+                    if (window.EventBus?.emit) {
+                        EventBus.emit('notificacion', { tipo: 'ok', mensaje: 'PDF de auditoría generado.' });
+                    }
+                } else {
+                    if (window.EventBus?.emit) {
+                        EventBus.emit('notificacion', { tipo: 'error', mensaje: r?.error || 'No se pudo generar el PDF.' });
+                    }
+                }
+            }).catch((e) => {
+                if (window.EventBus?.emit) {
+                    EventBus.emit('notificacion', { tipo: 'error', mensaje: e?.message || 'Error al exportar PDF.' });
+                }
+            });
         },
 
         init() {

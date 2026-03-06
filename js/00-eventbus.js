@@ -420,15 +420,15 @@
                                 </div>
                                 <div style="display:flex; gap:8px; margin-top:10px;">
                                     ${nivel === 'critical' ? `
-                                    <button onclick="driveConnect?.()" style="
+                                    <button data-action="storage-drive-connect" style="
                                         background:${color}; color:white; border:none; border-radius:6px;
                                         padding:5px 10px; font-size:0.75rem; cursor:pointer; font-weight:600;
                                     "><i class="fab fa-google-drive"></i> Activar Drive</button>` : ''}
-                                    <button onclick="storageGuardLimpiarBackups()" style="
+                                    <button data-action="storage-clean-backups" style="
                                         background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;
                                         border-radius:6px; padding:5px 10px; font-size:0.75rem; cursor:pointer;
                                     "><i class="fas fa-broom"></i> Limpiar backups</button>
-                                    <button onclick="document.getElementById('storage-guard-banner')?.remove()" style="
+                                    <button data-action="storage-banner-close" style="
                                         background:none; color:#94a3b8; border:none; cursor:pointer;
                                         font-size:0.75rem; padding:5px;
                                     ">✕</button>

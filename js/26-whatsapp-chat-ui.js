@@ -106,7 +106,7 @@ function waChatFiltrarLista() {
         const last = c.lastMessage || 'Sin mensajes';
         const unread = Number(c.unread || 0);
         return `
-        <button class="wa-chat-item ${active}" onclick="waChatAbrir('${String(c.chatId).replace(/'/g, "\\'")}')">
+        <button class="wa-chat-item ${active}" data-action="wa-chat-abrir" data-chat-id="${escHtml(String(c.chatId))}">
             <div class="wa-chat-item-top">
                 <strong>${escHtml(nombre)}</strong>
                 <span>${_waChatFmtHora(c.timestamp)}</span>

@@ -94,8 +94,53 @@ window.beCerrarAlerta = function(alertaId) {
 
     if (typeof markAppDirty === 'function') markAppDirty();
     guardarDB();
+    try {
+        if (typeof EventBus !== 'undefined' && EventBus?.emit) EventBus.emit('alertas:updated', { id: alerta.id, estado: 'cerrada' });
+    } catch (_) {}
     if (typeof showInfo === 'function') showInfo('Alerta marcada como gestionada.');
     renderCalendario();
+};
+
+window.beEliminarAlerta = async function(alertaId) {
+    try {
+        const alertas = (DB.alertas || []);
+        const idx = alertas.findIndex(a => String(a?.id) === String(alertaId));
+        if (idx < 0) return;
+        const alerta = alertas[idx];
+
+        const origen = String(alerta?.origen || 'auto').toLowerCase();
+        const esManual = origen === 'manual';
+        const confirmar = confirm(esManual
+            ? '¿Eliminar esta alerta manual?'
+            : '¿Eliminar esta alerta automática?\nRequiere autorización y se recomienda solo si fue generada por error.');
+        if (!confirmar) return;
+
+        if (!esManual) {
+            if (typeof window.uiAutorizarAccionCritica === 'function') {
+                const ok = await window.uiAutorizarAccionCritica({
+                    titulo: 'Eliminar alerta automática',
+                    detalle: 'Esta alerta fue generada por el sistema (plazos/procesos). Para eliminarla, ingrese clave admin o clave temporal.'
+                });
+                if (!ok) return;
+            } else {
+                if (typeof showError === 'function') showError('No está disponible el sistema de autorización.');
+                return;
+            }
+        }
+
+        alertas.splice(idx, 1);
+        DB.alertas = alertas;
+        if (typeof markAppDirty === 'function') markAppDirty();
+        guardarDB();
+        try {
+            if (typeof EventBus !== 'undefined' && EventBus?.emit) EventBus.emit('alertas:updated', { id: alertaId, deleted: true });
+        } catch (_) {}
+        if (typeof showSuccess === 'function') showSuccess('Alerta eliminada.');
+        renderCalendario();
+    } catch (e) {
+        console.error('[CAL] Error eliminando alerta:', e);
+        if (typeof showError === 'function') showError('No se pudo eliminar la alerta.');
+    }
 };
 
 function _addMonthsKeepDay(date, months) {
@@ -325,11 +370,111 @@ function crearAlerta(data) {
         mensaje: data.mensaje,
         fechaObjetivo: data.fechaObjetivo || hoy(),
         prioridad: data.prioridad || "media",
-        estado: "activa"
+        estado: "activa",
+        origen: data.origen || 'auto'
     };
     if (typeof Store !== 'undefined' && Store?.agregarAlerta) Store.agregarAlerta(alertaNueva);
     else DB.alertas.push(alertaNueva);
-    if (typeof markAppDirty === "function") markAppDirty(); guardarDB();
+    if (typeof markAppDirty === "function") markAppDirty();
+    guardarDB();
+    try {
+        if (typeof EventBus !== 'undefined' && EventBus?.emit) EventBus.emit('alertas:updated', { id: alertaNueva.id });
+    } catch (_) {}
+}
+
+function _evaluarAlertasHonorarios() {
+    try {
+        (DB.causas || []).forEach(causa => {
+            const h = causa?.honorarios || {};
+            const plan = Array.isArray(h.planPagos) ? h.planPagos : [];
+            if (!plan.length) return;
+            const pend = plan
+                .filter(x => (x?.estado || 'PENDIENTE') !== 'PAGADA')
+                .sort((a, b) => new Date(a?.fechaVencimiento || 0) - new Date(b?.fechaVencimiento || 0))[0];
+            if (!pend?.fechaVencimiento) return;
+            const dias = diasEntre(hoy(), new Date(pend.fechaVencimiento));
+            if (dias < 0) return;
+
+            if (dias <= 3) {
+                crearAlerta({
+                    causaId: causa.id,
+                    tipo: 'honorario',
+                    mensaje: `Vence cuota #${pend.numero || '?'} por $${Math.round(parseFloat(pend.monto) || 0).toLocaleString('es-CL')}`,
+                    fechaObjetivo: pend.fechaVencimiento,
+                    prioridad: dias === 0 ? 'critica' : 'alta',
+                    origen: 'auto'
+                });
+            }
+        });
+    } catch (e) {
+        console.warn('[ALERTAS] Honorarios: no se pudo evaluar.', e);
+    }
+}
+
+function _evaluarAlertasNegocios() {
+    try {
+        const propuestas = (DB.propuestas || []).filter(Boolean);
+        propuestas.forEach(pr => {
+            const vig = pr.fechaVigencia || pr.fechaVencimiento || pr.fechaVenc || null;
+            if (!vig) return;
+            const dias = diasEntre(hoy(), new Date(vig));
+            if (dias < 0) return;
+            if (dias <= 3) {
+                const label = pr.nombre || pr.titulo || (pr.prospectoId ? `Prospecto ${pr.prospectoId}` : 'Propuesta');
+                crearAlerta({
+                    causaId: null,
+                    tipo: 'vencimiento',
+                    mensaje: `Vence propuesta económica: ${label}`,
+                    fechaObjetivo: vig,
+                    prioridad: dias === 0 ? 'critica' : 'alta',
+                    origen: 'auto'
+                });
+            }
+        });
+    } catch (e) {
+        console.warn('[ALERTAS] Negocios: no se pudo evaluar.', e);
+    }
+}
+
+function _getTramitesLista() {
+    try {
+        if (typeof window.TramitesDB !== 'undefined' && window.TramitesDB?.todos) {
+            return window.TramitesDB.todos() || [];
+        }
+    } catch (_) {}
+    try {
+        if (typeof AppConfig !== 'undefined' && AppConfig.get) {
+            return AppConfig.get('tramites') || [];
+        }
+    } catch (_) {}
+    return [];
+}
+
+function _evaluarAlertasTramites() {
+    try {
+        const tramites = _getTramitesLista().filter(Boolean);
+        tramites.forEach(t => {
+            const f = t.fechaObjetivo || t.fechaVencimiento || t.fechaLimite || t.fechaPlazo || null;
+            if (!f) return;
+            const dias = diasEntre(hoy(), new Date(f));
+            if (dias < 0) return;
+            if (dias <= 3) {
+                const org = t.organismo || t.org || 'Trámite';
+                const tipo = t.tipo || t.nombre || 'Gestión';
+                const titulo = `${org}: ${tipo}`;
+                crearAlerta({
+                    causaId: null,
+                    tipo: 'plazo',
+                    mensaje: `Vence trámite: ${titulo}`,
+                    fechaObjetivo: f,
+                    prioridad: dias === 0 ? 'critica' : 'alta',
+                    origen: 'auto'
+                });
+            }
+        });
+    } catch (e) {
+        console.warn('[ALERTAS] Trámites: no se pudo evaluar.', e);
+    }
 }
 
 function evaluarAlertas() {
@@ -352,7 +497,8 @@ function generarEventosCalendario() {
     return DB.alertas
         .filter(a => a.estado === "activa")
         .map(alerta => {
-            const causa = DB.causas.find(c => String(c.id) === String(alerta.causaId));
+            const hasCausa = alerta.causaId !== null && alerta.causaId !== undefined && String(alerta.causaId).trim() !== '';
+            const causa = hasCausa ? DB.causas.find(c => String(c.id) === String(alerta.causaId)) : null;
             return {
                 id: alerta.id,
                 causaId: alerta.causaId,
@@ -360,10 +506,122 @@ function generarEventosCalendario() {
                 fecha: alerta.fechaObjetivo,
                 prioridad: alerta.prioridad,
                 tipo: (alerta.tipo || 'evento').toLowerCase(),
-                causaLabel: causa?.caratula || causa?.cliente || `Causa ${alerta.causaId}`,
+                causaLabel: causa?.caratula || causa?.cliente || (hasCausa ? `Causa ${alerta.causaId}` : 'Alerta manual'),
                 waAlertadoEn: alerta.waAlertadoEn || null
             };
         });
+}
+
+let _calMesActual = new Date();
+
+function _calTipoColor(tipo) {
+    const t = String(tipo || 'evento').toLowerCase();
+    const map = {
+        audiencia: '#2563eb',
+        plazo: '#dc2626',
+        vencimiento: '#dc2626',
+        contestacion: '#16a34a',
+        contestación: '#16a34a',
+        procesal: '#7c3aed',
+        honorario: '#7c3aed',
+        honorarios: '#7c3aed',
+        pago: '#7c3aed',
+        inactividad: '#b45309',
+        evento: '#64748b'
+    };
+    return map[t] || map.evento;
+}
+
+function _calFormatoMesLabel(dt) {
+    try {
+        return dt.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' });
+    } catch (_) {
+        return `${dt.getMonth() + 1}/${dt.getFullYear()}`;
+    }
+}
+
+function _calRenderMes(eventos) {
+    const cont = document.getElementById('calendarioMes');
+    if (!cont) return;
+    const lbl = document.getElementById('cal-mes-label');
+    if (lbl) lbl.textContent = _calFormatoMesLabel(_calMesActual);
+
+    const y = _calMesActual.getFullYear();
+    const m = _calMesActual.getMonth();
+    const first = new Date(y, m, 1);
+    const last = new Date(y, m + 1, 0);
+    const startDow = (first.getDay() + 6) % 7; // lunes=0
+    const daysInMonth = last.getDate();
+
+    const byDate = {};
+    (eventos || []).forEach(ev => {
+        if (!ev?.fecha) return;
+        const d = new Date(ev.fecha);
+        if (Number.isNaN(d.getTime())) return;
+        if (d.getFullYear() !== y || d.getMonth() !== m) return;
+        const key = d.toISOString().slice(0, 10);
+        if (!byDate[key]) byDate[key] = [];
+        byDate[key].push(ev);
+    });
+
+    const weekdays = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+    const cells = [];
+    for (let i = 0; i < startDow; i++) cells.push(null);
+    for (let day = 1; day <= daysInMonth; day++) {
+        const key = new Date(y, m, day).toISOString().slice(0, 10);
+        cells.push({ day, key, events: byDate[key] || [] });
+    }
+    while (cells.length % 7 !== 0) cells.push(null);
+
+    const legend = [
+        { t: 'Vencimientos / plazos', c: _calTipoColor('plazo') },
+        { t: 'Contestaciones', c: _calTipoColor('contestacion') },
+        { t: 'Honorarios / pagos', c: _calTipoColor('honorario') },
+        { t: 'Audiencias', c: _calTipoColor('audiencia') },
+    ];
+
+    cont.innerHTML = `
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin:8px 0 10px; font-size:.72rem; color:var(--text-3);">
+            ${legend.map(x => `
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <span style="width:10px; height:10px; border-radius:50%; background:${x.c}; display:inline-block;"></span>
+                    <span>${x.t}</span>
+                </div>
+            `).join('')}
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(7, 1fr); gap:6px;">
+            ${weekdays.map(w => `<div style="text-align:center; font-size:.7rem; font-weight:800; color:var(--text-3); padding:4px 0;">${w}</div>`).join('')}
+            ${cells.map(cell => {
+                if (!cell) return `<div style="height:52px; border:1px solid var(--border); border-radius:10px; background:var(--bg);"></div>`;
+                const dots = cell.events.slice(0, 4).map(ev => {
+                    const c = _calTipoColor(ev.tipo);
+                    return `<span title="${escHtml(ev.titulo || '')}" style="width:8px; height:8px; border-radius:50%; background:${c}; display:inline-block;"></span>`;
+                }).join('');
+                const has = cell.events.length > 0;
+                const bg = has ? '#f8fafc' : 'var(--bg)';
+                const border = has ? '#cbd5e1' : 'var(--border)';
+                return `
+                    <div style="min-height:52px; border:1px solid ${border}; border-radius:10px; background:${bg}; padding:6px 8px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div style="font-weight:900; font-size:.78rem; color:var(--text-2);">${cell.day}</div>
+                            <div style="font-size:.68rem; color:var(--text-3);">${cell.events.length ? (cell.events.length + '·') : ''}</div>
+                        </div>
+                        <div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:6px;">${dots}</div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
+}
+
+function calendarioMesPrev() {
+    _calMesActual = new Date(_calMesActual.getFullYear(), _calMesActual.getMonth() - 1, 1);
+    renderCalendario();
+}
+
+function calendarioMesNext() {
+    _calMesActual = new Date(_calMesActual.getFullYear(), _calMesActual.getMonth() + 1, 1);
+    renderCalendario();
 }
 
 function renderCalendario() {
@@ -371,13 +629,7 @@ function renderCalendario() {
     if (!contenedor) return;
     const eventos = generarEventosCalendario().sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
     const audienciasIA = (DB.causas || []).filter(c => c?.audiencias?.habilitado);
-    const tipoColor = {
-        audiencia: '#2563eb',
-        plazo: '#dc2626',
-        procesal: '#7c3aed',
-        inactividad: '#b45309',
-        evento: '#64748b'
-    };
+    _calRenderMes(eventos);
     const audienciasHtml = audienciasIA.length ? `
         <div style="margin-bottom:10px; padding:10px 12px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px;">
             <div style="font-size:.72rem; font-weight:800; color:#1e40af; text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">
@@ -399,7 +651,7 @@ function renderCalendario() {
                         <div style="font-size:.72rem; color:#334155; margin-top:2px;">${escHtml(tituloProx)}</div>
                         <div style="font-size:.68rem; color:#64748b; margin-top:1px;">${fechaProx} · ${auds.length} audiencia(s) IA</div>
                     </div>
-                    <button class="btn btn-xs" style="background:#dbeafe; color:#1e40af; border:none;" onclick="tab('detalle-causa'); setTimeout(()=>abrirDetalleCausa?.('${causaId}'),80);">
+                    <button class="btn btn-xs" style="background:#dbeafe; color:#1e40af; border:none;" data-action="cal-ver-causa" data-causa-id="${escHtml(causaId)}">
                         Ver causa
                     </button>
                 </div>`;
@@ -407,33 +659,101 @@ function renderCalendario() {
             ${audienciasIA.length > 4 ? `<div style="font-size:.7rem; color:#1d4ed8; margin-top:4px;">+${audienciasIA.length - 4} causa(s) adicional(es)</div>` : ''}
         </div>` : '';
 
-    const eventosHtml = eventos.length ? eventos.map(ev => `
-        <div class="alert-item ${ev.prioridad === 'critica' || ev.prioridad === 'alta' ? '' : 'info'}" style="border-left:3px solid ${tipoColor[ev.tipo] || tipoColor.evento};">
-            <i class="fas fa-calendar-day" style="color:${tipoColor[ev.tipo] || tipoColor.evento};"></i>
+    const eventosHtml = eventos.length ? eventos.map(ev => {
+        const hasCausa = ev.causaId !== null && ev.causaId !== undefined && String(ev.causaId).trim() !== '';
+        return `
+        <div class="alert-item ${ev.prioridad === 'critica' || ev.prioridad === 'alta' ? '' : 'info'}" style="border-left:3px solid ${_calTipoColor(ev.tipo)};">
+            <i class="fas fa-calendar-day" style="color:${_calTipoColor(ev.tipo)};"></i>
             <div>
                 <strong>${new Date(ev.fecha).toLocaleDateString('es-CL')}</strong> — ${escHtml(ev.titulo)}
                 <div style="font-size:.72rem; color:#64748b; margin-top:2px;">${escHtml(ev.causaLabel)}</div>
                 ${ev.waAlertadoEn ? `<div style="font-size:.68rem; color:#0f766e; margin-top:2px;"><i class="fab fa-whatsapp"></i> Enviado: ${new Date(ev.waAlertadoEn).toLocaleString('es-CL')}</div>` : ''}
-                ${(ev.tipo === 'audiencia' || ev.tipo === 'plazo') ? `
                 <div style="margin-top:5px;">
-                    <button class="btn btn-xs" style="background:#eef2ff; color:#4338ca; border:none; margin-right:4px;" onclick="tab('detalle-causa'); setTimeout(()=>abrirDetalleCausa?.('${ev.causaId}'),80);">
+                    ${hasCausa ? `
+                    <button class="btn btn-xs" style="background:#eef2ff; color:#4338ca; border:none; margin-right:4px;" data-action="cal-ver-causa" data-causa-id="${escHtml(ev.causaId)}">
                         <i class="fas fa-folder-open"></i> Ver causa
                     </button>
-                    <button class="btn btn-xs" style="background:#ecfeff; color:#0f766e; border:none;" onclick="beEnviarAlertaWhatsApp('${ev.id}')">
+                    ` : ''}
+                    <button class="btn btn-xs" style="background:#ecfeff; color:#0f766e; border:none;" data-action="cal-wa-alerta" data-alerta-id="${escHtml(ev.id)}">
                         <i class="fab fa-whatsapp"></i> ${ev.waAlertadoEn ? 'Reenviar' : 'Avisar'}
                     </button>
-                    <button class="btn btn-xs" style="background:#f0fdf4; color:#166534; border:none; margin-left:4px;" onclick="beCerrarAlerta('${ev.id}')">
+                    <button class="btn btn-xs" style="background:#f0fdf4; color:#166534; border:none; margin-left:4px;" data-action="cal-cerrar-alerta" data-alerta-id="${escHtml(ev.id)}">
                         <i class="fas fa-check"></i> Gestionada
                     </button>
-                </div>` : ''}
+                    <button class="btn btn-xs" style="background:#fee2e2; color:#b91c1c; border:none; margin-left:4px;" data-action="cal-eliminar-alerta" data-alerta-id="${escHtml(ev.id)}">
+                        <i class="fas fa-trash"></i> Eliminar
+                    </button>
+                </div>
             </div>
-        </div>`).join('') : '<div class="alert-empty">Sin eventos próximos.</div>';
+        </div>`;
+    }).join('') : '<div class="alert-empty">Sin eventos próximos.</div>';
 
     contenedor.innerHTML = audienciasHtml + eventosHtml;
 }
 
+function exportCalendarioICS() {
+    try {
+        const eventos = generarEventosCalendario();
+        const pad = (n) => String(n).padStart(2, '0');
+        const toIcsDate = (isoDate) => {
+            const d = new Date(isoDate);
+            if (Number.isNaN(d.getTime())) return null;
+            return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
+        };
+
+        const escapeIcs = (s) => String(s || '')
+            .replace(/\\/g, '\\\\')
+            .replace(/\n/g, '\\n')
+            .replace(/\r/g, '')
+            .replace(/,/g, '\\,')
+            .replace(/;/g, '\\;');
+
+        const lines = [];
+        lines.push('BEGIN:VCALENDAR');
+        lines.push('VERSION:2.0');
+        lines.push('PRODID:-//LEXIUMPRO//Agenda//ES');
+        lines.push('CALSCALE:GREGORIAN');
+
+        eventos.forEach(ev => {
+            const d = toIcsDate(ev.fecha);
+            if (!d) return;
+            const uidVal = `${ev.id || (Date.now() + Math.random())}@lexiumpro`;
+            lines.push('BEGIN:VEVENT');
+            lines.push(`UID:${uidVal}`);
+            lines.push(`DTSTART;VALUE=DATE:${d}`);
+            lines.push(`SUMMARY:${escapeIcs(ev.titulo || 'Evento')}`);
+            const desc = `${ev.causaLabel ? ('Causa: ' + ev.causaLabel + '\\n') : ''}${ev.tipo ? ('Tipo: ' + ev.tipo) : ''}`.trim();
+            if (desc) lines.push(`DESCRIPTION:${escapeIcs(desc)}`);
+            lines.push('END:VEVENT');
+        });
+
+        lines.push('END:VCALENDAR');
+
+        const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'lexium-agenda.ics';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        if (typeof showSuccess === 'function') showSuccess('Calendario exportado (.ics).');
+    } catch (e) {
+        console.error('[CAL] Error exportando ICS:', e);
+        if (typeof showError === 'function') showError('No se pudo exportar el calendario.');
+    }
+}
+
+window.exportCalendarioICS = exportCalendarioICS;
+window.calendarioMesPrev = calendarioMesPrev;
+window.calendarioMesNext = calendarioMesNext;
+
 function actualizarSistema() {
     evaluarAlertas();
+    _evaluarAlertasHonorarios();
+    _evaluarAlertasNegocios();
+    _evaluarAlertasTramites();
     renderCalendario();
     renderDashboard();
     renderDashboardPanel();  // actualizar KPIs sin loop

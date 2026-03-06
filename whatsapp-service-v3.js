@@ -433,6 +433,73 @@ function validarMensaje(mensaje) {
     return { ok: true };
 }
 
+function _dirTieneContenido(fs, ruta) {
+    try {
+        if (!fs.existsSync(ruta)) return false;
+        const items = fs.readdirSync(ruta);
+        return Array.isArray(items) && items.length > 0;
+    } catch (_) {
+        return false;
+    }
+}
+
+function _resolverAuthDataPath() {
+    // Preferencia:
+    //  1) Nuevo esquema: userData/.wa-session
+    //  2) Legacy whatsapp-web.js LocalAuth: base/.wwebjs_auth (usualmente userData/.wwebjs_auth)
+    try {
+        const path = require('path');
+        const fs = require('fs');
+        const { app } = require('electron');
+        const userData = app.getPath('userData');
+
+        const nuevo = path.join(userData, '.wa-session');
+        const nuevoDefault = path.join(nuevo, 'Default');
+        if (fs.existsSync(nuevoDefault) || _dirTieneContenido(fs, nuevo)) {
+            return { dataPath: nuevo, mode: 'new' };
+        }
+
+        const legacyBases = [userData, process.cwd()];
+        for (const base of legacyBases) {
+            if (!base) continue;
+            const authDir = path.join(base, '.wwebjs_auth');
+            if (fs.existsSync(authDir) && _dirTieneContenido(fs, authDir)) {
+                return { dataPath: base, mode: 'legacy' };
+            }
+        }
+
+        // Si no hay legacy, usar nuevo path igual (creará carpeta)
+        return { dataPath: nuevo, mode: 'new' };
+    } catch (_) {
+        return { dataPath: null, mode: 'unknown' };
+    }
+}
+
+function _waSesionExiste() {
+    try {
+        const path = require('path');
+        const fs = require('fs');
+        const { app } = require('electron');
+        const userData = app.getPath('userData');
+
+        // Nuevo esquema
+        const baseNew = path.join(userData, '.wa-session');
+        const def = path.join(baseNew, 'Default');
+        if (fs.existsSync(def) || _dirTieneContenido(fs, baseNew)) return true;
+
+        // Legacy
+        const legacyBases = [userData, process.cwd()];
+        for (const base of legacyBases) {
+            if (!base) continue;
+            const authDir = path.join(base, '.wwebjs_auth');
+            if (fs.existsSync(authDir) && _dirTieneContenido(fs, authDir)) return true;
+        }
+        return false;
+    } catch (_) {
+        return false;
+    }
+}
+
 // ── Inicializar ────────────────────────────────────────────────
 function initWhatsApp(browserWindow) {
     if (!Client) return;
@@ -443,18 +510,14 @@ function initWhatsApp(browserWindow) {
 
     // Detectar si hay sesión previa para no mostrar modal al reconectar
     try {
-        const sessionPath = require('path').join(
-            require('electron').app.getPath('userData'), '.wa-session'
-        );
-        _fueReconexionAuto = require('fs').existsSync(sessionPath);
+        _fueReconexionAuto = _waSesionExiste();
     } catch(_) { _fueReconexionAuto = false; }
+
+    const auth = _resolverAuthDataPath();
 
     waClient = new Client({
         authStrategy: new LocalAuth({
-            dataPath: require('path').join(
-                require('electron').app.getPath('userData'),
-                '.wa-session'
-            )
+            ...(auth?.dataPath ? { dataPath: auth.dataPath } : {})
         }),
         puppeteer: {
             headless: true,

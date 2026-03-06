@@ -951,16 +951,16 @@ const MAX_INTENTOS = 5;
 const BLOQUEO_MS = 5 * 60 * 1000;
 
 const ROLES_PERMISOS = {
-    admin: { verCausas: true, editarCausas: true, eliminarCausas: true, verHonorarios: true, editarHonorarios: true, verClientes: true, editarClientes: true, verBitacora: true, gestionarUsuarios: true, exportar: true, crearEscritos: true, editarEstrategia: true },
-    abogado: { verCausas: true, editarCausas: true, eliminarCausas: false, verHonorarios: true, editarHonorarios: true, verClientes: true, editarClientes: true, verBitacora: false, gestionarUsuarios: false, exportar: true, crearEscritos: true, editarEstrategia: true },
-    asistente: { verCausas: true, editarCausas: true, eliminarCausas: false, verHonorarios: false, editarHonorarios: false, verClientes: true, editarClientes: false, verBitacora: false, gestionarUsuarios: false, exportar: false, crearEscritos: false, editarEstrategia: false },
-    readonly: { verCausas: true, editarCausas: false, eliminarCausas: false, verHonorarios: false, editarHonorarios: false, verClientes: true, editarClientes: false, verBitacora: false, gestionarUsuarios: false, exportar: false, crearEscritos: false, editarEstrategia: false }
+    admin: { verCausas: true, editarCausas: true, eliminarCausas: true, verHonorarios: true, editarHonorarios: true, verClientes: true, editarClientes: true, eliminarClientes: true, verBitacora: true, gestionarUsuarios: true, exportar: true, crearEscritos: true, editarEstrategia: true },
+    abogado: { verCausas: true, editarCausas: true, eliminarCausas: false, verHonorarios: true, editarHonorarios: true, verClientes: true, editarClientes: true, eliminarClientes: false, verBitacora: false, gestionarUsuarios: false, exportar: true, crearEscritos: true, editarEstrategia: true },
+    asistente: { verCausas: true, editarCausas: true, eliminarCausas: false, verHonorarios: false, editarHonorarios: false, verClientes: true, editarClientes: false, eliminarClientes: false, verBitacora: false, gestionarUsuarios: false, exportar: false, crearEscritos: false, editarEstrategia: false },
+    readonly: { verCausas: true, editarCausas: false, eliminarCausas: false, verHonorarios: false, editarHonorarios: false, verClientes: true, editarClientes: false, eliminarClientes: false, verBitacora: false, gestionarUsuarios: false, exportar: false, crearEscritos: false, editarEstrategia: false }
 };
 
 const PERMISOS_LABELS = {
     verCausas: 'Ver causas', editarCausas: 'Editar causas', eliminarCausas: 'Eliminar causas',
     verHonorarios: 'Ver honorarios', editarHonorarios: 'Editar honorarios',
-    verClientes: 'Ver clientes', editarClientes: 'Editar clientes',
+    verClientes: 'Ver clientes', editarClientes: 'Editar clientes', eliminarClientes: 'Eliminar clientes',
     verBitacora: 'Bitácora del sistema', gestionarUsuarios: 'Gestionar usuarios',
     exportar: 'Exportar datos', crearEscritos: 'Generar escritos', editarEstrategia: 'Editar estrategia'
 };
@@ -969,6 +969,16 @@ const Users = (() => {
     // Lee y escribe desde AppConfig — fuente única de verdad
     function _cargar() { return AppConfig.get('usuarios') || []; }
     function _guardar(lista) { AppConfig.set('usuarios', lista); }
+
+    function _normalizarOverrides(overrides) {
+        const out = {};
+        if (!overrides || typeof overrides !== 'object') return out;
+        for (const [k, v] of Object.entries(overrides)) {
+            if (!k) continue;
+            if (v === 'allow' || v === 'deny') out[k] = v;
+        }
+        return out;
+    }
 
     return {
         async inicializar() {
@@ -998,6 +1008,7 @@ const Users = (() => {
                 id: uid(), nombre: data.nombre, usuario: data.usuario,
                 passwordHash: hpw, rol: data.rol || 'abogado',
                 color: data.color || '#1a3a6b', activo: true,
+                permOverrides: _normalizarOverrides(data.permOverrides),
                 fechaCreacion: new Date().toISOString()
             };
             lista.push(nuevo);
@@ -1012,6 +1023,9 @@ const Users = (() => {
             if (data.password && data.password.length >= 6) u.passwordHash = await _hash(data.password);
             if (data.rol && u.rol !== 'admin') u.rol = data.rol;
             if (data.color) u.color = data.color;
+            if (data.permOverrides && typeof data.permOverrides === 'object') {
+                u.permOverrides = _normalizarOverrides(data.permOverrides);
+            }
             _guardar(lista);
             return { ok: true };
         },
@@ -1032,6 +1046,11 @@ const Users = (() => {
         },
         tienePermiso(permiso) {
             const rol = DB.rolActual || 'readonly';
+            const usuario = DB.usuarioActual || '';
+            const u = usuario ? this.buscar(usuario) : null;
+            const ov = u && u.permOverrides ? u.permOverrides[permiso] : null;
+            if (ov === 'allow') return true;
+            if (ov === 'deny') return false;
             return !!(ROLES_PERMISOS[rol]?.[permiso]);
         }
     };
@@ -1209,12 +1228,10 @@ function _abrirApp() {
 }
 
 function _aplicarRestriccionesRol() {
-    const rol = DB.rolActual || 'readonly';
-    const p = ROLES_PERMISOS[rol] || ROLES_PERMISOS.readonly;
     // Ocultar elementos según permisos
     document.querySelectorAll('[data-requiere-permiso]').forEach(el => {
         const permiso = el.dataset.requierePermiso;
-        el.style.display = p[permiso] ? '' : 'none';
+        el.style.display = Users.tienePermiso(permiso) ? '' : 'none';
     });
 }
 
@@ -1266,6 +1283,66 @@ function logout() {
 // ─── Admin: CRUD usuarios ─────────────────────────────────────────
 let _avatarColorSeleccionado = '#1a3a6b';
 
+function _uiPermOverrideValueFromSelect(sel) {
+    const v = (sel && typeof sel.value === 'string') ? sel.value : '';
+    if (v === 'allow' || v === 'deny') return v;
+    return '';
+}
+
+function uiLeerPermOverrides() {
+    const cont = document.getElementById('perm-overrides-container');
+    if (!cont) return {};
+    const out = {};
+    cont.querySelectorAll('select[data-action="users-override-select"]').forEach(sel => {
+        const key = sel.getAttribute('data-perm');
+        const v = _uiPermOverrideValueFromSelect(sel);
+        if (key && v) out[key] = v;
+    });
+    return out;
+}
+
+function uiRenderPermOverrides(overrides) {
+    const cont = document.getElementById('perm-overrides-container');
+    if (!cont) return;
+    const ov = (overrides && typeof overrides === 'object') ? overrides : {};
+
+    cont.innerHTML = `
+        <div style="display:grid; grid-template-columns:1fr auto; gap:6px;">
+            ${Object.entries(PERMISOS_LABELS).map(([k, label]) => {
+                const cur = ov[k] === 'allow' ? 'allow' : ov[k] === 'deny' ? 'deny' : '';
+                return `
+                    <div style="font-size:0.72rem; color:var(--text-2); align-self:center;">${label}</div>
+                    <select data-action="users-override-select" data-perm="${k}" style="font-size:0.72rem; padding:6px 8px;">
+                        <option value="" ${cur === '' ? 'selected' : ''}>Heredar</option>
+                        <option value="allow" ${cur === 'allow' ? 'selected' : ''}>Permitir</option>
+                        <option value="deny" ${cur === 'deny' ? 'selected' : ''}>Denegar</option>
+                    </select>
+                `;
+            }).join('')}
+        </div>
+    `;
+}
+
+function uiLimpiarPermOverrides() {
+    const cont = document.getElementById('perm-overrides-container');
+    if (!cont) return;
+    cont.querySelectorAll('select[data-action="users-override-select"]').forEach(sel => { sel.value = ''; });
+    uiUpdatePermisosPrev();
+}
+
+function uiGetPermisosEfectivosPreview() {
+    const rol = document.getElementById('nu-rol')?.value || 'abogado';
+    const base = ROLES_PERMISOS[rol] || {};
+    const ov = uiLeerPermOverrides();
+    const eff = {};
+    for (const k of Object.keys(PERMISOS_LABELS)) {
+        if (ov[k] === 'allow') eff[k] = true;
+        else if (ov[k] === 'deny') eff[k] = false;
+        else eff[k] = !!base[k];
+    }
+    return eff;
+}
+
 function selectAvatarColor(el) {
     document.querySelectorAll('.avatar-color-opt').forEach(e => e.style.border = '2px solid transparent');
     el.style.border = '3px solid white';
@@ -1273,8 +1350,7 @@ function selectAvatarColor(el) {
 }
 
 function uiUpdatePermisosPrev() {
-    const rol = document.getElementById('nu-rol')?.value || 'abogado';
-    const p = ROLES_PERMISOS[rol] || {};
+    const p = uiGetPermisosEfectivosPreview();
     const el = document.getElementById('permisos-preview');
     if (!el) return;
     el.innerHTML = Object.entries(PERMISOS_LABELS).map(([k, label]) =>
@@ -1290,13 +1366,21 @@ function uiCrearUsuario(id) {
         : '<i class="fas fa-user-plus"></i> Nuevo Usuario';
     if (id) {
         const u = Users.listar().find(u => String(u.id) === String(id));
-        if (u) { document.getElementById('nu-nombre').value = u.nombre; document.getElementById('nu-usuario').value = u.usuario; document.getElementById('nu-password').value = ''; document.getElementById('nu-rol').value = u.rol !== 'admin' ? u.rol : 'abogado'; _avatarColorSeleccionado = u.color || '#1a3a6b'; }
+        if (u) {
+            document.getElementById('nu-nombre').value = u.nombre;
+            document.getElementById('nu-usuario').value = u.usuario;
+            document.getElementById('nu-password').value = '';
+            document.getElementById('nu-rol').value = u.rol !== 'admin' ? u.rol : 'abogado';
+            _avatarColorSeleccionado = u.color || '#1a3a6b';
+            uiRenderPermOverrides(u.permOverrides || {});
+        }
     } else {
         document.getElementById('nu-nombre').value = '';
         document.getElementById('nu-usuario').value = '';
         document.getElementById('nu-password').value = '';
         document.getElementById('nu-rol').value = 'abogado';
         _avatarColorSeleccionado = '#1a3a6b';
+        uiRenderPermOverrides({});
     }
     uiUpdatePermisosPrev();
     abrirModal('modal-nuevo-usuario');
@@ -1308,12 +1392,13 @@ async function guardarUsuario() {
     const usuario = document.getElementById('nu-usuario').value.trim().toLowerCase();
     const password = document.getElementById('nu-password').value;
     const rol = document.getElementById('nu-rol').value;
+    const permOverrides = uiLeerPermOverrides();
     if (!nombre || !usuario) { showError('Nombre y usuario son obligatorios.'); return; }
     let res;
     if (editId) {
-        res = await Users.editar(editId, { nombre, password, rol, color: _avatarColorSeleccionado });
+        res = await Users.editar(editId, { nombre, password, rol, color: _avatarColorSeleccionado, permOverrides });
     } else {
-        res = await Users.agregar({ nombre, usuario, password, rol, color: _avatarColorSeleccionado });
+        res = await Users.agregar({ nombre, usuario, password, rol, color: _avatarColorSeleccionado, permOverrides });
     }
     if (res.error) { showError('Error: ' + res.error); return; }
     registrarEvento(`Usuario ${editId ? 'editado' : 'creado'}: ${nombre} (${rol})`);
@@ -1350,8 +1435,8 @@ async function renderGestionUsuarios() {
                     </div>
                     <span class="user-role-badge urb-${u.rol}">${u.rol === 'admin' ? '👑 Admin' : u.rol === 'abogado' ? 'Abogado' : u.rol === 'asistente' ? 'Asistente' : 'Lectura'}</span>
                     ${u.rol !== 'admin' ? `
-                    <button class="btn btn-sm" style="background:var(--bg-2,var(--bg));" onclick="uiCrearUsuario('${u.id}')"><i class="fas fa-edit"></i></button>
-                    <button class="btn btn-d btn-sm" onclick="eliminarUsuario('${u.id}')"><i class="fas fa-trash"></i></button>` : '<span style="font-size:0.7rem; color:var(--t2);">Cuenta maestra</span>'}
+                    <button class="btn btn-sm" style="background:var(--bg-2,var(--bg));" data-action="users-edit" data-user-id="${escHtml(u.id)}"><i class="fas fa-edit"></i></button>
+                    <button class="btn btn-d btn-sm" data-action="users-delete" data-user-id="${escHtml(u.id)}"><i class="fas fa-trash"></i></button>` : '<span style="font-size:0.7rem; color:var(--t2);">Cuenta maestra</span>'}
                 </div>`).join('');
 
     // Tabla de permisos
@@ -1383,8 +1468,8 @@ async function renderGestionUsuarios() {
                         <div style="font-size:12px; color:var(--text-2); margin-top:4px;">Estado: <strong>${activa ? 'Activa' : 'Inactiva'}</strong> · Expira: ${escHtml(expTxt)}</div>
                     </div>
                     <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                        <button class="btn btn-sm" style="background:#0f766e; color:#fff; border:none;" onclick="uiGenerarClaveTemporalAdmin()"><i class="fas fa-key"></i> Generar clave temporal</button>
-                        <button class="btn btn-sm" style="background:#7f1d1d; color:#fff; border:none;" onclick="uiRevocarClaveTemporalAdmin()"><i class="fas fa-ban"></i> Revocar</button>
+                        <button class="btn btn-sm" style="background:#0f766e; color:#fff; border:none;" data-action="admin-clave-temp-generar"><i class="fas fa-key"></i> Generar clave temporal</button>
+                        <button class="btn btn-sm" style="background:#7f1d1d; color:#fff; border:none;" data-action="admin-clave-temp-revocar"><i class="fas fa-ban"></i> Revocar</button>
                     </div>
                 </div>
             </div>

@@ -306,7 +306,7 @@
                     </div>
                     <div class="db-kpi-trend" id="kpi-causas-trend"></div>
                 </div>
-                <div class="db-kpi db-kpi-red">
+                <div class="db-kpi db-kpi-red" data-action="dash-go-alertas" style="cursor:pointer;">
                     <div class="db-kpi-icon"><i class="fas fa-exclamation-triangle"></i></div>
                     <div class="db-kpi-data">
                         <span class="db-kpi-val" id="kpi-alertas">0</span>
@@ -915,6 +915,12 @@
                             <i class="fas fa-calendar-plus"></i> Exportar a Calendario (.ics)
                         </button>
                     </div>
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin:10px 0 12px;">
+                        <button class="btn btn-sm" data-action="cal-mes-prev" type="button"><i class="fas fa-chevron-left"></i></button>
+                        <div id="cal-mes-label" style="font-weight:800; letter-spacing:-.2px;"></div>
+                        <button class="btn btn-sm" data-action="cal-mes-next" type="button"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                    <div id="calendarioMes"></div>
                     <div
                         style="padding:8px 12px; background:#f0fdf4; border-left:3px solid #22c55e; border-radius:6px; font-size:0.75rem; color:#14532d; margin-bottom:12px;">
                         <i class="fas fa-info-circle"></i> El archivo <strong>.ics</strong> es compatible con Google
@@ -1954,6 +1960,8 @@
                                                 class="user-role-badge urb-abogado">Abo</span></th>
                                         <th style="text-align:center; padding:4px;"><span
                                                 class="user-role-badge urb-asistente">Asist</span></th>
+                                        <th style="text-align:center; padding:4px;"><span
+                                                class="user-role-badge urb-readonly">Lect</span></th>
                                     </tr>
                                 </thead>
                                 <tbody id="permisos-tabla"></tbody>

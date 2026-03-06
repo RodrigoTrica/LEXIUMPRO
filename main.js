@@ -48,7 +48,12 @@ try {
 
 // ── Google OAuth (Drive) — Authorization Code + PKCE (loopback localhost) ────
 const DRIVE_OAUTH_TOKEN_KEY = 'drive_oauth_tokens_v1';
-const DRIVE_OAUTH_SCOPES = 'https://www.googleapis.com/auth/drive.file';
+const DRIVE_OAUTH_SCOPES = [
+    'https://www.googleapis.com/auth/drive.file',
+    'openid',
+    'email',
+    'profile'
+].join(' ');
 
 function _b64UrlEncode(buf) {
     return Buffer.from(buf)
@@ -264,7 +269,7 @@ async function _driveGetAccessToken(clientId) {
 
     const saved = _leerDriveTokens();
     if (saved && saved.clientId === cid && saved.access_token && saved.expiry && Date.now() < saved.expiry) {
-        return { ok: true, accessToken: saved.access_token, expiry: saved.expiry };
+        return { ok: true, accessToken: saved.access_token, expiry: saved.expiry, scope: saved.scope || '' };
     }
 
     if (!saved || saved.clientId !== cid) {
@@ -292,7 +297,7 @@ async function _driveGetAccessToken(clientId) {
         obtainedAt: now,
     };
     _guardarDriveTokens(next);
-    return { ok: true, accessToken: next.access_token, expiry: next.expiry };
+    return { ok: true, accessToken: next.access_token, expiry: next.expiry, scope: next.scope || '' };
 }
 
 // ── Cifrado AES-256-GCM ───────────────────────────────────────────────────────
@@ -1198,6 +1203,64 @@ ipcMain.handle('prospectos:generar-pdf', async (_e, { tipo, html, nombre, defaul
     }
 });
 
+// ── IPC Handlers — Auditoría: Exportar PDF ───────────────────────────────────
+ipcMain.handle('audit:export-pdf', async (_e, { html, defaultName, outputDir, outputPath, saveAs }) => {
+    try {
+        const finalNombre = defaultName || `auditoria_${fechaHoy()}`;
+        const execPath = puppeteer.executablePath();
+        const browser = await puppeteer.launch({
+            executablePath: execPath,
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        });
+        const page = await browser.newPage();
+        await page.setContent(String(html || ''), { waitUntil: 'networkidle0' });
+        const pdf = await page.pdf({
+            format: 'A4',
+            printBackground: true,
+            margin: { top: '14mm', right: '12mm', bottom: '14mm', left: '12mm' }
+        });
+        await browser.close();
+
+        let ruta = '';
+        if (outputPath && typeof outputPath === 'string' && outputPath.trim()) {
+            ruta = outputPath.trim();
+        }
+
+        if (!ruta && saveAs) {
+            const baseDir = (outputDir && typeof outputDir === 'string' && outputDir.trim())
+                ? outputDir.trim()
+                : path.join(DATA_DIR, 'pdfs');
+            const defaultPath = path.join(baseDir, `${sanitizarNombre(finalNombre)}.pdf`);
+            const res = await dialog.showSaveDialog({
+                title: 'Guardar PDF (Auditoría)',
+                defaultPath,
+                filters: [{ name: 'PDF', extensions: ['pdf'] }]
+            });
+            if (res.canceled || !res.filePath) {
+                return { ok: false, success: false, error: 'Cancelado por usuario', message: 'Cancelado por usuario' };
+            }
+            ruta = res.filePath;
+        }
+
+        if (!ruta && outputDir && typeof outputDir === 'string' && outputDir.trim()) {
+            ruta = path.join(outputDir.trim(), `${sanitizarNombre(finalNombre)}.pdf`);
+        }
+
+        if (!ruta) {
+            ruta = path.join(DATA_DIR, 'pdfs', `${sanitizarNombre(finalNombre)}.pdf`);
+        }
+
+        fs.mkdirSync(path.dirname(ruta), { recursive: true });
+        fs.writeFileSync(ruta, pdf);
+        const base64 = pdf.toString('base64');
+        return { ok: true, success: true, ruta, base64 };
+    } catch (e) {
+        console.error('[audit:export-pdf]', e.message);
+        return { ok: false, success: false, error: e.message, message: e.message };
+    }
+});
+
 ipcMain.handle('prospectos:subir-documento', (_e, { causaId, tipo, archivo, nombre, mimetype }) => {
     try {
         const ruta = path.join(DATA_DIR, 'docs', sanitizarNombre(causaId), sanitizarNombre(tipo), `${sanitizarNombre(nombre)}.enc`);
@@ -1489,6 +1552,35 @@ function getWhatsAppConfig() {
     }
 }
 
+function waSesionExiste() {
+    try {
+        const userData = app.getPath('userData');
+
+        // Nuevo esquema (.wa-session)
+        const baseNew = path.join(userData, '.wa-session');
+        if (fs.existsSync(baseNew)) {
+            const def = path.join(baseNew, 'Default');
+            if (fs.existsSync(def)) return true;
+            const items = fs.readdirSync(baseNew);
+            if (Array.isArray(items) && items.length > 0) return true;
+        }
+
+        // Legacy LocalAuth (.wwebjs_auth) — puede vivir en userData o en el cwd
+        const legacyBases = [userData, process.cwd()];
+        for (const base of legacyBases) {
+            if (!base) continue;
+            const authDir = path.join(base, '.wwebjs_auth');
+            if (!fs.existsSync(authDir)) continue;
+            const items = fs.readdirSync(authDir);
+            if (Array.isArray(items) && items.length > 0) return true;
+        }
+
+        return false;
+    } catch (_) {
+        return false;
+    }
+}
+
 // ── Ventana principal ─────────────────────────────────────────────────────────
 let mainWindow;
 
@@ -1617,10 +1709,7 @@ app.whenReady().then(() => {
     // Si hay sesión guardada en disco (.wa-session), reconectar sin pedir QR.
     // Independiente del checkbox "activo" — la sesión persiste siempre.
     mainWindow.once('ready-to-show', () => {
-        const waSessionDir = require('path').join(app.getPath('userData'), '.wa-session');
-        const sessionExists = require('fs').existsSync(waSessionDir);
-
-        if (sessionExists) {
+        if (waSesionExiste()) {
             // Hay sesión guardada → reconectar automáticamente
             whatsappService.initWhatsApp(mainWindow);
         }

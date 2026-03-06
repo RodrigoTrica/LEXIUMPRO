@@ -6,31 +6,89 @@
             const el = document.getElementById('alert-container');
             let html = '';
 
+            if (!window._alertMonitorState) {
+                window._alertMonitorState = { filtro: 'todas', orden: 'prioridad' };
+            }
+            const st = window._alertMonitorState;
+
+            const prioRank = (p) => {
+                const k = String(p || 'media').toLowerCase();
+                if (k === 'critica') return 4;
+                if (k === 'alta') return 3;
+                if (k === 'media') return 2;
+                if (k === 'baja') return 1;
+                return 2;
+            };
+            const badge = (p) => {
+                const k = String(p || 'media').toLowerCase();
+                const map = {
+                    critica: { label: 'Crítica', bg: '#fee2e2', fg: '#b91c1c', bd: '#fecaca' },
+                    alta:    { label: 'Alta',    bg: '#ffedd5', fg: '#c2410c', bd: '#fed7aa' },
+                    media:   { label: 'Media',   bg: '#fef9c3', fg: '#854d0e', bd: '#fde68a' },
+                    baja:    { label: 'Baja',    bg: '#dcfce7', fg: '#166534', bd: '#bbf7d0' },
+                };
+                const v = map[k] || map.media;
+                return `<span style="font-size:10px; font-weight:800; padding:2px 8px; border-radius:999px; background:${v.bg}; color:${v.fg}; border:1px solid ${v.bd};">${v.label}</span>`;
+            };
+
             html += `
-                <div style="display:flex; justify-content:flex-end; margin:6px 0 12px;">
-                    <button class="btn" style="padding:7px 10px;" onclick="try{const r=window.cleanupAlertasPlantillaAntiguas&&window.cleanupAlertasPlantillaAntiguas({strictSameDay:true}); if(r&&r.ok){(typeof showSuccess==='function')&&showSuccess('Alertas auto eliminadas: '+(r.borradas||0));} else {(typeof showInfo==='function')&&showInfo('No fue posible ejecutar la limpieza.');}}catch(e){(typeof showError==='function')&&showError('No se pudo limpiar alertas auto.');} try{renderAlerts();}catch(_){}">
-                        Limpiar alertas auto
-                    </button>
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin:6px 0 12px; flex-wrap:wrap;">
+                    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; width:100%;">
+                        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; flex:1; min-width:240px;">
+                        <select class="input-field" style="padding:8px 10px; min-width:160px; flex:1;" data-action="alertas-set-filtro">
+                            <option value="todas" ${st.filtro === 'todas' ? 'selected' : ''}>Todas</option>
+                            <option value="criticas" ${st.filtro === 'criticas' ? 'selected' : ''}>Solo críticas/altas</option>
+                        </select>
+                        <select class="input-field" style="padding:8px 10px; min-width:180px; flex:1;" data-action="alertas-set-orden">
+                            <option value="prioridad" ${st.orden === 'prioridad' ? 'selected' : ''}>Orden: Prioridad</option>
+                            <option value="fecha" ${st.orden === 'fecha' ? 'selected' : ''}>Orden: Fecha</option>
+                        </select>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; min-width:170px;">
+                            <button class="btn" style="padding:8px 10px;" data-action="alertas-limpiar-auto">Limpiar alertas auto</button>
+                        </div>
+                    </div>
                 </div>
             `;
 
             // Alertas del sistema centralizado
             const today = new Date(); today.setHours(0, 0, 0, 0);
-            DB.alertas.filter(a => a.estado === 'activa').forEach(a => {
+
+            let alertasActivas = (DB.alertas || []).filter(a => a && a.estado === 'activa');
+            if (st.filtro === 'criticas') {
+                alertasActivas = alertasActivas.filter(a => {
+                    const p = String(a.prioridad || '').toLowerCase();
+                    return p === 'critica' || p === 'alta';
+                });
+            }
+
+            alertasActivas.sort((a, b) => {
+                if (st.orden === 'fecha') {
+                    return new Date(a.fechaObjetivo || 0) - new Date(b.fechaObjetivo || 0);
+                }
+                const pr = prioRank(b.prioridad) - prioRank(a.prioridad);
+                if (pr !== 0) return pr;
+                return new Date(a.fechaObjetivo || 0) - new Date(b.fechaObjetivo || 0);
+            });
+
+            alertasActivas.forEach(a => {
                 const causa = DB.causas.find(c => c.id === a.causaId);
                 const fa = new Date(a.fechaObjetivo); fa.setHours(0, 0, 0, 0);
                 const diff = Math.ceil((fa - today) / 86400000);
                 const color = diff <= 2 ? 'var(--danger)' : diff <= 5 ? 'var(--warning)' : 'var(--cyan)';
                 
                 html += `
-                <div class="alert-premium" style="border-left-color:${color}; margin-bottom:12px;">
+                <div class="alert-premium" style="border-left-color:${color}; margin-bottom:12px; cursor:pointer;" data-action="alertas-open" data-alerta-id="${escHtml(a.id)}">
                     <div class="icon-box-premium" style="background:${color}15; color:${color}; width:36px; height:36px; font-size:1rem;">
                         <i class="fas fa-bell"></i>
                     </div>
                     <div style="flex:1;">
                         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                            <strong>${escHtml(a.mensaje)}</strong>
-                            <button class="btn-xs" style="background:var(--bg-2); border:none; border-radius:4px; cursor:pointer;" onclick="archivarAlerta(${a.id})"><i class="fas fa-check"></i></button>
+                            <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+                                <strong style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escHtml(a.mensaje)}</strong>
+                                ${badge(a.prioridad)}
+                            </div>
+                            <button class="btn-xs" style="background:var(--bg-2); border:none; border-radius:4px; cursor:pointer;" data-action="alertas-archivar" data-alerta-id="${escHtml(a.id)}" title="Marcar como gestionada"><i class="fas fa-check"></i></button>
                         </div>
                         ${causa ? `<div style="font-size:12px; color:var(--text-2); margin:2px 0;">Causa: ${escHtml(causa.caratula)}</div>` : ''}
                         <div style="font-size:11px; color:var(--text-3); font-family:'IBM Plex Mono',monospace;">
@@ -257,6 +315,11 @@
                 el.innerHTML = '<div class="empty-state"><i class="fas fa-users"></i><p>Sin clientes registrados</p></div>';
                 return;
             }
+
+            const puedeEliminar = (typeof Users !== 'undefined' && typeof Users.tienePermiso === 'function')
+                ? Users.tienePermiso('eliminarClientes')
+                : true;
+
             el.innerHTML = lista.map(c => {
                 const causasCliente = DB.causas.filter(ca => ca.clienteId === c.id).length;
                 const esProspecto = (c.estado || c.status) === 'prospecto';
@@ -295,7 +358,7 @@
                             ${esProspecto ? `<button onclick="(typeof plantillaCausaAbrir==='function') ? plantillaCausaAbrir('${c.id}') : convertToCause('${c.id}')" class="btn btn-p btn-sm"><i class="fas fa-plus"></i> Abrir Causa</button>` : ''}
                             <button onclick="editClient('${c.id}')" class="btn btn-sm" style="background:var(--bg-2); border:none;"><i class="fas fa-edit"></i></button>
                             <button onclick="verPerfilCliente?.('${c.id}')" class="btn btn-sm" style="background:var(--bg-2); border:none;"><i class="fas fa-external-link-alt"></i></button>
-                            <button onclick="deleteClient('${c.id}')" class="btn btn-d btn-sm"><i class="fas fa-trash"></i></button>
+                            ${puedeEliminar ? `<button onclick="deleteClient('${c.id}')" class="btn btn-d btn-sm"><i class="fas fa-trash"></i></button>` : ''}
                         </div>
                     </div>
                 </div>`;
@@ -617,7 +680,7 @@
                             <div style="padding:14px 16px; display:grid; gap:10px;">
                                 <div id="auth-critica-detalle" style="font-size:13px; color:var(--text-2,#334155); font-family:'IBM Plex Sans',sans-serif;"></div>
                                 <label style="font-size:12px; color:var(--text-3,#64748b); font-family:'IBM Plex Sans',sans-serif;">Clave admin o clave temporal</label>
-                                <input id="auth-critica-pass" type="password" class="input-field" placeholder="Ingrese clave..." autocomplete="off" style="font-family:'IBM Plex Sans',sans-serif; font-size:14px; background:var(--bg,#0b1220); color:#e5e7eb !important; -webkit-text-fill-color:#e5e7eb; caret-color:#22d3ee; border:1px solid var(--border,#334155); pointer-events:auto;" />
+                                <input id="auth-critica-pass" type="password" class="input-field" placeholder="Ingrese clave..." autocomplete="off" style="font-family:'IBM Plex Sans',sans-serif; font-size:14px; background:var(--bg-2,#f1f5f9); color:var(--text-1,#0f172a); caret-color:var(--primary,#0f3460); border:1px solid var(--border,#e2e8f0); pointer-events:auto;" />
                                 <div id="auth-critica-error" style="display:none; font-size:12px; color:#b91c1c;"><i class="fas fa-times-circle"></i> Clave inválida.</div>
                                 <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:4px;">
                                     <button type="button" id="auth-critica-cancel" class="btn btn-sm" style="background:var(--bg-2); border:1px solid var(--border); font-family:'IBM Plex Sans',sans-serif;">Cancelar</button>
@@ -684,9 +747,16 @@
                 };
 
                 modal.style.display = 'flex';
-                // foco inmediato + fallback corto para evitar bloqueos de interacción por repaint
-                try { passEl?.focus(); passEl?.click(); } catch (_) {}
-                setTimeout(() => { try { passEl?.focus(); passEl?.click(); } catch (_) {} }, 0);
+                // Forzar reflow para evitar el bug de foco/click que aparece hasta cambiar de ventana
+                try { void modal.offsetHeight; } catch (_) {}
+
+                const focusPass = () => {
+                    try { passEl?.focus(); passEl?.select?.(); } catch (_) {}
+                };
+                // Foco inmediato + rAF + fallback
+                focusPass();
+                requestAnimationFrame(() => focusPass());
+                setTimeout(() => focusPass(), 50);
             });
             if (!pass) return false;
 
@@ -872,12 +942,24 @@
         }
 
         function deleteClient(id) {
+            if (typeof Users !== 'undefined' && typeof Users.tienePermiso === 'function') {
+                if (!Users.tienePermiso('eliminarClientes')) {
+                    showError('No tiene permiso para eliminar clientes.');
+                    return;
+                }
+            }
             showConfirm(
                 '¿Eliminar cliente?',
                 'Se eliminará el registro del cliente y su historial. Esta acción es irreversible.',
                 () => {
                     setTimeout(() => {
                         (async () => {
+                            if (typeof Users !== 'undefined' && typeof Users.tienePermiso === 'function') {
+                                if (!Users.tienePermiso('eliminarClientes')) {
+                                    showError('No tiene permiso para eliminar clientes.');
+                                    return;
+                                }
+                            }
                             const autorizado = await uiAutorizarAccionCritica({
                                 titulo: 'Eliminar cliente completo',
                                 detalle: 'Esta operación también eliminará causas, cobros y documentos asociados.'

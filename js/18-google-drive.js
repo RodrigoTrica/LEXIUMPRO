@@ -16,13 +16,15 @@ const GoogleDrive = (() => {
     const DRIVE_CONFIG_KEY = 'LEXIUM_DRIVE_CONFIG_V1';
     const DRIVE_FOLDER_NAME = 'LEXIUM - DESPACHO';
     const SYNC_META_KEY = 'LEXIUM_DRIVE_SYNC_META';
-    const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+    const SCOPES = 'https://www.googleapis.com/auth/drive.file openid email profile';
 
     // Estado interno (en memoria — no se persiste el token por seguridad)
     let _accessToken = null;
     let _tokenExpiry = null;   // timestamp ms
+    let _tokenScope = '';
     let _folderId = null;   // ID de la carpeta en Drive
     let _isInitialized = false;
+    let _autoResumeAttempted = false;
 
     function _sanitizeFolderName(s) {
         return String(s || '')
@@ -79,6 +81,7 @@ const GoogleDrive = (() => {
             const t = res.tokens || {};
             _accessToken = t.access_token || null;
             _tokenExpiry = t.expiry || null;
+            _tokenScope = String(t.scope || '');
             _isInitialized = true;
             EventBus.emit('drive:connected', { expiry: _tokenExpiry });
             _driveRenderStatus();
@@ -95,7 +98,27 @@ const GoogleDrive = (() => {
         if (!res || !res.ok) throw new Error(res?.error || 'No se pudo refrescar token');
         _accessToken = res.accessToken;
         _tokenExpiry = res.expiry;
+        if (res.scope) _tokenScope = String(res.scope || '');
         return res;
+    }
+
+    async function autoResume() {
+        if (_autoResumeAttempted) return;
+        _autoResumeAttempted = true;
+        try {
+            if (!getClientId()) return;
+            if (!_isElectronDriveAvailable()) return;
+            const res = await window.electronAPI.drive.getAccessToken(getClientId());
+            if (!res || !res.ok || !res.accessToken) return;
+            _accessToken = res.accessToken;
+            _tokenExpiry = res.expiry || null;
+            if (res.scope) _tokenScope = String(res.scope || '');
+            _isInitialized = true;
+            EventBus.emit('drive:connected', { expiry: _tokenExpiry, resumed: true });
+            _driveRenderStatus();
+        } catch (_) {
+            // silencioso
+        }
     }
 
     // ── Revocar token y desconectar ────────────────────────────────
@@ -492,9 +515,9 @@ const GoogleDrive = (() => {
                                 </div>
                             </div>
                             ${connected
-                ? `<button onclick="GoogleDrive.disconnect()" class="btn btn-sm" style="background:#fef2f2; color:#dc2626; border:1px solid #fecaca;">
+                ? `<button data-action="drive-disconnect" class="btn btn-sm" style="background:#fef2f2; color:#dc2626; border:1px solid #fecaca;">
                                     <i class="fas fa-unlink"></i> Desconectar</button>`
-                : `<button onclick="GoogleDrive.connect()" class="btn btn-p btn-sm">
+                : `<button data-action="drive-connect" class="btn btn-p btn-sm">
                                     <i class="fab fa-google"></i> Conectar</button>`
             }
                         </div>
@@ -512,11 +535,11 @@ const GoogleDrive = (() => {
                         </div>
 
                         <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                            <button onclick="GoogleDrive.pushToCloud('manual').then(() => showSuccess('✅ Datos sincronizados con Drive.')).catch(e => showError(e.message))"
+                            <button data-action="drive-push"
                                 class="btn btn-p" style="flex:1; min-width:120px;">
                                 <i class="fas fa-cloud-upload-alt"></i> Subir a Drive
                             </button>
-                            <button onclick="driveConfirmPull()" class="btn" style="flex:1; min-width:120px; background:var(--bg-2,#f8fafc); border:1px solid var(--border);">
+                            <button data-action="drive-pull-confirm" class="btn" style="flex:1; min-width:120px; background:var(--bg-2,#f8fafc); border:1px solid var(--border);">
                                 <i class="fas fa-cloud-download-alt"></i> Descargar de Drive
                             </button>
                         </div>
@@ -590,10 +613,10 @@ const GoogleDrive = (() => {
                                     spellcheck="false"
                                     style="flex:1; font-family:'IBM Plex Mono',monospace; font-size:14px; padding:10px 14px;"
                                 >
-                                <button onclick="GoogleDrive.copyDriveClientId()" class="btn" style="padding:0 14px; background:var(--bg-2,#f8fafc); border:1px solid var(--border);">
+                                <button data-action="drive-copy-clientid" class="btn" style="padding:0 14px; background:var(--bg-2,#f8fafc); border:1px solid var(--border);">
                                     <i class="far fa-copy"></i>
                                 </button>
-                                <button onclick="GoogleDrive.saveClientId()" class="btn btn-p" style="padding:0 20px;">
+                                <button data-action="drive-save-clientid" class="btn btn-p" style="padding:0 20px;">
                                     <i class="fas fa-save" style="margin-right:6px;"></i> Guardar
                                 </button>
                             </div>
@@ -605,10 +628,10 @@ const GoogleDrive = (() => {
                                     spellcheck="false"
                                     style="flex:1; font-family:'IBM Plex Mono',monospace; font-size:14px; padding:10px 14px;"
                                 >
-                                <button onclick="GoogleDrive.toggleDriveClientSecret()" class="btn" style="padding:0 14px; background:var(--bg-2,#f8fafc); border:1px solid var(--border);" title="Mostrar/Ocultar">
+                                <button data-action="drive-toggle-secret" class="btn" style="padding:0 14px; background:var(--bg-2,#f8fafc); border:1px solid var(--border);" title="Mostrar/Ocultar">
                                     <i class="far fa-eye"></i>
                                 </button>
-                                <button onclick="GoogleDrive.copyDriveClientSecret()" class="btn" style="padding:0 14px; background:var(--bg-2,#f8fafc); border:1px solid var(--border);" title="Copiar">
+                                <button data-action="drive-copy-secret" class="btn" style="padding:0 14px; background:var(--bg-2,#f8fafc); border:1px solid var(--border);" title="Copiar">
                                     <i class="far fa-copy"></i>
                                 </button>
                             </div>
@@ -621,6 +644,7 @@ const GoogleDrive = (() => {
                     </div>`;
 
         _driveRenderStatus();
+        setTimeout(() => { try { autoResume(); } catch (_) { } }, 250);
     }
 
     function saveClientId() {
@@ -632,7 +656,9 @@ const GoogleDrive = (() => {
 
         const clientSecret = secretInput ? String(secretInput.value || '').trim() : '';
         _saveConfig({ clientId, clientSecret });
-        showOk('Client ID guardado. Ahora puedes conectar Drive.');
+        if (typeof showSuccess === 'function') showSuccess('Client ID guardado. Ahora puedes conectar Drive.');
+        else if (typeof showInfo === 'function') showInfo('Client ID guardado. Ahora puedes conectar Drive.');
+        else { try { alert('Client ID guardado. Ahora puedes conectar Drive.'); } catch (_) {} }
         _driveRenderStatus();
     }
 
@@ -642,7 +668,9 @@ const GoogleDrive = (() => {
             const val = input ? String(input.value || '').trim() : '';
             if (!val) { showError('Client ID vacío.'); return; }
             await navigator.clipboard.writeText(val);
-            showOk('Client ID copiado.');
+            if (typeof showSuccess === 'function') showSuccess('Client ID copiado.');
+            else if (typeof showInfo === 'function') showInfo('Client ID copiado.');
+            else { try { alert('Client ID copiado.'); } catch (_) {} }
         } catch (e) {
             showError('No se pudo copiar (permiso del sistema).');
         }
@@ -654,7 +682,9 @@ const GoogleDrive = (() => {
             const val = input ? String(input.value || '').trim() : '';
             if (!val) { showError('Client Secret vacío.'); return; }
             await navigator.clipboard.writeText(val);
-            showOk('Client Secret copiado.');
+            if (typeof showSuccess === 'function') showSuccess('Client Secret copiado.');
+            else if (typeof showInfo === 'function') showInfo('Client Secret copiado.');
+            else { try { alert('Client Secret copiado.'); } catch (_) {} }
         } catch (e) {
             showError('No se pudo copiar (permiso del sistema).');
         }
@@ -673,6 +703,9 @@ const GoogleDrive = (() => {
 
         // Obtener email del usuario autenticado en Google
         try {
+            const scope = String(_tokenScope || '');
+            const canProfile = scope.includes('openid') || scope.includes('email') || scope.includes('profile');
+            if (!canProfile) return;
             const resp = await fetch(
                 'https://www.googleapis.com/oauth2/v2/userinfo',
                 { headers: { 'Authorization': `Bearer ${_accessToken}` } }

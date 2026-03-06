@@ -600,6 +600,25 @@ async function _iaCallClaude(prompt, key, model) {
 
 let _iaProviderTab = iaGetProviderA(); // tab activo en la UI
 
+function iaUiSetProviderTab(pid) {
+    if (!pid || !IA_PROVIDERS[pid]) return;
+    _iaProviderTab = pid;
+}
+
+function iaUiSelectProviderA(pid) {
+    if (!pid || !IA_PROVIDERS[pid]) return;
+    try { iaSetProviderA(pid); } catch (_) {}
+    _iaProviderTab = pid;
+    try { iaRenderConfigUI(); } catch (_) {}
+}
+
+function iaUiSelectProviderB(pid) {
+    if (!pid || !IA_PROVIDERS[pid]) return;
+    try { iaSetProviderB(pid); } catch (_) {}
+    _iaProviderTab = pid;
+    try { iaRenderConfigUI(); } catch (_) {}
+}
+
 /** Renderiza la sección completa de config-ia con tabs de proveedores */
 async function iaRenderConfigUI() {
     const section = document.getElementById('ia-config-container');
@@ -648,7 +667,7 @@ async function iaRenderConfigUI() {
                                                 box-shadow: ${isActive ? '0 10px 20px ' + p.color + '15' : 'var(--sh-1)'};">
                                                 <input type="radio" name="ia-provider-radio-a" value="${p.id}"
                                                     ${isActive ? 'checked' : ''}
-                                                    onchange="iaSetProviderA('${p.id}'); _iaProviderTab='${p.id}'; iaRenderConfigUI();"
+                                                    data-action="ia-provider-a" data-provider="${p.id}"
                                                     style="display:none;">
                                                 <div style="width:42px; height:42px; display:flex; align-items:center; justify-content:center; border-radius:12px; background:${p.color}15; box-shadow: inset 0 0 0 1px ${p.color}20;">
                                                     <i class="${p.icon}" style="font-size:1.35rem; color:${p.color};"></i>
@@ -680,7 +699,7 @@ async function iaRenderConfigUI() {
                                                 box-shadow: ${isActive ? '0 10px 20px ' + p.color + '15' : 'var(--sh-1)'};">
                                                 <input type="radio" name="ia-provider-radio-b" value="${p.id}"
                                                     ${isActive ? 'checked' : ''}
-                                                    onchange="iaSetProviderB('${p.id}'); _iaProviderTab='${p.id}'; iaRenderConfigUI();"
+                                                    data-action="ia-provider-b" data-provider="${p.id}"
                                                     style="display:none;">
                                                 <div style="width:42px; height:42px; display:flex; align-items:center; justify-content:center; border-radius:12px; background:${p.color}15; box-shadow: inset 0 0 0 1px ${p.color}20;">
                                                     <i class="${p.icon}" style="font-size:1.35rem; color:${p.color};"></i>
@@ -729,10 +748,10 @@ async function iaRenderConfigUI() {
                         <div style="margin-top:16px; padding:14px; background:linear-gradient(135deg,#faf5ff,#f5f3ff); border:1px solid #e9d5ff; border-radius:12px;">
                             <div style="font-size:11px; font-weight:700; color:#5b21b6; margin-bottom:10px; letter-spacing:0.04em; text-transform:uppercase;">Accesos Rápidos del Repositorio</div>
                             <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-                                <button onclick="typeof clAbrirBusquedaJuris!=='undefined'&&clAbrirBusquedaJuris()" style="display:flex;align-items:center;gap:7px;padding:8px 10px;background:white;border:1px solid #e9d5ff;border-radius:8px;cursor:pointer;font-size:0.72rem;font-weight:700;color:#4c1d95;" onmouseover="this.style.background='#ede9fe'" onmouseout="this.style.background='white'"><i class="fas fa-book" style="color:#7c3aed;"></i>Jurisprudencia</button>
-                                <button onclick="typeof clAbrirDoctrina!=='undefined'&&clAbrirDoctrina()" style="display:flex;align-items:center;gap:7px;padding:8px 10px;background:white;border:1px solid #e9d5ff;border-radius:8px;cursor:pointer;font-size:0.72rem;font-weight:700;color:#4c1d95;" onmouseover="this.style.background='#ede9fe'" onmouseout="this.style.background='white'"><i class="fas fa-graduation-cap" style="color:#7c3aed;"></i>Doctrina</button>
-                                <button onclick="tab && tab('jurisprudencia', null)" style="display:flex;align-items:center;gap:7px;padding:8px 10px;background:white;border:1px solid #e9d5ff;border-radius:8px;cursor:pointer;font-size:0.72rem;font-weight:700;color:#4c1d95;" onmouseover="this.style.background='#ede9fe'" onmouseout="this.style.background='white'"><i class="fas fa-landmark" style="color:#7c3aed;"></i>Módulo Jurisprudencia</button>
-                                <button onclick="tab && tab('doctrina', null)" style="display:flex;align-items:center;gap:7px;padding:8px 10px;background:white;border:1px solid #e9d5ff;border-radius:8px;cursor:pointer;font-size:0.72rem;font-weight:700;color:#4c1d95;" onmouseover="this.style.background='#ede9fe'" onmouseout="this.style.background='white'"><i class="fas fa-book-reader" style="color:#7c3aed;"></i>Módulo Doctrina</button>
+                                <button data-action="ia-quick-juris" style="display:flex;align-items:center;gap:7px;padding:8px 10px;background:white;border:1px solid #e9d5ff;border-radius:8px;cursor:pointer;font-size:0.72rem;font-weight:700;color:#4c1d95;"><i class="fas fa-book" style="color:#7c3aed;"></i>Jurisprudencia</button>
+                                <button data-action="ia-quick-doctrina" style="display:flex;align-items:center;gap:7px;padding:8px 10px;background:white;border:1px solid #e9d5ff;border-radius:8px;cursor:pointer;font-size:0.72rem;font-weight:700;color:#4c1d95;"><i class="fas fa-graduation-cap" style="color:#7c3aed;"></i>Doctrina</button>
+                                <button data-action="ia-tab" data-tab="jurisprudencia" style="display:flex;align-items:center;gap:7px;padding:8px 10px;background:white;border:1px solid #e9d5ff;border-radius:8px;cursor:pointer;font-size:0.72rem;font-weight:700;color:#4c1d95;"><i class="fas fa-landmark" style="color:#7c3aed;"></i>Módulo Jurisprudencia</button>
+                                <button data-action="ia-tab" data-tab="doctrina" style="display:flex;align-items:center;gap:7px;padding:8px 10px;background:white;border:1px solid #e9d5ff;border-radius:8px;cursor:pointer;font-size:0.72rem;font-weight:700;color:#4c1d95;"><i class="fas fa-book-reader" style="color:#7c3aed;"></i>Módulo Doctrina</button>
                             </div>
                         </div>
                         <div style="margin-top:14px; padding:14px; background:rgba(245, 158, 11, 0.05); border:1px solid rgba(245, 158, 11, 0.2); border-radius:14px; font-size:12.5px; color:#d97706; line-height:1.5;">
@@ -913,6 +932,10 @@ async function analizarDocumentoDual(documentoId, onProgress) {
 
 window.analizarDocumentoDual = analizarDocumentoDual;
 
+window.iaUiSetProviderTab = iaUiSetProviderTab;
+window.iaUiSelectProviderA = iaUiSelectProviderA;
+window.iaUiSelectProviderB = iaUiSelectProviderB;
+
 async function _iaRenderProviderCard(pid) {
     const p = IA_PROVIDERS[pid];
     const key = await iaGetKey(pid);
@@ -949,21 +972,21 @@ async function _iaRenderProviderCard(pid) {
                         placeholder="${p.keyHint}"
                         value="${key ? '••••••••••••••••' : ''}"
                         style="flex:1; font-family:'IBM Plex Mono',monospace; font-size:13px;"
-                        onfocus="if(this.value.startsWith('•'))this.value='';">
+                        data-action="ia-key-focus" data-provider="${pid}">
                     <button class="btn btn-sm" style="background:var(--bg);"
-                        onclick="_iaToggleVerKey('${pid}')">
+                        data-action="ia-key-toggle" data-provider="${pid}">
                         <i class="fas fa-eye" id="ia-eye-${pid}"></i>
                     </button>
                 </div>
                 <div style="display:flex; gap:10px; margin-top:20px; border-bottom:1px solid var(--border); padding-bottom:20px;">
-                    <button class="btn btn-p" style="padding:10px 20px; font-weight:700; min-width:140px;" onclick="_iaGuardarKeyUI('${pid}')">
+                    <button class="btn btn-p" style="padding:10px 20px; font-weight:700; min-width:140px;" data-action="ia-key-save" data-provider="${pid}">
                         <i class="fas fa-save" style="margin-right:6px;"></i> Guardar Cambios
                     </button>
                     <button class="btn btn-secondary" style="background:var(--bg); border:1px solid var(--border); border-radius:var(--r-md); cursor:pointer; padding:0 15px; display:flex; align-items:center; gap:6px; font-size:13px; color:var(--text-2); transition:all 0.15s;"
-                        onclick="_iaTestKeyUI('${pid}')">
+                        data-action="ia-key-test" data-provider="${pid}">
                         <i class="fas fa-bolt" style="color:var(--cyan);"></i> Probar
                     </button>
-                    <button class="btn btn-d" style="padding:0 15px;" onclick="_iaEliminarKeyUI('${pid}')">
+                    <button class="btn btn-d" style="padding:0 15px;" data-action="ia-key-delete" data-provider="${pid}">
                         <i class="fas fa-trash-alt"></i>
                     </button>
                 </div>
@@ -993,7 +1016,7 @@ async function _iaRenderProviderCard(pid) {
                             overflow:hidden;">
                             <input type="radio" name="ia-model-${pid}" value="${m.id}"
                                 ${isSel ? 'checked' : ''}
-                                onchange="iaGuardarModelProvider('${pid}','${m.id}'); iaRenderConfigUI();"
+                                data-action="ia-model" data-provider="${pid}" data-model="${m.id}"
                                 style="width:18px; height:18px; accent-color:${p.color};">
                             <div style="min-width:0;">
                                 <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
