@@ -8,11 +8,11 @@
 // Captura errores silenciosos y promesas rechazadas sin manejar
 // ══════════════════════════════════════════════════════════════════
 window.addEventListener('error', function (e) {
-    console.error('[AppBogado] Error global:', e.message, '→', e.filename, 'línea', e.lineno);
+    console.error('[LEXIUM] Error global:', e.message, '→', e.filename, 'línea', e.lineno);
 });
 
 window.addEventListener('unhandledrejection', function (e) {
-    console.error('[AppBogado] Promesa rechazada sin capturar:', e.reason);
+    console.error('[LEXIUM] Promesa rechazada sin capturar:', e.reason);
     e.preventDefault();
 });
 
@@ -28,10 +28,10 @@ window.addEventListener('unhandledrejection', function (e) {
             .sort();
         if (huerfanos.length > 0) {
             huerfanos.forEach(k => localStorage.removeItem(k));
-            console.info('[AppBogado] Limpiados', huerfanos.length, 'backup(s) huérfano(s).');
+            console.info('[LEXIUM] Limpiados', huerfanos.length, 'backup(s) huérfano(s).');
         }
     } catch (e) {
-        console.warn('[AppBogado] Error limpiando backups huérfanos:', e);
+        console.warn('[LEXIUM] Error limpiando backups huérfanos:', e);
     }
 })();
 
@@ -44,8 +44,8 @@ window.addEventListener('unhandledrejection', function (e) {
 // código de negocio nuevo — el legacy sigue funcionando via proxy).
 // ═══════════════════════════════════════════════════════════════════
 
-const DB_KEY = 'APPBOGADO_DATA_V395';
-const BACKUP_KEY = 'APPBOGADO_BACKUPS_V1';   // historial rotativo
+const DB_KEY = 'LEXIUM_DATA_V1';
+const BACKUP_KEY = 'LEXIUM_BACKUPS_V1';   // historial rotativo
 const BACKUP_MAX = 5;                          // snapshots guardados
 const BACKUP_INTERVAL_MS = 5 * 60 * 1000;        // auto-backup cada 5 min
 
@@ -171,16 +171,16 @@ let _raw = (() => {
     });
     // Migración única: mover Doctrina del localStorage aislado al Store centralizado
     try {
-        const rawDoctr = localStorage.getItem('APPBOGADO_DOCTRINA_V1');
+        const rawDoctr = localStorage.getItem('LEXIUM_DOCTRINA_V1');
         if (rawDoctr && !d._doctrina.length) {
             const parsed = JSON.parse(rawDoctr);
             if (Array.isArray(parsed) && parsed.length > 0) {
                 d._doctrina = parsed;
-                localStorage.removeItem('APPBOGADO_DOCTRINA_V1'); // limpiar clave huérfana
+                localStorage.removeItem('LEXIUM_DOCTRINA_V1'); // limpiar clave huérfana
                 console.info('[Store] Doctrina migrada al Store centralizado:', parsed.length, 'documentos.');
             }
         }
-    } catch (e) { console.warn('[Store] Migración doctrina falló (no crítico):', e); }
+    } catch (_) { }
     if (!d.configuracion) d.configuracion = { ultimoResetDiario: null, modoEstudio: false };
     if (!d.configuracion.auditRetention) d.configuracion.auditRetention = { maxLogs: 10000, maxDays: 180 };
     if (!d.loginBloqueado) d.loginBloqueado = { hasta: null, intentosFallidos: 0 };
@@ -946,7 +946,7 @@ async function _hash(pw) {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-const USERS_KEY = 'APPBOGADO_USERS_V2';
+const USERS_KEY = 'LEXIUM_USERS_V1';
 const MAX_INTENTOS = 5;
 const BLOQUEO_MS = 5 * 60 * 1000;
 
@@ -1057,7 +1057,7 @@ async function loginRenderUsuarios() {
     const el = document.getElementById('login-user-list');
     if (!el) return;
     el.innerHTML = lista.filter(u => u.activo !== false).map(u => `
-                <button class="login-user-btn" onclick="loginSeleccionarUsuario('${u.id}')">
+                <button class="login-user-btn" data-user-id="${u.id}">
                     <div class="login-avatar" style="background:${u.color || '#1a3a6b'};">${(u.nombre || '?')[0].toUpperCase()}</div>
                     <div class="login-user-info">
                         <div class="login-user-name">${escHtml(u.nombre)}</div>
@@ -1068,16 +1068,26 @@ async function loginRenderUsuarios() {
 }
 
 let _loginUserId = null;
+// Delegación de eventos (CSP estricto: sin handlers inline)
+document.addEventListener('click', (ev) => {
+    const btn = ev.target && ev.target.closest ? ev.target.closest('.login-user-btn') : null;
+    if (!btn) return;
+    const cont = document.getElementById('login-user-list');
+    if (!cont || !cont.contains(btn)) return;
+    const id = btn.dataset.userId;
+    if (!id) return;
+    loginSeleccionarUsuario(id);
+});
+
 async function loginSeleccionarUsuario(id) {
     _loginUserId = id;
     const lista = Users.listar();
     const u = lista.find(u => String(u.id) === String(id));
     if (!u) return;
     document.querySelectorAll('.login-user-btn').forEach(b => b.classList.remove('selected'));
-    // Marcar botón seleccionado (onclick inline no provee currentTarget fiable)
+    // Marcar botón seleccionado
     document.querySelectorAll('.login-user-btn').forEach(b => {
-        const onclk = b.getAttribute('onclick') || '';
-        if (onclk.includes(id)) b.classList.add('selected');
+        if (String(b.dataset.userId || '') === String(id)) b.classList.add('selected');
     });
     document.getElementById('login-user-list').style.display = 'none';
     const pwBlock = document.getElementById('login-pw-block');
@@ -1173,11 +1183,11 @@ function _abrirApp() {
         const te = document.getElementById('topbar-email');
         if (ta) { ta.textContent = (u.nombre || '?')[0].toUpperCase(); ta.style.background = u.color || '#2563eb'; }
         if (tn) tn.textContent = u.nombre;
-        if (te) te.textContent = (u.usuario || 'admin') + '@appbogado.com';
+        if (te) te.textContent = (u.usuario || 'admin') + '@lexium.cl';
     }
     // Botón admin solo visible para admin
     const btnAdmin = document.getElementById('btn-admin-usuarios');
-    if (btnAdmin) btnAdmin.style.display = (u?.rol === 'admin') ? 'flex' : 'none';
+    if (btnAdmin) btnAdmin.style.display = (u && u.rol === 'admin') ? 'inline-flex' : 'none';
     // Aplicar restricciones de UI según rol
     _aplicarRestriccionesRol();
     // Esperar a que los modales parciales estén inyectados (html-loader) antes de init
@@ -1425,7 +1435,7 @@ function uiRevocarClaveTemporalAdmin() {
 // ═══════════════════════════════════════════════════════════════════════
 // BIBLIOTECA DOCUMENTAL — Índice estructurado de todos los documentos
 // ═══════════════════════════════════════════════════════════════════════
-const BIB_KEY = 'APPBOGADO_BIBLIOTECA_V1';
+const BIB_KEY = 'LEXIUM_BIBLIOTECA_V1';
 let _bibView = 'grid';
 let _bibTagActivo = '';
 

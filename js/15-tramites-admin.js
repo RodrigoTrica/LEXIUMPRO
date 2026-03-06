@@ -6,7 +6,7 @@
         // ████████████████████████████████████████████████████████████████████
 
         // ── Constante de clave local ──────────────────────────────────────
-        const TRAMITES_KEY = 'APPBOGADO_TRAMITES_V1';
+        const TRAMITES_KEY = 'LEXIUM_TRAMITES_V1';
 
         // ── Catálogo de organismos y tipos de trámite ─────────────────────
         const TRAMITES_CATALOGO = {

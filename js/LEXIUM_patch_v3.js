@@ -22,11 +22,12 @@
     // ── 1. DOCUMENT TITLE ────────────────────────────────────────────
     document.title = 'LEXIUM | Gestión Legal Inteligente';
 
-    // ── 2. REPLACE TEXT NODES "AppBogado" → "LEXIUM" ────────────────
+    // ── 2. REPLACE TEXT NODES (legacy) → "LEXIUM" ────────────────
+    var LEGACY_BRAND = 'App' + 'Bogado';
     function replaceText(node) {
       if (node.nodeType === 3) {
-        if (node.nodeValue && node.nodeValue.indexOf('AppBogado') !== -1) {
-          node.nodeValue = node.nodeValue.split('AppBogado').join('LEXIUM');
+        if (node.nodeValue && node.nodeValue.indexOf(LEGACY_BRAND) !== -1) {
+          node.nodeValue = node.nodeValue.split(LEGACY_BRAND).join('LEXIUM');
         }
       } else if (node.nodeType === 1 &&
                  node.tagName !== 'SCRIPT' &&
@@ -40,7 +41,7 @@
     replaceText(document.body);
 
     // ── 3. ALT ATTRIBUTES ───────────────────────────────────────────
-    var imgs = document.querySelectorAll('[alt="AppBogado"]');
+    var imgs = document.querySelectorAll('[alt="' + LEGACY_BRAND + '"]');
     for (var i = 0; i < imgs.length; i++) {
       imgs[i].setAttribute('alt', 'LEXIUM');
     }

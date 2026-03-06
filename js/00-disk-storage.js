@@ -1,5 +1,5 @@
 /**
- * AppBogado — js/00-disk-storage.js
+ * LEXIUM — js/00-disk-storage.js
  * 
  * Reemplaza localStorage por almacenamiento cifrado en disco cuando
  * la app corre dentro de Electron. Si corre en navegador normal,
@@ -167,7 +167,7 @@
     // Carga las claves críticas al caché ANTES de que 01-db-auth.js las necesite.
     // Usa IPC síncrono (sendSync) para bloquear hasta tener los datos del disco.
     if (ES_ELECTRON && window.electronAPI?.storage?.getSync) {
-        const CLAVES_CRITICAS = ['APPBOGADO_DATA_V395', 'APPBOGADO_CONFIG_V1'];
+        const CLAVES_CRITICAS = ['LEXIUM_DATA_V1', 'LEXIUM_CONFIG_V1'];
         let hidratadas = 0;
         CLAVES_CRITICAS.forEach(k => {
             try {

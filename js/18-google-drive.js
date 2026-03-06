@@ -13,10 +13,9 @@ const GoogleDrive = (() => {
     // Instrucciones en: https://console.cloud.google.com/
     // API habilitada: Google Drive API v3
     // ──────────────────────────────────────────────────────────────
-    const DRIVE_CONFIG_KEY = 'APPBOGADO_DRIVE_CONFIG_V1';
+    const DRIVE_CONFIG_KEY = 'LEXIUM_DRIVE_CONFIG_V1';
     const DRIVE_FOLDER_NAME = 'LEXIUM - DESPACHO';
-    const DRIVE_FOLDER_NAME_LEGACY = 'AppBogado — Despacho';
-    const SYNC_META_KEY = 'APPBOGADO_DRIVE_SYNC_META';
+    const SYNC_META_KEY = 'LEXIUM_DRIVE_SYNC_META';
     const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
     // Estado interno (en memoria — no se persiste el token por seguridad)
@@ -140,7 +139,7 @@ const GoogleDrive = (() => {
         return resp.status === 204 ? null : resp.json();
     }
 
-    // ── Obtener/crear carpeta AppBogado en Drive ───────────────────
+    // ── Obtener/crear carpeta LEXIUM en Drive ───────────────────
     async function _getOrCreateFolder() {
         if (_folderId) return _folderId;
 
@@ -224,7 +223,7 @@ const GoogleDrive = (() => {
     async function uploadFile(filename, content, mimeType = 'application/json', existingFileId = null) {
         const folderId = await _getOrCreateFolder();
         const metadata = { name: filename, parents: existingFileId ? undefined : [folderId] };
-        const boundary = '-------AppBogadoBoundary';
+        const boundary = '-------LEXIUMBoundary';
         const body = [
             `--${boundary}`,
             'Content-Type: application/json; charset=UTF-8',
@@ -257,7 +256,7 @@ const GoogleDrive = (() => {
         return JSON.parse(text);
     }
 
-    // ── Buscar un archivo por nombre en la carpeta AppBogado ────────
+    // ── Buscar un archivo por nombre en la carpeta LEXIUM ────────
     async function findFile(filename) {
         const folderId = await _getOrCreateFolder();
         const res = await _driveRequest(
@@ -279,7 +278,7 @@ const GoogleDrive = (() => {
     // ═══════════════════════════════════════════════════════════════
 
     // Nombre del archivo principal de datos en Drive
-    const MAIN_DATA_FILE = 'appbogado-datos.json';
+    const MAIN_DATA_FILE = 'lexium-datos.json';
 
     /**
      * pushToCloud — Sube el snapshot completo de Store a Drive.
@@ -309,7 +308,7 @@ const GoogleDrive = (() => {
         // Desde v15, Doctrina está integrada en Store (no requiere merge manual).
         // Solo Trámites mantiene almacenamiento aislado.
         try {
-            const rawTram = localStorage.getItem('APPBOGADO_TRAMITES_V1');
+            const rawTram = localStorage.getItem('LEXIUM_TRAMITES_V1');
             if (rawTram) snapshot._tramites = JSON.parse(rawTram);
         } catch (e) {
             console.warn('[Drive] No se pudieron incluir Trámites en el snapshot:', e.message);
@@ -372,7 +371,7 @@ const GoogleDrive = (() => {
                 }
             }
             if (Array.isArray(data.snapshot._tramites)) {
-                localStorage.setItem('APPBOGADO_TRAMITES_V1', JSON.stringify(data.snapshot._tramites));
+                localStorage.setItem('LEXIUM_TRAMITES_V1', JSON.stringify(data.snapshot._tramites));
             }
         } catch (e) {
             console.warn('[Drive] No se pudieron restaurar módulos auxiliares:', e.message);
@@ -525,7 +524,7 @@ const GoogleDrive = (() => {
                         <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:10px 12px; font-size:0.76rem; color:#92400e;">
                             <i class="fas fa-info-circle"></i>
                             Auto-sync activo cada 10 min. Los archivos se guardan en tu Google Drive personal,
-                            bajo tu cuenta — no en servidores de AppBogado.
+                            bajo tu cuenta — no en servidores de LEXIUM.
                         </div>
                         ` : ''}
                     </div>`;
@@ -724,7 +723,7 @@ const GoogleDrive = (() => {
         }
 
         // Construir cuerpo multipart con datos binarios reales
-        const boundary = '-------AppBogadoPDFBoundary' + Date.now();
+        const boundary = '-------LEXIUMPDFBoundary' + Date.now();
         const metadata = JSON.stringify({ name: filename, parents: [folderId] });
 
         const metaPart = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n`;
@@ -800,4 +799,4 @@ function driveConnect() { GoogleDrive.connect(); }
 function driveConfirmPull() { GoogleDrive.confirmPull(); }
 function drivePush() { GoogleDrive.pushToCloud('manual').then(() => showSuccess('✅ Sincronizado con Drive.')).catch(e => showError(e.message)); }
 
-console.info('[AppBogado v13] GoogleDrive F13 ✓');
+console.info('[LEXIUM v13] GoogleDrive F13 ✓');

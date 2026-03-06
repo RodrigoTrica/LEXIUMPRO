@@ -485,7 +485,7 @@
             // Limpiar backups viejos para liberar espacio
             function limpiarBackups(dejarN = 2) {
                 try {
-                    const BACKUP_KEY = 'APPBOGADO_BACKUPS_V1';
+                    const BACKUP_KEY = 'LEXIUM_BACKUPS_V1';
                     const lista = JSON.parse(localStorage.getItem(BACKUP_KEY)) || [];
                     if (lista.length <= dejarN) {
                         showInfo(`Solo hay ${lista.length} backups. Nada que limpiar.`);
@@ -617,12 +617,11 @@
             const missing = criticalChecks.filter(c => { try { return !c.test(); } catch(e) { return true; } });
             if (missing.length > 0) {
                 missing.forEach(c => {
-                    console.error(`[AppBogado] ❌ DEPENDENCIA FALTANTE: "${c.label}" — verificar carga de ${c.module}.`);
+                    console.error(`[LEXIUM] ❌ DEPENDENCIA FALTANTE: "${c.label}" — verificar carga de ${c.module}.`);
                 });
             } else {
-                console.info('[AppBogado] ✅ Módulos críticos verificados.');
+                console.info('[LEXIUM] ✅ Módulos críticos verificados.');
             }
         });
 
-        console.info('[AppBogado v13] EventBus ✓ | RenderBus ✓ | StorageGuard ✓');
-
+        console.info('[LEXIUM v13] EventBus ✓ | RenderBus ✓ | StorageGuard ✓');

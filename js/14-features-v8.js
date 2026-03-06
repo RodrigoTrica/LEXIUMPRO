@@ -219,7 +219,7 @@
                     ? 'IMPORTANTE: El abogado está trabajando en la causa indicada en el contexto. Enfoca tu respuesta en esa causa específicamente.'
                     : 'Responde sobre el estado general del despacho o la causa que el abogado mencione.';
 
-                const systemPrompt = `Eres "LexBot", el asistente legal IA de AppBogado, especializado en derecho chileno.
+                const systemPrompt = `Eres "LexBot", el asistente legal IA de LEXIUM, especializado en derecho chileno.
 Ayuda con plazos procesales, estrategia, análisis de riesgo, y preguntas sobre causas.
 Responde de forma ejecutiva, clara y con referencias legales cuando sea pertinente.
 ${causaCtxNote}
@@ -610,7 +610,7 @@ ${context}`;
 <html xmlns:x="urn:schemas-microsoft-com:office:excel">
 <head>
 <meta charset="UTF-8">
-<title>Cartera de Causas — AppBogado</title>
+<title>Cartera de Causas — LEXIUM</title>
 <style>
   body{font-family:Calibri,Arial,sans-serif;font-size:12px;}
   h1{font-size:16px;color:#1a3a6b;border-bottom:2px solid #1a3a6b;padding-bottom:6px;}
@@ -628,7 +628,7 @@ ${context}`;
 <div class="meta">
   Generado: ${new Date().toLocaleDateString('es-CL', {weekday:'long',day:'numeric',month:'long',year:'numeric'})} ·
   Total causas: <strong>${DB.causas.length}</strong> ·
-  Despacho: <strong>${DB.configuracion?.nombreDespacho || 'AppBogado'}</strong>
+  Despacho: <strong>${DB.configuracion?.nombreDespacho || 'LEXIUM'}</strong>
 </div>
 <table>
   <thead>
@@ -650,7 +650,7 @@ ${context}`;
     </tr>
   </tbody>
 </table>
-<div class="footer">AppBogado · Gestión Jurídica Profesional · Datos exportados de localStorage · Confidencial</div>
+<div class="footer">LEXIUM · Gestión Jurídica Profesional · Datos exportados de localStorage · Confidencial</div>
 </body></html>`;
 
             _descargarTexto(html, `cartera-causas-${new Date().toISOString().split('T')[0]}.xls`, 'application/vnd.ms-excel;charset=utf-8;');
@@ -822,7 +822,7 @@ ${context}`;
 <!-- ══ PORTADA ══ -->
 <div class="portada">
   <div>
-    <div class="portada-logo">⚖ AppBogado · Gestión Jurídica</div>
+    <div class="portada-logo">⚖ LEXIUM · Gestión Jurídica</div>
     <div class="portada-despacho">${escHtml(config.nombreDespacho || 'Despacho Jurídico')}</div>
     <div class="portada-tagline">${escHtml(config.tagline || 'Gestión Jurídica Profesional')}</div>
   </div>
@@ -1040,7 +1040,7 @@ ${context}`;
 
   <!-- FOOTER -->
   <div class="footer-doc">
-    <span>${escHtml(config.nombreDespacho || 'AppBogado')} · Generado el ${hoy}</span>
+    <span>${escHtml(config.nombreDespacho || 'LEXIUM')} · Generado el ${hoy}</span>
     <span>CONFIDENCIAL · Solo para uso interno</span>
   </div>
 </div>

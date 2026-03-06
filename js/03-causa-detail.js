@@ -636,7 +636,7 @@ td:first-child{width:34%;font-weight:700;color:#475569}
                 let usuarios = appCfg?.get?.('usuarios') || [];
                 if (!Array.isArray(usuarios) || usuarios.length === 0) {
                     try {
-                        const raw = localStorage.getItem('APPBOGADO_USERS_V2');
+                        const raw = localStorage.getItem('LEXIUM_USERS_V1');
                         usuarios = raw ? (JSON.parse(raw) || []) : [];
                     } catch (_) {
                         usuarios = [];

@@ -87,8 +87,8 @@ async function _iaCallGLM(prompt, key, model) {
 const _IACrypto = (() => {
     // Secreto base mezclado con fingerprint del navegador.
     // Cambiar este valor invalida todas las keys guardadas (migración limpia).
-    const BASE_SECRET = 'APPBOGADO-IA-KEY-VAULT-v1';
-    const SALT_STORAGE = 'APPBOGADO_IA_SALT';
+    const BASE_SECRET = 'LEXIUM-IA-KEY-VAULT-v1';
+    const SALT_STORAGE = 'LEXIUM_IA_SALT';
 
     // Obtiene o genera un salt persistente aleatorio por dispositivo/perfil
     function _getSalt() {
@@ -180,9 +180,9 @@ const _IACrypto = (() => {
 // SECCIÓN 1 — REGISTRO DE PROVEEDORES
 // ═══════════════════════════════════════════════════════════════════
 
-const IA_PROVIDER_STORAGE = 'APPBOGADO_IA_PROVIDER';   // 'gemini' | 'openai' | 'claude'
-const IA_KEYS_STORAGE = 'APPBOGADO_IA_KEYS';       // { gemini, openai, claude } — valores cifrados AES-GCM
-const IA_MODELS_STORAGE = 'APPBOGADO_IA_MODELS';     // { gemini, openai, claude }
+const IA_PROVIDER_STORAGE = 'LEXIUM_IA_PROVIDER';   // 'gemini' | 'openai' | 'claude'
+const IA_KEYS_STORAGE = 'LEXIUM_IA_KEYS';       // { gemini, openai, claude } — valores cifrados AES-GCM
+const IA_MODELS_STORAGE = 'LEXIUM_IA_MODELS';     // { gemini, openai, claude }
 
 const IA_PROVIDERS = {
     gemini: {
@@ -326,7 +326,7 @@ async function iaGetKey(providerId) {
 
     // Retrocompatibilidad Gemini: leer key legacy si no hay en el nuevo store
     if (!raw && pid === 'gemini') {
-        try { raw = localStorage.getItem('APPBOGADO_GEMINI_KEY') || ''; } catch(e) { raw = ''; }
+        try { raw = localStorage.getItem('LEXIUM_GEMINI_KEY') || ''; } catch(e) { raw = ''; }
     }
 
     if (!raw) return '';
@@ -342,7 +342,7 @@ function iaGetModel(providerId) {
     if (pid === 'gemini') {
         // Retrocompatibilidad con GEMINI_MODEL_STORAGE legacy
         return models.gemini
-            || (() => { try { return localStorage.getItem('APPBOGADO_GEMINI_MODEL'); } catch(e) { return null; } })()
+            || (() => { try { return localStorage.getItem('LEXIUM_GEMINI_MODEL'); } catch(e) { return null; } })()
             || IA_PROVIDERS.gemini.defaultModel;
     }
     return models[pid] || IA_PROVIDERS[pid]?.defaultModel || '';
@@ -355,7 +355,7 @@ async function iaGuardarKeyProvider(providerId, key) {
     try { AppConfig.set('ia_keys', keys); } catch(e) { console.warn('[AppConfig] ia_keys', e.message); }
     // Retrocompatibilidad Gemini: también actualizar key legacy (cifrada)
     if (providerId === 'gemini') {
-        try { localStorage.setItem('APPBOGADO_GEMINI_KEY', encrypted); } catch(e) { console.warn('[LS] GEMINI_KEY', e.message); }
+        try { localStorage.setItem('LEXIUM_GEMINI_KEY', encrypted); } catch(e) { console.warn('[LS] GEMINI_KEY', e.message); }
     }
 }
 
@@ -365,7 +365,7 @@ function iaGuardarModelProvider(providerId, modelId) {
     try { AppConfig.set('ia_models', models); } catch(e) { console.warn('[AppConfig] ia_models', e.message); }
     // Retrocompatibilidad Gemini
     if (providerId === 'gemini') {
-        try { localStorage.setItem('APPBOGADO_GEMINI_MODEL', modelId); } catch(e) { console.warn('[LS] GEMINI_MODEL', e.message); }
+        try { localStorage.setItem('LEXIUM_GEMINI_MODEL', modelId); } catch(e) { console.warn('[LS] GEMINI_MODEL', e.message); }
     }
 }
 
@@ -931,7 +931,7 @@ async function _iaRenderProviderCard(pid) {
                     <i class="fas fa-lock-alt" style="font-size:1.2rem;"></i>
                     <div>
                         <strong>Privacidad Local:</strong>
-                        Sus llaves se cifran en el navegador. AppBogado no almacena ni visualiza sus API Keys.
+                        Sus llaves se cifran en el navegador. LEXIUM no almacena ni visualiza sus API Keys.
                     </div>
                 </div>
 
@@ -1049,7 +1049,7 @@ function _iaEliminarKeyUI(pid) {
         const keys = _iaGetKeyStorage();
         delete keys[pid];
         try { AppConfig.set('ia_keys', keys); } catch(e) { console.warn('[AppConfig] ia_keys', e.message); }
-        if (pid === 'gemini') { try { localStorage.removeItem('APPBOGADO_GEMINI_KEY'); } catch(e) { console.warn('[LS] removeItem GEMINI_KEY', e.message); } }
+        if (pid === 'gemini') { try { localStorage.removeItem('LEXIUM_GEMINI_KEY'); } catch(e) { console.warn('[LS] removeItem GEMINI_KEY', e.message); } }
         showSuccess(`API Key de ${IA_PROVIDERS[pid]?.label} eliminada.`);
         iaRenderConfigUI();
     }, 'danger');

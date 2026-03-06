@@ -1,5 +1,5 @@
 /**
- * AppBogado — main.js (Electron Main Process) v2.2
+ * LEXIUM — main.js (Electron Main Process) v2.2
  * ─────────────────────────────────────────────────
  * MEJORAS DE SEGURIDAD APLICADAS:
  *  ✅ contextIsolation: true  (ya estaba)
@@ -21,6 +21,8 @@ const http = require('http');
 const os = require('os');
 const crypto = require('crypto');
 const puppeteer = require('puppeteer');
+
+const IA_PROMPTS = require('./ia-prompts');
 
 const alertService = require('./alert-service-v3');
 const waLogger = require('./wa-logger-v3');
@@ -347,6 +349,611 @@ function descifrar(b64) {
     }
 }
 
+function _leerStorageSeguro(clave) {
+    try {
+        validarClave(clave);
+        const archivo = path.join(DATA_DIR, `${sanitizarNombre(clave)}.enc`);
+        if (!fs.existsSync(archivo)) return null;
+        return descifrar(fs.readFileSync(archivo, 'utf8'));
+    } catch (_) {
+        return null;
+    }
+}
+
+function _guardarStorageSeguro(clave, valor) {
+    validarClave(clave);
+    validarValor(valor);
+    const archivo = path.join(DATA_DIR, `${sanitizarNombre(clave)}.enc`);
+    fs.writeFileSync(archivo, cifrar(valor), 'utf8');
+}
+
+function _iaNormalizeProvider(pid) {
+    const p = String(pid || '').toLowerCase().trim();
+    if (p === 'gemini') return 'gemini';
+    if (p === 'claude' || p === 'anthropic') return 'claude';
+    if (p === 'groq') return 'groq';
+    return '';
+}
+
+const _IA_DEFAULTS = {
+    gemini: { model: 'gemini-2.5-flash' },
+    claude: { model: 'claude-3-5-sonnet-20241022' },
+    groq: { model: 'llama-3.3-70b-versatile' }
+};
+
+const _IA_ESCRITOS_TIPOS = {
+    demanda_civil_ordinaria: {
+        label: 'Demanda Civil — Juicio Ordinario',
+        prompt_extra: 'Estructura obligatoria Art. 254 CPC: (1) SUMA con peticiones en otrosíes. (2) Encabezado con tribunal, RUT, domicilio procesal. (3) I. HECHOS numerados y cronológicos. (4) II. DERECHO con artículos del Código Civil y CPC. (5) III. PETICIONES con "Por tanto, pide a US." (6) OTROSÍES: patrocinio/poder y documentos. (7) Cierre con "ES JUSTICIA". Tono formal y técnico.'
+    },
+    demanda_civil_sumario: {
+        label: 'Demanda Civil — Juicio Sumario',
+        prompt_extra: 'Procedimiento sumario Art. 680 y ss. CPC. Indicar causal que justifica sumariedad (urgencia o naturaleza de la acción). Misma estructura que ordinaria. Citar Art. 683 CPC para citación a audiencia. Peticiones claras y acotadas.'
+    },
+    alimentos_menores: {
+        label: 'Demanda de Alimentos (Familia)',
+        prompt_extra: 'Estructura en tribunales de familia: EN LO PRINCIPAL (demanda), OTROSÍES: alimentos provisorios, acompañar documentos, patrocinio y poder, forma especial de notificación. Citar Ley 14.908, Código Civil (321 y ss.), Ley 19.968. Identificar demandante/demandado con RUT y domicilio.'
+    }
+};
+
+const _IA_PROMPT_ANALISIS_ESTRATEGICO = `=== INSTRUCCIÓN: ANÁLISIS ESTRATÉGICO PROFUNDO ===
+Eres un litigante experto en derecho chileno. Analiza esta causa y entrega un plan estratégico completo:
+
+1. DIAGNÓSTICO ESTRATÉGICO
+[Posición actual del cliente, ventajas comparativas frente a la contraparte]
+
+2. TEORÍA DEL CASO
+[Narrativa jurídica que el abogado debe sostener en juicio]
+
+3. MAPA DE RIESGOS
+Señala para cada dimensión: nivel y cómo mitigarlo
+- Riesgo procesal
+- Riesgo probatorio
+- Riesgo de prescripción/caducidad
+- Riesgo de condena en costas
+- Riesgo reputacional
+
+4. PLAN DE ACCIÓN (90 días)
+Semanas 1-2: [Acciones urgentes]
+Semanas 3-6: [Acciones de desarrollo]
+Semanas 7-12: [Acciones de consolidación]
+
+5. ESTRATEGIA PROBATORIA
+[Pruebas clave a obtener, testigos, peritos, documentos]
+
+6. ARGUMENTOS JURÍDICOS PRINCIPALES
+[Con cita de artículos específicos y jurisprudencia relevante del despacho]
+
+7. CONTRAARGUMENTOS ESPERADOS Y RESPUESTAS
+[Qué alegará la contraparte y cómo rebatirlo]
+
+8. ESCENARIOS Y PROBABILIDADES
+- Escenario favorable: [probabilidad estimada + condiciones]
+- Escenario neutro (acuerdo): [probabilidad + términos razonables]
+- Escenario adverso: [probabilidad + mitigación]
+
+9. RECOMENDACIÓN FINAL
+[Acción estratégica más importante que el abogado debe ejecutar esta semana]
+
+Sé específico. Cita normativa chilena aplicable. Evita generalidades.`;
+
+const _IA_PROMPT_CHAT_LEGAL = IA_PROMPTS.CHAT_LEGAL;
+
+const _IA_PROMPT_ANALIZAR_CAUSA = IA_PROMPTS.ANALIZAR_CAUSA;
+
+const _IA_PROMPT_ANALIZAR_JURISPRUDENCIA = IA_PROMPTS.ANALIZAR_JURISPRUDENCIA;
+
+const _IA_PROMPT_EXTRAER_FALLO_JSON = `Analiza el siguiente texto de una resolución o sentencia judicial chilena y extrae los datos en formato JSON estricto.
+Responde SOLO con el JSON, sin texto adicional, sin backticks, sin markdown.
+
+Campos requeridos:
+{
+  "tribunal": "nombre del tribunal",
+  "rol": "ROL o RIT del caso",
+  "fecha": "YYYY-MM-DD o cadena de fecha",
+  "materia": "materia o rama del derecho (Civil, Laboral, Familia, Penal, Constitucional, etc.)",
+  "procedimiento": "tipo de procedimiento",
+  "tendencia": "Favorable (para demandante) | Desfavorable | Neutra",
+  "nivelRelevancia": "Alta | Media | Baja",
+  "temaCentral": "resumen del tema jurídico central en 1-2 oraciones",
+  "holding": "criterio jurídico o doctrina establecida en el fallo, máx 3 oraciones",
+  "palabrasClave": ["término1", "término2", "término3", "término4", "término5"]
+}
+
+Si algún campo no puede determinarse del texto, usa "No especificado".`;
+
+const _IA_MODULOS_TEMPLATES = {
+    juris_consulta: {
+        providerDefault: 'claude',
+        buildPrompt: ({ consulta }) => `Eres un experto en jurisprudencia chilena.
+Jurisdicción: Chile. Responde en español formal. Cita ROL y tribunal cuando sea posible.
+
+CONSULTA: ${consulta}`
+    },
+    doctrina_consulta: {
+        providerDefault: 'claude',
+        buildPrompt: ({ tema }) => `Eres un experto en doctrina jurídica chilena. Conoces profundamente los textos de Alessandri, Somarriva, Abeliuk, Meza Barros, Claro Solar y otros autores nacionales.
+
+CONSULTA DOCTRINAL: ${tema}
+Jurisdicción: Chile. Responde en español formal y técnico.`
+    },
+    estrategia_situacion: {
+        providerDefault: 'claude',
+        buildPrompt: ({ contexto, situacion }) => `${contexto}
+
+SITUACIÓN A ANALIZAR: ${situacion}
+
+Entrega recomendaciones estratégicas concretas, riesgos y próximos pasos.`
+    },
+    informe_causa: {
+        providerDefault: 'claude',
+        buildPrompt: ({ contexto, alertas, instrucciones }) => `${contexto}
+
+ALERTAS ACTIVAS:
+${alertas}
+
+INSTRUCCIONES PARA EL INFORME:
+${instrucciones}
+
+Redacta un informe formal y accionable.`
+    },
+    mejorar_escrito: {
+        providerDefault: 'claude',
+        buildPrompt: ({ borrador, instrucciones }) => `Eres un abogado litigante chileno experto. Revisa y mejora el siguiente escrito judicial.
+
+BORRADOR:
+---
+${borrador}
+---
+
+INSTRUCCIONES:
+${instrucciones}
+
+Devuelve el escrito mejorado completo, manteniendo el estilo formal.`
+    },
+    resumen_doc: {
+        providerDefault: 'claude',
+        buildPrompt: ({ texto }) => `Resume y estructura este documento legal chileno:
+
+---
+${texto}
+---
+
+Devuelve:
+1) Resumen ejecutivo
+2) Hechos relevantes
+3) Pretensiones/solicitudes
+4) Fundamentos jurídicos
+5) Fechas y plazos relevantes (si aparecen)
+6) Acciones recomendadas`
+    }
+};
+
+function _iaSafeJsonParse(raw) {
+    try {
+        if (!raw) return null;
+        return JSON.parse(raw);
+    } catch (_) {
+        return null;
+    }
+}
+
+function _iaGetKeyFromLegacyConfig(providerId) {
+    const rawCfg = _leerStorageSeguro('LEXIUM_CONFIG_V1');
+    const cfg = _iaSafeJsonParse(rawCfg);
+    const keys = cfg && typeof cfg === 'object' ? (cfg.ia_keys || null) : null;
+    if (!keys || typeof keys !== 'object') return '';
+    return String(keys[providerId] || '');
+}
+
+function _iaReadKey(providerId) {
+    const pid = _iaNormalizeProvider(providerId);
+    if (!pid) return '';
+    const direct = _leerStorageSeguro(`ia_key_${pid}`);
+    if (direct && typeof direct === 'string' && direct.trim()) return direct.trim();
+    const legacy = _iaGetKeyFromLegacyConfig(pid);
+    if (legacy) return legacy;
+    return '';
+}
+
+function _iaReadModel(providerId) {
+    const pid = _iaNormalizeProvider(providerId);
+    if (!pid) return '';
+    const direct = _leerStorageSeguro(`ia_model_${pid}`);
+    if (direct && typeof direct === 'string' && direct.trim()) return direct.trim();
+    return _IA_DEFAULTS[pid]?.model || '';
+}
+
+function _iaBuildPromptGenerarEscrito(args) {
+    const tipoId = String(args?.tipoId || '').trim();
+    const tipo = _IA_ESCRITOS_TIPOS[tipoId] || null;
+    const tipoLabel = String(args?.tipoLabel || tipo?.label || 'Escrito').trim();
+
+    const causa = (args && typeof args.causa === 'object' && args.causa) ? args.causa : {};
+    const hechos = String(args?.hechos || '').trim();
+    const juris = String(args?.jurisprudencia || '').trim();
+
+    const rama = String(causa?.rama || 'Civil');
+    const caratula = String(causa?.caratula || 'Causa');
+    const tribunal = String(causa?.juzgado || 'Tribunal competente');
+    const tipoProcedimiento = String(causa?.tipoProcedimiento || '');
+    const promptExtra = String(tipo?.prompt_extra || args?.promptExtra || '').trim();
+
+    return `Eres un abogado litigante chileno experto en ${rama}.
+Redacta un escrito judicial formal de tipo "${tipoLabel}" para presentar ante un tribunal chileno.
+Usa el formato estándar chileno: EN LO PRINCIPAL / OTROSÍ, RIT/ROL, fundamentación legal con artículos del Código de Procedimiento Civil y normas sustantivas aplicables a la materia, y peticiones concretas.
+Deja entre [CORCHETES] los datos que el abogado debe completar (nombre, RUT, domicilio, etc.).
+NO inventes hechos. Usa SOLO los proporcionados.
+
+INSTRUCCIONES ESPECÍFICAS PARA ESTE TIPO DE ESCRITO:
+${promptExtra}
+
+DATOS DE LA CAUSA:
+- Carátula: ${caratula}
+- Tribunal: ${tribunal}
+${tipoProcedimiento ? `- Procedimiento: ${tipoProcedimiento}\n` : ''}
+- Rama: ${rama}
+
+HECHOS Y ANTECEDENTES:
+${hechos}
+
+${juris ? 'JURISPRUDENCIA ASOCIADA:\n' + juris + '\n\n' : ''}Redacta el escrito completo con formato profesional.`;
+}
+
+async function _iaCallGemini(prompt, key, model) {
+    const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+    const m = String(model || _IA_DEFAULTS.gemini.model);
+    const url = `${GEMINI_API_BASE}/${encodeURIComponent(m)}:generateContent?key=${encodeURIComponent(key)}`;
+    let resp;
+    try {
+        resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: String(prompt || '') }] }],
+                generationConfig: { temperature: 0.3, maxOutputTokens: 4000 },
+            }),
+        });
+    } catch (_) {
+        throw new Error('Error de red al conectar con Gemini.');
+    }
+    if (!resp.ok) {
+        const errBody = await resp.json().catch(() => ({}));
+        const errMsg = errBody?.error?.message || `HTTP ${resp.status}`;
+        const err = new Error(errMsg);
+        err.status = resp.status;
+        throw err;
+    }
+    const data = await resp.json().catch(() => ({}));
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+}
+
+async function _iaCallClaude(prompt, key, model) {
+    let resp;
+    try {
+        resp = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': key,
+                'anthropic-version': '2023-06-01',
+            },
+            body: JSON.stringify({
+                model: String(model || _IA_DEFAULTS.claude.model),
+                max_tokens: 4000,
+                messages: [{ role: 'user', content: String(prompt || '') }],
+            }),
+        });
+    } catch (_) {
+        throw new Error('Error de red al conectar con Anthropic.');
+    }
+    if (!resp.ok) {
+        const errBody = await resp.json().catch(() => ({}));
+        const errMsg = errBody?.error?.message || `HTTP ${resp.status}`;
+        const err = new Error(errMsg);
+        err.status = resp.status;
+        throw err;
+    }
+    const data = await resp.json().catch(() => ({}));
+    const blocks = Array.isArray(data.content) ? data.content : [];
+    return blocks.filter(b => b && b.type === 'text').map(b => b.text).join('') || '';
+}
+
+async function _iaCallGroq(prompt, key, model) {
+    let resp;
+    try {
+        resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${key}`,
+            },
+            body: JSON.stringify({
+                model: String(model || _IA_DEFAULTS.groq.model),
+                temperature: 0.25,
+                max_tokens: 4000,
+                messages: [{ role: 'user', content: String(prompt || '') }],
+            }),
+        });
+    } catch (_) {
+        throw new Error('Error de red al conectar con Groq.');
+    }
+    if (!resp.ok) {
+        const errBody = await resp.json().catch(() => ({}));
+        const errMsg = errBody?.error?.message || `HTTP ${resp.status}`;
+        const err = new Error(errMsg);
+        err.status = resp.status;
+        throw err;
+    }
+    const data = await resp.json().catch(() => ({}));
+    return data?.choices?.[0]?.message?.content || '';
+}
+
+ipcMain.handle('ia:set-key', async (_e, args) => {
+    try {
+        const pid = _iaNormalizeProvider(args?.provider);
+        if (!pid) throw new Error('Proveedor inválido');
+        const key = String(args?.key || '').trim();
+        if (!key) throw new Error('Key vacía');
+        if (key.length > 300) throw new Error('Key demasiado larga');
+        _guardarStorageSeguro(`ia_key_${pid}`, key);
+        return { ok: true };
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
+});
+
+ipcMain.handle('ia:list-escritos-tipos', async () => {
+    try {
+        const items = Object.entries(_IA_ESCRITOS_TIPOS).map(([id, v]) => ({
+            id,
+            label: String(v?.label || id)
+        }));
+        return { ok: true, items };
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
+});
+
+ipcMain.handle('ia:get-status', async (_e) => {
+    try {
+        const g = _iaReadKey('gemini');
+        const c = _iaReadKey('claude');
+        const gr = _iaReadKey('groq');
+        return {
+            ok: true,
+            has: {
+                gemini: !!g,
+                claude: !!c,
+                groq: !!gr,
+            },
+            model: {
+                gemini: _iaReadModel('gemini'),
+                claude: _iaReadModel('claude'),
+                groq: _iaReadModel('groq'),
+            }
+        };
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
+});
+
+ipcMain.handle('ia:generar-escrito', async (_e, args) => {
+    try {
+        const provider = _iaNormalizeProvider(args?.provider || 'gemini');
+        if (!provider) throw new Error('Proveedor inválido');
+        const hechos = String(args?.hechos || '').trim();
+        if (!hechos) throw new Error('Faltan hechos');
+        if (hechos.length > 200000) throw new Error('Hechos demasiado largos');
+
+        const key = _iaReadKey(provider);
+        if (!key) throw new Error('No hay API Key configurada para este proveedor.');
+
+        const model = _iaReadModel(provider);
+        const prompt = (args && typeof args === 'object' && typeof args.promptExtra === 'string' && args.promptExtra.trim())
+            ? String(args.promptExtra).trim()
+            : _iaBuildPromptGenerarEscrito(args);
+
+        const texto = provider === 'gemini'
+            ? await _iaCallGemini(prompt, key, model)
+            : provider === 'claude'
+                ? await _iaCallClaude(prompt, key, model)
+                : await _iaCallGroq(prompt, key, model);
+
+        return { ok: true, texto };
+    } catch (e) {
+        return { ok: false, error: e.message || String(e) };
+    }
+});
+
+ipcMain.handle('ia:modulo-run', async (_e, args) => {
+    try {
+        const templateId = String(args?.templateId || '').trim();
+        const tpl = _IA_MODULOS_TEMPLATES[templateId];
+        if (!tpl) throw new Error('Template IA inválido');
+
+        const provider = _iaNormalizeProvider(args?.provider || tpl.providerDefault || 'claude');
+        if (!provider) throw new Error('Proveedor inválido');
+        const key = _iaReadKey(provider);
+        if (!key) throw new Error('No hay API Key configurada para este proveedor.');
+        const model = _iaReadModel(provider);
+
+        const payload = (args && typeof args.payload === 'object' && args.payload) ? args.payload : {};
+        const prompt = String(tpl.buildPrompt(payload) || '').trim();
+        if (!prompt) throw new Error('Prompt vacío');
+        if (prompt.length > 250000) throw new Error('Prompt demasiado largo');
+
+        const texto = provider === 'gemini'
+            ? await _iaCallGemini(prompt, key, model)
+            : provider === 'claude'
+                ? await _iaCallClaude(prompt, key, model)
+                : await _iaCallGroq(prompt, key, model);
+
+        return { ok: true, texto };
+    } catch (e) {
+        return { ok: false, error: e.message || String(e) };
+    }
+});
+
+ipcMain.handle('ia:chat-responder', async (_e, args) => {
+    try {
+        const provider = _iaNormalizeProvider(args?.provider || 'claude');
+        if (!provider) throw new Error('Proveedor inválido');
+        const key = _iaReadKey(provider);
+        if (!key) throw new Error('No hay API Key configurada para este proveedor.');
+        const model = _iaReadModel(provider);
+
+        const contexto = String(args?.contexto || '').trim();
+        const causaCtx = String(args?.causaCtx || '').trim();
+        const historial = String(args?.historial || '').trim();
+        const pregunta = String(args?.pregunta || '').trim();
+        if (!pregunta) throw new Error('Pregunta vacía');
+        if (pregunta.length > 50000) throw new Error('Pregunta demasiado larga');
+        if (contexto.length > 200000) throw new Error('Contexto demasiado largo');
+
+        const prompt = `${contexto}\n${causaCtx}\n\n${historial ? `=== CONVERSACIÓN PREVIA ===\n${historial}\n\n` : ''}=== PREGUNTA ACTUAL ===\nABOGADO: ${pregunta}\n\n${_IA_PROMPT_CHAT_LEGAL}`;
+
+        const texto = provider === 'gemini'
+            ? await _iaCallGemini(prompt, key, model)
+            : provider === 'claude'
+                ? await _iaCallClaude(prompt, key, model)
+                : await _iaCallGroq(prompt, key, model);
+
+        return { ok: true, texto };
+    } catch (e) {
+        return { ok: false, error: e.message || String(e) };
+    }
+});
+
+ipcMain.handle('ia:analizar-causa', async (_e, args) => {
+    try {
+        const provider = _iaNormalizeProvider(args?.provider || 'claude');
+        if (!provider) throw new Error('Proveedor inválido');
+        const key = _iaReadKey(provider);
+        if (!key) throw new Error('No hay API Key configurada para este proveedor.');
+        const model = _iaReadModel(provider);
+
+        const contexto = String(args?.contexto || '').trim();
+        if (!contexto) throw new Error('Contexto vacío');
+        if (contexto.length > 200000) throw new Error('Contexto demasiado largo');
+
+        const prompt = `${contexto}\n\n=== INSTRUCCIÓN ===\n${_IA_PROMPT_ANALIZAR_CAUSA}`;
+
+        const texto = provider === 'gemini'
+            ? await _iaCallGemini(prompt, key, model)
+            : provider === 'claude'
+                ? await _iaCallClaude(prompt, key, model)
+                : await _iaCallGroq(prompt, key, model);
+
+        return { ok: true, texto };
+    } catch (e) {
+        return { ok: false, error: e.message || String(e) };
+    }
+});
+
+ipcMain.handle('ia:analizar-jurisprudencia', async (_e, args) => {
+    try {
+        const provider = _iaNormalizeProvider(args?.provider || 'claude');
+        if (!provider) throw new Error('Proveedor inválido');
+        const key = _iaReadKey(provider);
+        if (!key) throw new Error('No hay API Key configurada para este proveedor.');
+        const model = _iaReadModel(provider);
+
+        const sentencia = String(args?.sentencia || '').trim();
+        if (!sentencia) throw new Error('Sentencia vacía');
+        if (sentencia.length > 200000) throw new Error('Sentencia demasiado larga');
+        const causasRel = String(args?.causasRelacionadas || '').trim();
+        if (causasRel.length > 200000) throw new Error('Contexto demasiado largo');
+
+        const prompt = `${sentencia}\n\n${causasRel ? `CAUSAS DEL DESPACHO POSIBLEMENTE RELACIONADAS:\n${causasRel}\n\n` : ''}=== INSTRUCCIÓN ===\n${_IA_PROMPT_ANALIZAR_JURISPRUDENCIA}`;
+
+        const texto = provider === 'gemini'
+            ? await _iaCallGemini(prompt, key, model)
+            : provider === 'claude'
+                ? await _iaCallClaude(prompt, key, model)
+                : await _iaCallGroq(prompt, key, model);
+
+        return { ok: true, texto };
+    } catch (e) {
+        return { ok: false, error: e.message || String(e) };
+    }
+});
+
+ipcMain.handle('ia:extraer-fallo-json', async (_e, args) => {
+    try {
+        const provider = 'gemini';
+        const key = _iaReadKey(provider);
+        if (!key) throw new Error('No hay API Key configurada para Gemini.');
+        const model = _iaReadModel(provider);
+        const textoFallo = String(args?.texto || '').trim();
+        if (!textoFallo) throw new Error('Texto vacío');
+
+        const prompt = `${_IA_PROMPT_EXTRAER_FALLO_JSON}\n\nTEXTO DEL FALLO:\n${textoFallo.substring(0, 8000)}`;
+        const texto = await _iaCallGemini(prompt, key, model);
+        return { ok: true, texto };
+    } catch (e) {
+        return { ok: false, error: e.message || String(e) };
+    }
+});
+
+ipcMain.handle('ia:analizar-estrategia', async (_e, args) => {
+    try {
+        const provider = _iaNormalizeProvider(args?.provider || 'claude');
+        if (!provider) throw new Error('Proveedor inválido');
+        const key = _iaReadKey(provider);
+        if (!key) throw new Error('No hay API Key configurada para este proveedor.');
+        const model = _iaReadModel(provider);
+
+        const causa = (args && typeof args.causa === 'object' && args.causa) ? args.causa : {};
+        const extraCtx = String(args?.contexto || '').trim();
+        if (extraCtx.length > 200000) throw new Error('Contexto demasiado largo');
+
+        const prompt = `CONTEXTO DEL DESPACHO / CAUSA:\n${extraCtx}\n\nDATOS DE CAUSA (JSON RESUMIDO):\n${JSON.stringify({
+            caratula: causa.caratula || '',
+            rama: causa.rama || '',
+            tipoProcedimiento: causa.tipoProcedimiento || '',
+            juzgado: causa.juzgado || '',
+            rit: causa.rit || '',
+            partes: causa.partes || null,
+        })}\n\n${_IA_PROMPT_ANALISIS_ESTRATEGICO}`;
+
+        const texto = provider === 'gemini'
+            ? await _iaCallGemini(prompt, key, model)
+            : provider === 'claude'
+                ? await _iaCallClaude(prompt, key, model)
+                : await _iaCallGroq(prompt, key, model);
+
+        return { ok: true, texto };
+    } catch (e) {
+        return { ok: false, error: e.message || String(e) };
+    }
+});
+
+ipcMain.handle('ia:iframe-context', async (_e, args) => {
+    try {
+        const modo = String(args?.modo || 'general').trim();
+        if (!modo) throw new Error('modo vacío');
+        if (modo.length > 40) throw new Error('modo demasiado largo');
+
+        const base = String(args?.base || '').trim();
+        if (base.length > 10000) throw new Error('base demasiado largo');
+
+        const tipo = String(args?.tipo || '').trim();
+        if (tipo.length > 200) throw new Error('tipo demasiado largo');
+
+        const hechos = String(args?.hechos || '').trim();
+        if (hechos.length > 20000) throw new Error('hechos demasiado largos');
+
+        const causa = (args && typeof args.causa === 'object' && args.causa) ? args.causa : null;
+        if (causa && typeof causa !== 'object') throw new Error('causa inválida');
+
+        const contexto = IA_PROMPTS.iframeContext({ modo, base, causa, tipo, hechos });
+        return { ok: true, contexto };
+    } catch (e) {
+        return { ok: false, error: e.message || String(e) };
+    }
+});
+
 // ── Validadores de input IPC ──────────────────────────────────────────────────
 function validarClave(clave) {
     if (typeof clave !== 'string' || clave.length === 0 || clave.length > 200) {
@@ -635,8 +1242,8 @@ ipcMain.handle('prospectos:registrar-pago', (_e, { id, fotoBase64, nombre }) => 
 ipcMain.handle('backup:exportar', async (_e, jsonData) => {
     if (typeof jsonData !== 'string') return { error: 'Datos inválidos' };
     const { filePath } = await dialog.showSaveDialog({
-        title: 'Exportar Backup AppBogado',
-        defaultPath: `backup_appbogado_${fechaHoy()}.json`,
+        title: 'Exportar Backup LEXIUM',
+        defaultPath: `backup_lexium_${fechaHoy()}.json`,
         filters: [{ name: 'JSON', extensions: ['json'] }]
     });
     if (!filePath) return { cancelado: true };
@@ -650,7 +1257,7 @@ ipcMain.handle('backup:exportar', async (_e, jsonData) => {
 
 ipcMain.handle('backup:importar', async (_e) => {
     const { filePaths } = await dialog.showOpenDialog({
-        title: 'Importar Backup AppBogado',
+        title: 'Importar Backup LEXIUM',
         filters: [{ name: 'JSON', extensions: ['json'] }],
         properties: ['openFile']
     });
@@ -889,6 +1496,7 @@ function crearVentana() {
     mainWindow = new BrowserWindow({
         width: 1000,
         height: 700,
+        title: 'LEXIUM',
         icon: path.join(__dirname, 'assets/logo-lexium.ico'),
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
@@ -904,17 +1512,14 @@ function crearVentana() {
     mainWindow.loadFile('index.html');
 
     // ── CSP via cabecera HTTP (más robusto que el meta tag) ──────────────────
-    // NOTA: 'unsafe-inline' en script-src es necesario mientras existan scripts
-    // inline en index.html. DEUDA TÉCNICA: mover todos los bloques <script>
-    // inline a archivos .js externos y eliminar 'unsafe-inline' para activar
-    // protección XSS completa. Ver informe de seguridad, punto 7.
+    // NOTA: script-src NO debe permitir inline para mitigar XSS.
     mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
         callback({
             responseHeaders: {
                 ...details.responseHeaders,
                 'Content-Security-Policy': [
                     "default-src 'self';" +
-                    "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://accounts.google.com https://apis.google.com;" +
+                    "script-src 'self' https://cdnjs.cloudflare.com https://accounts.google.com https://apis.google.com;" +
                     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com;" +
                     "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com;" +
                     "img-src 'self' data: blob:;" +

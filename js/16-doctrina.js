@@ -4,7 +4,7 @@
         //          y PDFs indexados automáticamente con IA (v13).
         // ████████████████████████████████████████████████████████████████████
 
-        const DOC_KEY = 'APPBOGADO_DOCTRINA_V1';
+        const DOC_KEY = 'LEXIUM_DOCTRINA_V1';
 
         const DOC_CATEGORIAS = [
             { id: 'civil',          label: 'Derecho Civil',           icon: 'fa-balance-scale', color: '#0ea5e9' },

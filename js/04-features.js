@@ -420,7 +420,7 @@ function generarInformeCausa() {
                     <h3 style="font-size:1rem; color:var(--a);">${escHtml(causa.caratula)}</h3>
                 </div>
                 <div style="text-align:right; font-size:0.75rem; color:var(--t2); font-family:'IBM Plex Mono',monospace;">
-                    <p>AppBogado v3.9.5</p><p>Generado: ${hoy}</p>
+                    <p>LEXIUM</p><p>Generado: ${hoy}</p>
                 </div>
             </div>
 
@@ -469,7 +469,7 @@ function generarInformeCausa() {
             : '<p style="color:#94a3b8;">Sin recomendaciones activas.</p>'}
 
             <div style="margin-top:20px; padding-top:12px; border-top:1px solid #e2e8f0; font-size:0.72rem; color:#94a3b8;">
-                <p><strong>AVISO LEGAL:</strong> Este informe es de uso interno profesional. Los plazos, riesgos y recomendaciones son referenciales y no reemplazan el criterio jurídico del abogado. AppBogado no es responsable de decisiones tomadas con base en este documento.</p>
+                <p><strong>AVISO LEGAL:</strong> Este informe es de uso interno profesional. Los plazos, riesgos y recomendaciones son referenciales y no reemplazan el criterio jurídico del abogado. LEXIUM no es responsable de decisiones tomadas con base en este documento.</p>
             </div>
         </div>`;
     registrarEvento(`Informe generado para causa: ${causa.caratula}`);
@@ -483,7 +483,7 @@ function exportarInformeTexto() {
     if (!causa) return;
     const hon = causa.honorarios || {};
     const rec = generarRecomendaciones(causaId);
-    let txt = `INFORME DE CAUSA — AppBogado v3.9.5\n`;
+    let txt = `INFORME DE CAUSA — LEXIUM\n`;
     txt += `Generado: ${new Date().toLocaleDateString('es-CL')}\n`;
     txt += `${'='.repeat(50)}\n\n`;
     txt += `CARÁTULA: ${causa.caratula}\n`;
@@ -864,7 +864,7 @@ async function gaGuardarDoc() {
                             // Reuse PDF extraction logic if necessary - here we'll just use a brief prompt for now
                             // unless we want to load pdf.js here too. For simplicity in gaGuardarDoc, we assume
                             // IA knows about filename and description.
-                            const prompt = `Analiza este documento cargado en AppBogado.\nNombre: ${file.name}\nTipo: ${tipo}\nSubtipo: ${subtipo}\nDescripción: ${desc}\nGenera un resumen breve (2 líneas) y confirma si la clasificación es correcta. Responde solo con el resumen.`;
+                            const prompt = `Analiza este documento cargado en LEXIUM.\nNombre: ${file.name}\nTipo: ${tipo}\nSubtipo: ${subtipo}\nDescripción: ${desc}\nGenera un resumen breve (2 líneas) y confirma si la clasificación es correcta. Responde solo con el resumen.`;
                             iaSummary = await iaCall(prompt);
                         } else if (file.type.startsWith('text/') || file.name.endsWith('.txt')) {
                             const text = await file.text();
@@ -962,4 +962,4 @@ function escHtml(s) {
 }
 
 // ═══════════════════════════════════════════════════════
-// BLOQUES 1-8 INTEGRADOS – APPBOGADO PRO EXTENDED ENGINE
+// BLOQUES 1-8 INTEGRADOS – LEXIUM PRO EXTENDED ENGINE

@@ -620,4 +620,4 @@ ${truncado}`;
 
         window.DocPdfIndexer = DocPdfIndexer;
 
-        console.info('[AppBogado v13] DocPdfIndexer ✓ — PDF → Drive → IA → DoctrinaDB');
+        console.info('[LEXIUM v13] DocPdfIndexer ✓ — PDF → Drive → IA → DoctrinaDB');

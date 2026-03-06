@@ -20,7 +20,7 @@
         // ████████████████████████████████████████████████████████████████████
 
         const DocFisico = (() => {
-            const KEY_ROOT = 'APPBOGADO_ROOT_DIR_HANDLE_NAME';
+            const KEY_ROOT = 'LEXIUM_ROOT_DIR_HANDLE_NAME';
             let _rootHandle = null; // handle de la carpeta raíz
 
             // ── Soporte ─────────────────────────────────────────────────────
@@ -137,7 +137,7 @@
                     }
                     try {
                         _rootHandle = await window.showDirectoryPicker({
-                            id: 'appbogado-root',
+                            id: 'lexium-root',
                             mode: 'readwrite',
                             startIn: 'documents'
                         });

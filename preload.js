@@ -1,5 +1,5 @@
 /**
- * AppBogado — preload.js v2.2
+ * LEXIUM — preload.js v2.2
  * ───────────────────────────
  * Puente seguro (contextBridge) entre renderer y main.
  *
@@ -21,6 +21,10 @@ function assertString(val, nombre, maxLen = 1000) {
 function assertStringOrEmpty(val, nombre, maxLen = 10 * 1024 * 1024) {
     if (typeof val !== 'string') throw new Error(`${nombre} debe ser string`);
     if (val.length > maxLen) throw new Error(`${nombre} excede tamaño máximo`);
+}
+
+function assertObject(val, nombre) {
+    if (!val || typeof val !== 'object' || Array.isArray(val)) throw new Error(`${nombre} debe ser objeto`);
 }
 
 // ── API expuesta al renderer ──────────────────────────────────────────────────
@@ -192,6 +196,86 @@ contextBridge.exposeInMainWorld('electronAPI', {
         extraerTexto: (base64) => {
             assertStringOrEmpty(base64, 'base64', 70 * 1024 * 1024);
             return ipcRenderer.invoke('pdf:extraer-texto', base64);
+        }
+    },
+
+    // ── IA Proxy (main process) ─────────────────────────────────────────────
+    ia: {
+        getStatus: () => ipcRenderer.invoke('ia:get-status'),
+        listEscritosTipos: () => ipcRenderer.invoke('ia:list-escritos-tipos'),
+        setKey: (provider, key) => {
+            assertString(provider, 'provider', 30);
+            assertString(key, 'key', 300);
+            return ipcRenderer.invoke('ia:set-key', { provider, key });
+        },
+        iframeContext: (args) => {
+            assertObject(args, 'args');
+            assertString(String(args.modo || ''), 'modo', 40);
+            if (args.base !== undefined && args.base !== null) assertStringOrEmpty(String(args.base), 'base', 10000);
+            if (args.tipo !== undefined && args.tipo !== null) assertStringOrEmpty(String(args.tipo), 'tipo', 200);
+            if (args.hechos !== undefined && args.hechos !== null) assertStringOrEmpty(String(args.hechos), 'hechos', 20000);
+            if (args.causa !== undefined && args.causa !== null) {
+                if (typeof args.causa !== 'object') throw new Error('causa debe ser objeto');
+            }
+            return ipcRenderer.invoke('ia:iframe-context', args);
+        },
+        chatResponder: (args) => {
+            assertObject(args, 'args');
+            if (args.provider !== undefined && args.provider !== null) assertString(String(args.provider), 'provider', 30);
+            assertString(String(args.pregunta || ''), 'pregunta', 50000);
+            if (args.contexto !== undefined && args.contexto !== null) assertStringOrEmpty(String(args.contexto), 'contexto', 200000);
+            if (args.causaCtx !== undefined && args.causaCtx !== null) assertStringOrEmpty(String(args.causaCtx), 'causaCtx', 200000);
+            if (args.historial !== undefined && args.historial !== null) assertStringOrEmpty(String(args.historial), 'historial', 50000);
+            return ipcRenderer.invoke('ia:chat-responder', args);
+        },
+        analizarCausa: (args) => {
+            assertObject(args, 'args');
+            if (args.provider !== undefined && args.provider !== null) assertString(String(args.provider), 'provider', 30);
+            assertString(String(args.contexto || ''), 'contexto', 200000);
+            return ipcRenderer.invoke('ia:analizar-causa', args);
+        },
+        analizarJurisprudencia: (args) => {
+            assertObject(args, 'args');
+            if (args.provider !== undefined && args.provider !== null) assertString(String(args.provider), 'provider', 30);
+            assertString(String(args.sentencia || ''), 'sentencia', 200000);
+            if (args.causasRelacionadas !== undefined && args.causasRelacionadas !== null) assertStringOrEmpty(String(args.causasRelacionadas), 'causasRelacionadas', 200000);
+            return ipcRenderer.invoke('ia:analizar-jurisprudencia', args);
+        },
+        extraerFalloJson: (args) => {
+            assertObject(args, 'args');
+            assertString(String(args.texto || ''), 'texto', 8000);
+            return ipcRenderer.invoke('ia:extraer-fallo-json', args);
+        },
+        moduloRun: (args) => {
+            assertObject(args, 'args');
+            assertString(String(args.templateId || ''), 'templateId', 80);
+            if (args.provider !== undefined && args.provider !== null) assertString(String(args.provider), 'provider', 30);
+            if (args.payload !== undefined && args.payload !== null) {
+                if (typeof args.payload !== 'object') throw new Error('payload debe ser objeto');
+            }
+            return ipcRenderer.invoke('ia:modulo-run', args);
+        },
+        generarEscrito: (args) => {
+            assertObject(args, 'args');
+            if (args.provider !== undefined && args.provider !== null) assertString(String(args.provider), 'provider', 30);
+            if (args.tipoId !== undefined && args.tipoId !== null) assertString(String(args.tipoId), 'tipoId', 80);
+            if (args.tipoLabel !== undefined && args.tipoLabel !== null) assertStringOrEmpty(String(args.tipoLabel), 'tipoLabel', 160);
+            assertString(String(args.hechos || ''), 'hechos', 200000);
+            if (args.jurisprudencia !== undefined && args.jurisprudencia !== null) assertStringOrEmpty(String(args.jurisprudencia), 'jurisprudencia', 100000);
+            if (args.promptExtra !== undefined && args.promptExtra !== null) assertStringOrEmpty(String(args.promptExtra), 'promptExtra', 50000);
+            if (args.causa !== undefined && args.causa !== null) {
+                if (typeof args.causa !== 'object') throw new Error('causa debe ser objeto');
+            }
+            return ipcRenderer.invoke('ia:generar-escrito', args);
+        },
+        analizarEstrategia: (args) => {
+            assertObject(args, 'args');
+            if (args.provider !== undefined && args.provider !== null) assertString(String(args.provider), 'provider', 30);
+            if (args.contexto !== undefined && args.contexto !== null) assertStringOrEmpty(String(args.contexto), 'contexto', 200000);
+            if (args.causa !== undefined && args.causa !== null) {
+                if (typeof args.causa !== 'object') throw new Error('causa debe ser objeto');
+            }
+            return ipcRenderer.invoke('ia:analizar-estrategia', args);
         }
     },
 

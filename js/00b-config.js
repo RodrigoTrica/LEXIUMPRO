@@ -1,6 +1,6 @@
         // ████████████████████████████████████████████████████████████████████
         // JS — MÓDULO 00b: CONFIGURACIÓN CENTRAL (AppConfig)
-        // Una sola clave en localStorage: APPBOGADO_CONFIG_V1
+        // Una sola clave en localStorage: LEXIUM_CONFIG_V1
         // Reemplaza las 13 claves dispersas con un objeto unificado.
         //
         // Claves que centraliza:
@@ -9,7 +9,7 @@
         //   backup_ultimo, docfisico_raiz, backup_history
         //
         // Las claves de DATOS (causas, clientes, etc.) permanecen en
-        // APPBOGADO_DATA_V395 ya que son gestionadas por Store.
+        // LEXIUM_DATA_V1 ya que son gestionadas por Store.
         //
         // Uso:
         //   AppConfig.get('usuarios')        → array de usuarios
@@ -18,25 +18,25 @@
         // ████████████████████████████████████████████████████████████████████
 
         const AppConfig = (() => {
-            const CONFIG_KEY = 'APPBOGADO_CONFIG_V1';
+            const CONFIG_KEY = 'LEXIUM_CONFIG_V1';
 
             // Claves legadas a migrar en el primer arranque
             const LEGACY_KEYS = {
-                usuarios:        'APPBOGADO_USERS_V2',
-                biblioteca:      'APPBOGADO_BIBLIOTECA_V1',
-                tramites:        'APPBOGADO_TRAMITES_V1',
-                ia_provider:     'APPBOGADO_IA_PROVIDER',
-                ia_keys:         'APPBOGADO_IA_KEYS',
-                ia_models:       'APPBOGADO_IA_MODELS',
-                ia_salt:         'APPBOGADO_IA_SALT',
-                drive_config:    'APPBOGADO_DRIVE_CONFIG_V1',
-                drive_sync_meta: 'APPBOGADO_DRIVE_SYNC_META',
-                backup_carpeta:  'APPBOGADO_BACKUP_DIR_HANDLE',
-                backup_ultimo:   'APPBOGADO_LAST_BACKUP_DISCO',
-                docfisico_raiz:  'APPBOGADO_ROOT_DIR_HANDLE_NAME',
-                tema:            'APPBOGADO_THEME',
-                gemini_key_old:  'APPBOGADO_GEMINI_KEY',
-                gemini_model_old:'APPBOGADO_GEMINI_MODEL',
+                usuarios:        'LEXIUM_USERS_V1',
+                biblioteca:      'LEXIUM_BIBLIOTECA_V1',
+                tramites:        'LEXIUM_TRAMITES_V1',
+                ia_provider:     'LEXIUM_IA_PROVIDER',
+                ia_keys:         'LEXIUM_IA_KEYS',
+                ia_models:       'LEXIUM_IA_MODELS',
+                ia_salt:         'LEXIUM_IA_SALT',
+                drive_config:    'LEXIUM_DRIVE_CONFIG_V1',
+                drive_sync_meta: 'LEXIUM_DRIVE_SYNC_META',
+                backup_carpeta:  'LEXIUM_BACKUP_DIR_HANDLE',
+                backup_ultimo:   'LEXIUM_LAST_BACKUP_DISCO',
+                docfisico_raiz:  'LEXIUM_ROOT_DIR_HANDLE_NAME',
+                tema:            'LEXIUM_THEME',
+                gemini_key_old:  'LEXIUM_GEMINI_KEY',
+                gemini_model_old:'LEXIUM_GEMINI_MODEL',
             };
 
             // Valores por defecto de cada sección

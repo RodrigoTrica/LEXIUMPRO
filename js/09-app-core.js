@@ -219,7 +219,7 @@ function toggleTheme() {
     if (typeof AppConfig !== 'undefined') {
         AppConfig.set('tema', next);
     } else {
-        _lsSet('APPBOGADO_THEME', next);
+        _lsSet('LEXIUM_THEME', next);
     }
     _updateThemeIcon(next);
     _applyDashboardTheme(next);
@@ -248,7 +248,7 @@ async function init() {
 
     // Leer tema con disco ya cargado
     const savedTheme = (typeof AppConfig !== 'undefined' && AppConfig.get('tema'))
-        || _lsGet('APPBOGADO_THEME')
+        || _lsGet('LEXIUM_THEME')
         || 'light';
     document.documentElement.setAttribute('data-theme', savedTheme);
     _updateThemeIcon(savedTheme);
@@ -947,8 +947,8 @@ function askIAExtractContext() {
 }
 
 
-const GEMINI_KEY_STORAGE = 'APPBOGADO_GEMINI_KEY';
-const GEMINI_MODEL_STORAGE = 'APPBOGADO_GEMINI_MODEL';
+const GEMINI_KEY_STORAGE = 'LEXIUM_GEMINI_KEY';
+const GEMINI_MODEL_STORAGE = 'LEXIUM_GEMINI_MODEL';
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 // ── Catálogo de modelos conocidos (feb 2026) ──────────────────────

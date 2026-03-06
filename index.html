@@ -37,88 +37,88 @@
         </div>
         <nav>
             <!-- 📊 HUB 1: PANEL -->
-            <button class="act" onclick="tab('panel',this)"><i class="fas fa-chart-line"></i> Dashboard</button>
+            <button class="act" data-action="tab" data-tab="panel"><i class="fas fa-chart-line"></i> Dashboard</button>
 
             <!-- 📁 HUB 2: EXPEDIENTES -->
             <button class="nav-group-header"
-                onclick="this.classList.toggle('open'); document.getElementById('nav-items-expedientes').classList.toggle('open')"><i
+                data-action="nav-group-toggle" data-target="nav-items-expedientes"><i
                     class="fas fa-folder grp-icon"></i> <span>Expedientes</span> <i
                     class="fas fa-chevron-right nav-group-chevron"></i></button>
             <div class="nav-group-items" id="nav-items-expedientes">
-                <button onclick="tab('causas',this)"><i class="fas fa-gavel"></i> Gestión de Causas</button>
-                <button onclick="tab('causas-pro',this)"><i class="fas fa-sitemap"></i> Causas Pro</button>
+                <button data-action="tab" data-tab="causas"><i class="fas fa-gavel"></i> Gestión de Causas</button>
+                <button data-action="tab" data-tab="causas-pro"><i class="fas fa-sitemap"></i> Causas Pro</button>
             </div>
 
             <!-- 🧠 HUB 3: INTELIGENCIA -->
             <button class="nav-group-header"
-                onclick="this.classList.toggle('open'); document.getElementById('nav-items-inteligencia').classList.toggle('open')"><i
+                data-action="nav-group-toggle" data-target="nav-items-inteligencia"><i
                     class="fas fa-brain grp-icon"></i> <span>Inteligencia</span> <i
                     class="fas fa-chevron-right nav-group-chevron"></i></button>
             <div class="nav-group-items" id="nav-items-inteligencia">
-                <button onclick="tab('estrategia',this)"><i class="fas fa-brain"></i> Estrategia & Riesgo</button>
-                <button onclick="tab('calculadora',this)"><i class="fas fa-calendar-alt"></i> Calculadora
+                <button data-action="tab" data-tab="estrategia"><i class="fas fa-brain"></i> Estrategia & Riesgo</button>
+                <button data-action="tab" data-tab="calculadora"><i class="fas fa-calendar-alt"></i> Calculadora
                     Plazos</button>
-                <button onclick="tab('calculadora-pro',this)"><i class="fas fa-calculator"></i> Calculadora Pro</button>
-                <button onclick="tab('doctrina',this)"><i class="fas fa-graduation-cap"></i> Doctrina</button>
+                <button data-action="tab" data-tab="calculadora-pro"><i class="fas fa-calculator"></i> Calculadora Pro</button>
+                <button data-action="tab" data-tab="doctrina"><i class="fas fa-graduation-cap"></i> Doctrina</button>
             </div>
 
             <!-- ✍️ HUB 4: PRODUCCIÓN -->
             <button class="nav-group-header"
-                onclick="this.classList.toggle('open'); document.getElementById('nav-items-produccion').classList.toggle('open')"><i
+                data-action="nav-group-toggle" data-target="nav-items-produccion"><i
                     class="fas fa-pen-nib grp-icon"></i> <span>Producción</span> <i
                     class="fas fa-chevron-right nav-group-chevron"></i></button>
             <div class="nav-group-items" id="nav-items-produccion">
-                <button onclick="tab('escritos',this)"><i class="fas fa-pen-nib"></i> Generador Escritos</button>
-                <button onclick="tab('plantillas-escritos',this)"><i class="fas fa-layer-group"></i> Plantillas</button>
-                <button onclick="tab('timesheet',this)"><i class="fas fa-stopwatch"></i> Timesheet</button>
+                <button data-action="tab" data-tab="escritos"><i class="fas fa-pen-nib"></i> Generador Escritos</button>
+                <button data-action="tab" data-tab="plantillas-escritos"><i class="fas fa-layer-group"></i> Plantillas</button>
+                <button data-action="tab" data-tab="timesheet"><i class="fas fa-stopwatch"></i> Timesheet</button>
             </div>
 
             <!-- 💼 HUB 5: NEGOCIO -->
             <button class="nav-group-header"
-                onclick="this.classList.toggle('open'); document.getElementById('nav-items-negocio').classList.toggle('open')"><i
+                data-action="nav-group-toggle" data-target="nav-items-negocio"><i
                     class="fas fa-briefcase grp-icon"></i> <span>Negocio</span> <i
                     class="fas fa-chevron-right nav-group-chevron"></i></button>
             <div class="nav-group-items" id="nav-items-negocio">
-                <button onclick="tab('clientes',this)"><i class="fas fa-users"></i> Clientes</button>
-                <button onclick="tab('honorarios',this)"><i class="fas fa-wallet"></i> Honorarios</button>
-                <button onclick="tab('prospectos',this)"><i class="fas fa-funnel-dollar"></i> Prospectos CRM</button>
-                <button onclick="tab('whatsapp-chat', this)"><i class="fas fa-comments"></i> Chat WhatsApp</button>
+                <button data-action="tab" data-tab="clientes"><i class="fas fa-users"></i> Clientes</button>
+                <button data-action="tab" data-tab="honorarios"><i class="fas fa-wallet"></i> Honorarios</button>
+                <button data-action="tab" data-tab="prospectos"><i class="fas fa-funnel-dollar"></i> Prospectos CRM</button>
+                <button data-action="tab" data-tab="whatsapp-chat"><i class="fas fa-comments"></i> Chat WhatsApp</button>
             </div>
 
             <!-- 🛠️ HUB 6: SISTEMA -->
             <button class="nav-group-header"
-                onclick="this.classList.toggle('open'); document.getElementById('nav-items-sistema').classList.toggle('open')"><i
+                data-action="nav-group-toggle" data-target="nav-items-sistema"><i
                     class="fas fa-tools grp-icon"></i> <span>Sistema</span> <i
                     class="fas fa-chevron-right nav-group-chevron"></i></button>
             <div class="nav-group-items" id="nav-items-sistema">
-                <button onclick="tab('calendario',this)"><i class="fas fa-calendar-week"></i> Agenda & Alertas</button>
-                <button onclick="tab('admin-usuarios',this)"><i class="fas fa-users-cog"></i> Usuarios</button>
-                <button onclick="tab('config-estudio',this)"><i class="fas fa-building-columns"></i> Config. Estudio</button>
-                <button onclick="tab('config-ia',this)"><i class="fas fa-robot"></i> Config. IA</button>
-                <button onclick="tab('bitacora',this)"><i class="fas fa-shield-alt"></i> Bitácora</button>
-                <button onclick="tab('audit-reportes',this)"><i class="fas fa-shield-halved"></i> Auditoría y Reportes</button>
-                <button onclick="tab('seccion-whatsapp', this)"><i class="fab fa-whatsapp"></i> WhatsApp</button>
+                <button data-action="tab" data-tab="calendario"><i class="fas fa-calendar-week"></i> Agenda & Alertas</button>
+                <button data-action="tab" data-tab="admin-usuarios"><i class="fas fa-users-cog"></i> Usuarios</button>
+                <button data-action="tab" data-tab="config-estudio"><i class="fas fa-building-columns"></i> Config. Estudio</button>
+                <button data-action="tab" data-tab="config-ia"><i class="fas fa-robot"></i> Config. IA</button>
+                <button data-action="tab" data-tab="bitacora"><i class="fas fa-shield-alt"></i> Bitácora</button>
+                <button data-action="tab" data-tab="audit-reportes"><i class="fas fa-shield-halved"></i> Auditoría y Reportes</button>
+                <button data-action="tab" data-tab="seccion-whatsapp"><i class="fab fa-whatsapp"></i> WhatsApp</button>
             </div>
 
             <div class="nav-divider"></div>
-            <button onclick="importarBackup()" class="nav-bottom-btn"><i class="fas fa-upload"></i> Importar
+            <button data-action="importar-backup" class="nav-bottom-btn"><i class="fas fa-upload"></i> Importar
                 Backup</button>
-            <button onclick="BackupDisco.hacerAhora('manual')" class="nav-bottom-btn nav-bottom-btn--highlight"
+            <button data-action="backup-ahora" class="nav-bottom-btn nav-bottom-btn--highlight"
                 title="Guardar backup ahora">
                 <i class="fas fa-download"></i> Backup ahora
             </button>
             <div id="backup-disco-estado" class="sb-status">Cargando...</div>
             <div class="nav-divider"></div>
-            <button onclick="DocFisico.elegirCarpeta()" class="nav-bottom-btn"
+            <button data-action="docfisico-elegir-carpeta" class="nav-bottom-btn"
                 title="Establece la carpeta raiz donde se organizan documentos, backups y exportaciones">
                 <i class="fas fa-folder"></i> Carpeta de la app
             </button>
-            <button onclick="DocFisico.sincronizarTodo()" class="nav-bottom-btn nav-bottom-btn--small"
+            <button data-action="docfisico-sincronizar" class="nav-bottom-btn nav-bottom-btn--small"
                 title="Copia todos los adjuntos existentes a la carpeta de documentos">
                 <i class="fas fa-sync"></i> Sincronizar docs a disco
             </button>
             <div id="docfisico-estado" class="sb-status">Sin carpeta de docs</div>
-            <button onclick="logout()" class="nav-bottom-btn nav-logout-btn"><i class="fas fa-sign-out-alt"></i> Cerrar
+            <button data-action="logout" class="nav-bottom-btn nav-logout-btn"><i class="fas fa-sign-out-alt"></i> Cerrar
                 Sesión</button>
         </nav>
     </aside>
@@ -170,19 +170,19 @@
                             usuarios...</div>
                     </div>
                     <div id="login-pw-block" class="login-pw-block">
-                        <button class="login-back-btn" onclick="loginVolver()">← Cambiar usuario</button>
+                        <button class="login-back-btn" data-action="login-volver">← Cambiar usuario</button>
                         <div style="margin-bottom:6px;">
                             <label id="login-pw-label" style="margin-top:0;">Contraseña</label>
                             <input type="password" id="pw" placeholder="Ingresa tu contraseña"
-                                onkeydown="if(event.key==='Enter') auth()" style="font-size:14px;">
+                                data-action="login-password" style="font-size:14px;">
                         </div>
-                        <button onclick="auth()" class="btn btn-p btn-full"
+                        <button data-action="login-auth" class="btn btn-p btn-full"
                             style="height:44px;font-size:15px;border-radius:8px;"><i class="fas fa-unlock-alt"></i>
                             Ingresar</button>
                     </div>
                     <p id="err" style="color:var(--danger);font-size:13px;margin-top:10px;text-align:center;"></p>
                     <p style="text-align:center;margin-top:10px;">
-                        <button id="btn-reset-bloqueo" onclick="resetBloqueo()"
+                        <button id="btn-reset-bloqueo" data-action="reset-bloqueo"
                             style="display:none;background:none;border:none;color:var(--text-3);font-size:12px;cursor:pointer;text-decoration:underline;">
                             ¿Sistema bloqueado? Clic aquí
                         </button>
@@ -201,26 +201,25 @@
         <div id="app" style="display:none;">
             <!-- TOPBAR -->
             <div id="topbar">
-                <button class="topbar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">
+                <button class="topbar-toggle" data-action="toggle-sidebar" title="Toggle sidebar">
                     <i class="fas fa-bars"></i>
                 </button>
                 <div class="topbar-search">
                     <i class="fas fa-search topbar-search-icon"></i>
                     <input type="text" class="topbar-search-input" placeholder="Buscar causas, clientes, documento..."
-                        id="topbar-search-input" oninput="if(typeof busquedaGlobal==='function')tab('busqueda',null)">
+                        id="topbar-search-input" data-action="topbar-search">
                 </div>
                 <div class="topbar-spacer"></div>
-                <button id="btn-guardar-global" onclick="guardarCambiosGlobal()" title="Guardar cambios">
+                <button id="btn-guardar-global" data-action="guardar-global" title="Guardar cambios">
                     <i class="fas fa-save"></i> <span>Guardar</span>
                 </button>
                 <span id="storage-usage-badge" class="topbar-storage-badge" title="Uso de almacenamiento local">
                     <i class="fas fa-database" style="font-size:10px;"></i> <span id="storage-text">Local</span>
                 </span>
-                <button class="topbar-bell" onclick="toggleTheme()" title="Cambiar Tema (Claro/Oscuro)">
+                <button class="topbar-bell" data-action="toggle-theme" title="Cambiar Tema (Claro/Oscuro)">
                     <i class="fas fa-moon" id="theme-icon"></i>
                 </button>
-                <button class="topbar-bell" title="Notificaciones"
-                    onclick="if(typeof notifTogglePanel==='function')notifTogglePanel()">
+                <button class="topbar-bell" title="Notificaciones" data-action="notif-toggle">
                     <i class="fas fa-bell"></i>
                     <span class="topbar-bell-dot"></span>
                 </button>
@@ -252,10 +251,10 @@
                 <div class="db-header-right">
                     <div class="modo-toggle">
                         <button class="modo-btn activo" id="modo-personal-btn"
-                            onclick="setModo('personal')">Personal</button>
-                        <button class="modo-btn" id="modo-estudio-btn" onclick="setModo('estudio')">Estudio</button>
+                            data-action="set-modo" data-modo="personal">Personal</button>
+                        <button class="modo-btn" id="modo-estudio-btn" data-action="set-modo" data-modo="estudio">Estudio</button>
                     </div>
-                    <button class="db-export-btn" onclick="exportarPDFEconomico()">
+                    <button class="db-export-btn" data-action="exportar-pdf-economico">
                         <i class="fas fa-download"></i> PDF
                     </button>
                 </div>
@@ -266,7 +265,7 @@
                 <span class="db-filtro-icon"><i class="fas fa-filter"></i></span>
                 <div class="db-filtro-group">
                     <label>Rama</label>
-                    <select id="flt-rama" onchange="renderDashboardPanel()">
+                    <select id="flt-rama" data-action="dashboard-filter">
                         <option value="">Todas las Ramas</option>
                         <option>Civil</option>
                         <option>Laboral</option>
@@ -277,7 +276,7 @@
                 </div>
                 <div class="db-filtro-group">
                     <label>Estado</label>
-                    <select id="flt-estado" onchange="renderDashboardPanel()">
+                    <select id="flt-estado" data-action="dashboard-filter">
                         <option value="">Todos los Estados</option>
                         <option>En tramitación</option>
                         <option>Finalizada</option>
@@ -286,14 +285,14 @@
                 </div>
                 <div class="db-filtro-group">
                     <label>Instancia</label>
-                    <select id="flt-instancia" onchange="renderDashboardPanel()">
+                    <select id="flt-instancia" data-action="dashboard-filter">
                         <option value="">Todas las Instancias</option>
                         <option>Primera</option>
                         <option>Segunda</option>
                         <option>Casación</option>
                     </select>
                 </div>
-                <button class="db-clear-btn" onclick="limpiarFiltrosPanel()"><i class="fas fa-times"></i>
+                <button class="db-clear-btn" data-action="dashboard-clear"><i class="fas fa-times"></i>
                     Limpiar</button>
             </div>
 
@@ -449,10 +448,10 @@
         <section id="clientes" class="tabs">
             <div class="hub-nav">
                 <button class="hub-tab active" id="hub-tab-clientes"
-                    onclick="mostrarPanelClientes('clientes-panel', this)">
+                    data-action="clientes-panel" data-panel="clientes-panel">
                     <i class="fas fa-users"></i> Clientes</button>
                 <button class="hub-tab" id="hub-tab-financiero"
-                    onclick="mostrarPanelClientes('financiero-panel', this)">
+                    data-action="clientes-panel" data-panel="financiero-panel">
                     <i class="fas fa-wallet"></i> Control Financiero</button>
             </div>
 
@@ -475,18 +474,18 @@
                         <label>Gestión</label>
                         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
                             <select id="hr-causa-sel" style="flex:1; min-width:220px;"></select>
-                            <button type="button" class="btn btn-sm" onclick="uiTestAlertaCobro()" style="background:var(--bg-2); border:1px solid var(--border);">
+                            <button type="button" class="btn btn-sm" data-action="hr-test-alerta" style="background:var(--bg-2); border:1px solid var(--border);">
                                 <i class="fas fa-vial"></i> Probar Alerta Cobro
                             </button>
-                            <button type="button" class="btn btn-sm" onclick="uiProbarSchedulerCobros()" style="background:var(--bg-2); border:1px solid var(--border);">
+                            <button type="button" class="btn btn-sm" data-action="hr-probar-scheduler" style="background:var(--bg-2); border:1px solid var(--border);">
                                 <i class="fas fa-bolt"></i> Ejecutar Auto ahora
                             </button>
                         </div>
                         <div id="hr-asignado-summary" style="margin-top:14px;"></div>
-                        <button id="hr-btn-modificar" type="button" class="btn btn-sm" onclick="uiHonorariosModificar()" style="margin-top:10px; background:var(--bg-2); border:1px solid var(--border); display:none;">
+                        <button id="hr-btn-modificar" type="button" class="btn btn-sm" data-action="hr-modificar" style="margin-top:10px; background:var(--bg-2); border:1px solid var(--border); display:none;">
                             <i class="fas fa-pen"></i> Modificar
                         </button>
-                        <button id="hr-btn-eliminar-cobro" type="button" class="btn btn-sm" onclick="uiEliminarCobroCausa()" style="margin-top:10px; margin-left:8px; background:#fee2e2; border:1px solid #fecaca; color:#b91c1c;">
+                        <button id="hr-btn-eliminar-cobro" type="button" class="btn btn-sm" data-action="hr-eliminar" style="margin-top:10px; margin-left:8px; background:#fee2e2; border:1px solid #fecaca; color:#b91c1c;">
                             <i class="fas fa-trash"></i> Eliminar cobro de esta gestión
                         </button>
 
@@ -508,7 +507,7 @@
                                 <label>Fecha primera cuota</label>
                                 <input type="date" id="hr-cuotas-fecha">
                             </div>
-                            <button class="btn btn-s btn-full" onclick="uiAsignarHonorarios()">
+                            <button class="btn btn-s btn-full" data-action="hr-asignar">
                                 <i class="fas fa-save"></i> Asignar</button>
                             <div id="hr-plan" style="margin-top:14px;"></div>
                         </div>
@@ -520,7 +519,7 @@
                         <input type="number" id="hr-pago-monto" placeholder="Ej: 1000000">
                         <label>Comprobante (PDF opcional)</label>
                         <input type="file" id="hr-pago-comprobante" accept=".pdf,application/pdf">
-                        <button class="btn btn-p btn-full" onclick="uiRegistrarPago()">
+                        <button class="btn btn-p btn-full" data-action="hr-registrar-pago">
                             <i class="fas fa-check"></i> Registrar Pago</button>
                         <div id="hr-pagos-list" style="margin-top:12px;"></div>
                     </div>
@@ -535,11 +534,11 @@
         <!-- CAUSAS -->
         <section id="causas" class="tabs">
             <div class="hub-nav">
-                <button class="hub-tab active" onclick="tab('causas', this)"><i class="fas fa-gavel"></i>
+                <button class="hub-tab active" data-action="tab" data-tab="causas"><i class="fas fa-gavel"></i>
                     Causas</button>
-                <button class="hub-tab" onclick="tab('archivos', this)"><i class="fas fa-folder-open"></i>
+                <button class="hub-tab" data-action="tab" data-tab="archivos"><i class="fas fa-folder-open"></i>
                     Documentos</button>
-                <button class="hub-tab" onclick="tab('tramites', this)"><i class="fas fa-building"></i>
+                <button class="hub-tab" data-action="tab" data-tab="tramites"><i class="fas fa-building"></i>
                     Trámites</button>
             </div>
             <div id="causa-list" class="grid">
@@ -552,16 +551,16 @@
         <!-- ESTRATEGIA -->
         <section id="estrategia" class="tabs">
             <div class="hub-nav">
-                <button class="hub-tab active" onclick="tab('estrategia', this)"><i class="fas fa-chart-pie"></i>
+                <button class="hub-tab active" data-action="tab" data-tab="estrategia"><i class="fas fa-chart-pie"></i>
                     Estrategia & Riesgo</button>
-                <button class="hub-tab" onclick="tab('juris', this)"><i class="fas fa-book"></i> Jurisprudencia &
+                <button class="hub-tab" data-action="tab" data-tab="juris"><i class="fas fa-book"></i> Jurisprudencia &
                     Doctrina</button>
             </div>
             <div class="grid">
                 <div class="card">
                     <h3><i class="fas fa-chart-pie"></i> Análisis de Riesgo Multidimensional</h3>
                     <label>Seleccionar Causa</label>
-                    <select id="risk-select" onchange="renderRisk()">
+                    <select id="risk-select" data-action="risk-select">
                         <option value="">-- Seleccione una causa --</option>
                     </select>
                     <div id="risk-chart" style="margin-top:16px;"></div>
@@ -578,7 +577,7 @@
             <div class="card" style="max-width:580px;">
                 <h3><i class="fas fa-calendar-alt"></i> Calculadora de Plazos Procesales</h3>
                 <label>Materia</label>
-                <select id="calc-materia" onchange="updateCalcHitos()">
+                <select id="calc-materia" data-action="calc-materia">
                     <option value="civil">Civil — CPC (Días Hábiles L-S)</option>
                     <option value="laboral">Laboral — CT (Días Hábiles L-S)</option>
                 </select>
@@ -586,7 +585,7 @@
                 <select id="calc-hito"></select>
                 <label>Fecha de Notificación / Inicio</label>
                 <input type="date" id="calc-date">
-                <button class="btn btn-p btn-full" onclick="runCalc()"><i class="fas fa-calculator"></i> Calcular
+                <button class="btn btn-p btn-full" data-action="calc-run"><i class="fas fa-calculator"></i> Calcular
                     Vencimiento</button>
                 <div id="calc-res"></div>
             </div>
@@ -595,10 +594,10 @@
         <!-- GESTOR DE ARCHIVOS -->
         <section id="archivos" class="tabs">
             <div class="hub-nav">
-                <button class="hub-tab" onclick="tab('causas', this)"><i class="fas fa-gavel"></i> Causas</button>
-                <button class="hub-tab active" onclick="tab('archivos', this)"><i class="fas fa-folder-open"></i>
+                <button class="hub-tab" data-action="tab" data-tab="causas"><i class="fas fa-gavel"></i> Causas</button>
+                <button class="hub-tab active" data-action="tab" data-tab="archivos"><i class="fas fa-folder-open"></i>
                     Documentos</button>
-                <button class="hub-tab" onclick="tab('tramites', this)"><i class="fas fa-building"></i>
+                <button class="hub-tab" data-action="tab" data-tab="tramites"><i class="fas fa-building"></i>
                     Trámites</button>
             </div>
 
@@ -606,15 +605,15 @@
             <div class="ga-header">
                 <div class="ga-select-wrap">
                     <label>Causa</label>
-                    <select id="ga-causa-sel" onchange="gaSelectCausa()">
+                    <select id="ga-causa-sel" data-action="ga-select-causa">
                         <option value="">-- Seleccione una causa --</option>
                     </select>
                 </div>
-                <button class="btn btn-p" onclick="document.getElementById('file-input').click()" id="ga-upload-btn"
+                <button class="btn btn-p" data-action="ga-open-file" id="ga-upload-btn"
                     disabled>
                     <i class="fas fa-upload"></i> Subir Documento
                 </button>
-                <button class="btn" style="background:var(--bg-2,var(--bg));" onclick="gaToggleView()" id="ga-view-btn"
+                <button class="btn" style="background:var(--bg-2,var(--bg));" data-action="ga-toggle-view" id="ga-view-btn"
                     title="Cambiar vista">
                     <i class="fas fa-stream"></i>
                 </button>
@@ -629,7 +628,7 @@
             <div id="ga-main" style="display:none;">
 
                 <!-- Upload zone + form -->
-                <div class="upload-zone card" id="ga-drop-zone" onclick="document.getElementById('file-input').click()">
+                <div class="upload-zone card" id="ga-drop-zone" data-action="ga-open-file">
                     <i class="fas fa-cloud-upload-alt"></i>
                     <p>Arrastre archivos aquí o haga clic para seleccionar</p>
                     <small>PDF · Word · Imágenes · Múltiples archivos</small>
@@ -702,7 +701,7 @@
                     </div>
 
                     <label class="cb-row" style="margin-top:12px; font-weight:600;">
-                        <input type="checkbox" id="ga-genera-plazo" onchange="gaTogglePlazo()">
+                        <input type="checkbox" id="ga-genera-plazo" data-action="ga-toggle-plazo">
                         ¿Este documento genera un plazo procesal?
                     </label>
 
@@ -713,11 +712,11 @@
                             <div>
                                 <label>Días Hábiles</label>
                                 <input type="number" id="ga-dias" placeholder="Ej: 10" min="1"
-                                    oninput="gaPreviewPlazo()">
+                                    data-action="ga-preview-plazo">
                             </div>
                             <div>
                                 <label>Tipo día</label>
-                                <select id="ga-tipo-dia" onchange="gaPreviewPlazo()">
+                                <select id="ga-tipo-dia" data-action="ga-preview-plazo">
                                     <option value="habiles">Hábiles (L-S)</option>
                                     <option value="corridos">Corridos</option>
                                 </select>
@@ -737,9 +736,9 @@
                     </div>
 
                     <div style="display:flex; gap:8px; margin-top:14px;">
-                        <button class="btn btn-p" onclick="gaGuardarDoc()" style="flex:1;"><i class="fas fa-save"></i>
+                        <button class="btn btn-p" data-action="ga-guardar-doc" style="flex:1;"><i class="fas fa-save"></i>
                             Indexar Documento</button>
-                        <button class="btn btn-d" onclick="gaCancelForm()"><i class="fas fa-times"></i></button>
+                        <button class="btn btn-d" data-action="ga-cancel-form"><i class="fas fa-times"></i></button>
                     </div>
                 </div>
 
@@ -754,13 +753,13 @@
                             <div class="doc-list-header">
                                 <h4 id="ga-folder-title">Todos los documentos</h4>
                                 <div class="doc-filters" id="ga-filters">
-                                    <button class="filter-btn active" onclick="gaFilter('all',this)">Todos</button>
-                                    <button class="filter-btn" onclick="gaFilter('plazo',this)">⏰ Con plazo</button>
-                                    <button class="filter-btn" onclick="gaFilter('prob',this)">🔍
+                                    <button class="filter-btn active" data-action="ga-filter" data-filter="all">Todos</button>
+                                    <button class="filter-btn" data-action="ga-filter" data-filter="plazo">⏰ Con plazo</button>
+                                    <button class="filter-btn" data-action="ga-filter" data-filter="prob">🔍
                                         Probatorio</button>
-                                    <button class="filter-btn" onclick="gaFilter('strat',this)">💡
+                                    <button class="filter-btn" data-action="ga-filter" data-filter="strat">💡
                                         Estratégico</button>
-                                    <button class="filter-btn" onclick="gaFilter('crit',this)">🔴 Crítico</button>
+                                    <button class="filter-btn" data-action="ga-filter" data-filter="crit">🔴 Crítico</button>
                                 </div>
                             </div>
                             <div id="ga-items"></div>
@@ -785,9 +784,9 @@
         <!-- JURISPRUDENCIA -->
         <section id="juris" class="tabs">
             <div class="hub-nav">
-                <button class="hub-tab" onclick="tab('estrategia', this)"><i class="fas fa-chart-pie"></i>
+                <button class="hub-tab" data-action="tab" data-tab="estrategia"><i class="fas fa-chart-pie"></i>
                     Estrategia & Riesgo</button>
-                <button class="hub-tab active" onclick="tab('juris', this)"><i class="fas fa-book"></i>
+                <button class="hub-tab active" data-action="tab" data-tab="juris"><i class="fas fa-book"></i>
                     Jurisprudencia & Doctrina</button>
             </div>
             <div class="grid">
@@ -805,7 +804,7 @@
                         <option value="Constitucional">Constitucional</option>
                         <option value="Otra">Otra</option>
                     </select>
-                    <button class="btn btn-p btn-full" onclick="addJuris()"><i class="fas fa-database"></i>
+                    <button class="btn btn-p btn-full" data-action="juris-add"><i class="fas fa-database"></i>
                         Indexar</button>
                 </div>
                 <div>
@@ -822,7 +821,7 @@
             <div class="card" style="max-width:500px;">
                 <h3><i class="fas fa-wallet"></i> Calculadora de Honorarios Sugerida</h3>
                 <label>Cuantía del Asunto ($)</label>
-                <input type="number" id="hon-val" placeholder="Ej: 10000000" oninput="calcHon()">
+                <input type="number" id="hon-val" placeholder="Ej: 10000000" data-action="hon-calc">
                 <h2 id="hon-res">$ 0</h2>
                 <p style="font-size:0.8rem; color:var(--t2); margin-bottom:12px;">Honorario mínimo sugerido (modelo
                     referencial 15%–10% escalonado)</p>
@@ -851,7 +850,7 @@
                     </select>
                     <label>Rama / Materia</label>
                     <input id="cp-rama" placeholder="Ej: Civil, Laboral, Familia">
-                    <button class="btn btn-s btn-full" onclick="uiCrearCausaPro()"><i class="fas fa-gavel"></i>
+                    <button class="btn btn-s btn-full" data-action="cp-crear"><i class="fas fa-gavel"></i>
                         Crear Causa</button>
                 </div>
                 <div>
@@ -886,7 +885,7 @@
                         <label>Fecha del Documento</label>
                         <input type="date" id="doc-fecha">
                         <label class="cb-row" style="margin-top:10px; font-weight:600;">
-                            <input type="checkbox" id="doc-genera-plazo" onchange="uiToggleDocPlazo()"> ¿Genera
+                            <input type="checkbox" id="doc-genera-plazo" data-action="doc-toggle-plazo"> ¿Genera
                             Plazo?
                         </label>
                         <div id="doc-plazo-extra"
@@ -894,7 +893,7 @@
                             <label>Días del Plazo</label>
                             <input type="number" id="doc-dias" placeholder="Ej: 10" min="1">
                         </div>
-                        <button class="btn btn-p btn-full" onclick="uiAgregarDocumento()"><i class="fas fa-upload"></i>
+                        <button class="btn btn-p btn-full" data-action="doc-agregar"><i class="fas fa-upload"></i>
                             Agregar Documento</button>
                         <div id="listaDocumentos" style="margin-top:14px;"></div>
                     </div>
@@ -908,11 +907,11 @@
                 <div class="card">
                     <h3><i class="fas fa-calendar-week"></i> Eventos y Plazos</h3>
                     <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
-                        <button class="btn btn-p" onclick="evaluarAlertas(); renderCalendario();">
+                        <button class="btn btn-p" data-action="cal-actualizar-alertas">
                             <i class="fas fa-sync"></i> Actualizar Alertas
                         </button>
                         <button class="btn btn-sm" style="background:#ede9fe; color:#7c3aed; font-weight:600;"
-                            onclick="exportarCalendarioICS()">
+                            data-action="cal-export-ics">
                             <i class="fas fa-calendar-plus"></i> Exportar a Calendario (.ics)
                         </button>
                     </div>
@@ -948,7 +947,7 @@
                         <option value="alta">Alta</option>
                         <option value="critica">Crítica</option>
                     </select>
-                    <button class="btn btn-s btn-full" onclick="uiCrearAlerta()"><i class="fas fa-bell"></i> Crear
+                    <button class="btn btn-s btn-full" data-action="cal-crear-alerta"><i class="fas fa-bell"></i> Crear
                         Alerta</button>
                 </div>
             </div>
@@ -965,12 +964,11 @@
                 <div class="card">
                     <h3><i class="fas fa-chess"></i> Motor Estratégico</h3>
                     <label>Seleccionar Causa Pro</label>
-                    <select id="ep-causa-sel" onchange="uiRenderEstrategiaPro()">
+                    <select id="ep-causa-sel" data-action="ep-causa">
                         <option value="">-- Seleccione una causa --</option>
                     </select>
                     <div style="margin-top:12px;margin-bottom:4px;">
-                        <button
-                            onclick="clAnalizarEstrategiaPro(parseInt(document.getElementById('ep-causa-sel').value))"
+                        <button data-action="ep-analizar"
                             style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:linear-gradient(135deg,#7c3aed,#5b21b6);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;box-shadow:0 2px 10px rgba(124,58,237,0.35);">
                             <i class="fas fa-brain"></i> Análisis Estratégico con Bot AI
                         </button>
@@ -995,7 +993,7 @@
                         <textarea id="import-fallo-texto" placeholder="Pegue aquí el texto del fallo judicial..."
                             style="min-height:110px; font-size:0.8rem; border-color:#c4b5fd;"></textarea>
                         <button class="btn btn-full" style="background:#7c3aed; color:white; margin-top:8px;"
-                            onclick="iaImportarFallo()">
+                            data-action="ep-importar-fallo">
                             <i class="fas fa-magic"></i> <span id="btn-import-fallo-txt">Analizar con IA e
                                 Indexar</span>
                         </button>
@@ -1036,7 +1034,7 @@
                     </select>
                     <label>Palabras Clave (separadas por coma)</label>
                     <input id="jav-palabras" placeholder="Ej: prescripción, contrato, daño">
-                    <button class="btn btn-p btn-full" onclick="uiCrearJurisprudencia()"><i class="fas fa-save"></i>
+                    <button class="btn btn-p btn-full" data-action="ep-crear-juris"><i class="fas fa-save"></i>
                         Indexar Jurisprudencia</button>
                     <div id="listaJurisprudencia" style="margin-top:14px;"></div>
                 </div>
@@ -1050,10 +1048,10 @@
             <div class="card" style="max-width:800px;">
                 <h3><i class="fas fa-shield-alt"></i> Bitácora del Sistema</h3>
                 <div style="display:flex; gap:8px; margin-bottom:14px;">
-                    <button class="btn btn-p btn-sm" onclick="renderBitacora()"><i class="fas fa-sync"></i>
+                    <button class="btn btn-p btn-sm" data-action="bitacora-refresh"><i class="fas fa-sync"></i>
                         Actualizar</button>
                     <button class="btn btn-d btn-sm"
-                        onclick="if(confirm('¿Limpiar bitácora?')){DB.bitacora=[];guardarDB();renderBitacora();}"><i
+                        data-action="bitacora-clear"><i
                             class="fas fa-trash"></i> Limpiar</button>
                 </div>
                 <div id="bitacoraSistema"></div>
@@ -1133,16 +1131,16 @@
                 <h3><i class="fas fa-search"></i> Búsqueda Global</h3>
                 <div style="display:flex; gap:8px; margin-bottom:16px;">
                     <input id="busq-input" placeholder="Buscar causas, clientes, documentos, jurisprudencia..."
-                        oninput="busquedaGlobal(this.value)" style="margin:0; flex:1;">
-                    <button class="btn btn-p" onclick="busquedaGlobal(document.getElementById('busq-input').value)"><i
+                        data-action="busq-input" style="margin:0; flex:1;">
+                    <button class="btn btn-p" data-action="busq-run"><i
                             class="fas fa-search"></i></button>
                 </div>
                 <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;" id="busq-filtros">
-                    <button class="filter-btn active" onclick="setBusqFiltro('todo',this)">Todo</button>
-                    <button class="filter-btn" onclick="setBusqFiltro('causas',this)">Causas</button>
-                    <button class="filter-btn" onclick="setBusqFiltro('clientes',this)">Clientes</button>
-                    <button class="filter-btn" onclick="setBusqFiltro('documentos',this)">Documentos</button>
-                    <button class="filter-btn" onclick="setBusqFiltro('juris',this)">Jurisprudencia</button>
+                    <button class="filter-btn active" data-action="busq-filtro" data-filtro="todo">Todo</button>
+                    <button class="filter-btn" data-action="busq-filtro" data-filtro="causas">Causas</button>
+                    <button class="filter-btn" data-action="busq-filtro" data-filtro="clientes">Clientes</button>
+                    <button class="filter-btn" data-action="busq-filtro" data-filtro="documentos">Documentos</button>
+                    <button class="filter-btn" data-action="busq-filtro" data-filtro="juris">Jurisprudencia</button>
                 </div>
                 <div id="busq-resultados"></div>
             </div>
@@ -1154,7 +1152,7 @@
                 <h3><i class="fas fa-hourglass-half"></i> Control de Prescripción</h3>
                 <p style="font-size:0.83rem; color:var(--t2); margin-bottom:16px;">Plazos legales referenciales.
                     Verificar siempre con normativa vigente.</p>
-                <button class="btn btn-p" style="margin-bottom:16px;" onclick="renderPrescripcion()"><i
+                <button class="btn btn-p" style="margin-bottom:16px;" data-action="prescripcion-run"><i
                         class="fas fa-sync"></i> Calcular Prescripciones</button>
                 <div id="prescripcion-lista"></div>
             </div>
@@ -1182,7 +1180,7 @@
                     <input id="rec-tribunal" placeholder="Ej: Corte de Apelaciones de Santiago">
                     <label>Observaciones</label>
                     <textarea id="rec-obs" placeholder="Fundamentos del recurso..."></textarea>
-                    <button class="btn btn-s btn-full" onclick="uiInterponerRecurso()"><i class="fas fa-save"></i>
+                    <button class="btn btn-s btn-full" data-action="rec-interponer"><i class="fas fa-save"></i>
                         Registrar Recurso</button>
                 </div>
                 <div class="card">
@@ -1197,16 +1195,16 @@
             <div class="card" style="max-width:700px;">
                 <h3><i class="fas fa-file-alt"></i> Generar Informe de Causa</h3>
                 <label>Seleccionar Causa</label>
-                <select id="inf-causa-sel" onchange="previewInforme()"></select>
+                <select id="inf-causa-sel" data-action="inf-preview"></select>
                 <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
-                    <button class="btn btn-p" onclick="generarInformeCausa()"><i class="fas fa-eye"></i> Generar
+                    <button class="btn btn-p" data-action="inf-generar"><i class="fas fa-eye"></i> Generar
                         Informe</button>
-                    <button class="btn btn-s" onclick="window.print()"><i class="fas fa-print"></i>
+                    <button class="btn btn-s" data-action="inf-print"><i class="fas fa-print"></i>
                         Imprimir</button>
-                    <button class="btn" style="background:var(--bg-2,var(--bg));" onclick="exportarInformeTexto()"><i
+                    <button class="btn" style="background:var(--bg-2,var(--bg));" data-action="inf-export-txt"><i
                             class="fas fa-download"></i> Exportar .txt</button>
                     <button class="btn" style="background:linear-gradient(135deg,#1a3a6b,#0d5e8a);color:#fff;"
-                        onclick="exportarInformeMejorado(document.getElementById('inf-causa-sel').value)">
+                        data-action="inf-export-pro">
                         <i class="fas fa-star"></i> Informe Pro (PDF)
                     </button>
                 </div>
@@ -1229,20 +1227,20 @@
                     <span class="esc-topbar-badge">Dual Pro v2</span>
                 </div>
                 <div class="esc-topbar-right">
-                    <button class="btn btn-sm" onclick="uiGuardarEscrito()" id="btn-guardar-escrito">
+                    <button class="btn btn-sm" data-action="esc-guardar" id="btn-guardar-escrito">
                         <i class="fas fa-save"></i> Guardar en Causa
                     </button>
-                    <button class="btn btn-sm" onclick="uiExportarEscrito()" id="btn-exportar-escrito">
+                    <button class="btn btn-sm" data-action="esc-exportar" id="btn-exportar-escrito">
                         <i class="fas fa-download"></i> Exportar
                     </button>
-                    <button class="btn btn-sm btn-success-outline" onclick="uiCopiarEscrito()" id="btn-copiar-escrito">
+                    <button class="btn btn-sm btn-success-outline" data-action="esc-copiar" id="btn-copiar-escrito">
                         <i class="fas fa-copy"></i> Copiar
                     </button>
-                    <button class="btn btn-sm" onclick="uiAplicarVariables()" id="btn-vars"
+                    <button class="btn btn-sm" data-action="esc-variables" id="btn-vars"
                         title="Reemplaza [VARIABLES] con datos reales de la causa">
                         <i class="fas fa-magic"></i> Variables
                     </button>
-                    <button class="btn btn-sm btn-purple-outline" onclick="escToggleIA()" id="btn-panel-ia">
+                    <button class="btn btn-sm btn-purple-outline" data-action="esc-toggle-ia" id="btn-panel-ia">
                         <i class="fas fa-robot"></i> Sugerencias IA
                     </button>
                 </div>
@@ -1261,7 +1259,7 @@
                             <span>Redacción con <span id="esc-ia-provider-label">IA</span></span>
                         </div>
                         <label class="esc-toggle">
-                            <input type="checkbox" id="esc-modo-ia" onchange="uiToggleModoIA()">
+                            <input type="checkbox" id="esc-modo-ia" data-action="esc-modo-ia">
                             <span class="esc-toggle-track"></span>
                         </label>
                     </div>
@@ -1290,7 +1288,7 @@
                             placeholder="Describa los hechos relevantes del caso, antecedentes, fundamentos específicos para el tipo de escrito seleccionado..."></textarea>
                     </div>
 
-                    <button class="btn btn-p btn-full" style="margin-top:12px;" onclick="uiGenerarEscrito()">
+                    <button class="btn btn-p btn-full" style="margin-top:12px;" data-action="esc-generar">
                         <i class="fas fa-magic"></i>
                         <span id="btn-generar-txt">Generar Borrador</span>
                     </button>
@@ -1349,7 +1347,7 @@
                         <i class="fas fa-robot" style="color:var(--cyan);"></i>
                         <strong>Sugerencias IA</strong>
                     </div>
-                    <button class="btn-icon" onclick="escToggleIA()">
+                    <button class="btn-icon" data-action="esc-toggle-ia">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
@@ -1384,8 +1382,8 @@
             <div class="db-filtros"
                 style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:18px; align-items:center;">
                 <input type="text" id="hfilt-texto" placeholder="Buscar por tipo, causa o contenido…"
-                    style="flex:1; min-width:200px;" oninput="historialFiltrar()">
-                <select id="hfilt-origen" onchange="historialFiltrar()" style="min-width:130px;">
+                    style="flex:1; min-width:200px;" data-action="historial-filtrar">
+                <select id="hfilt-origen" data-action="historial-filtrar" style="min-width:130px;">
                     <option value="">Todos los orígenes</option>
                     <option value="ia">✨ Generado con IA</option>
                     <option value="catalogo">📄 Catálogo estático</option>
@@ -1393,7 +1391,7 @@
                     <option value="manual">Manual</option>
                 </select>
                 <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;">
-                    <input type="checkbox" id="hfilt-favoritos" onchange="historialFiltrar()">
+                    <input type="checkbox" id="hfilt-favoritos" data-action="historial-filtrar">
                     <i class="fas fa-star" style="color:var(--warning);"></i> Solo favoritos
                 </label>
             </div>
@@ -1418,11 +1416,11 @@
                     <p class="section-subtitle">Crea y reutiliza tus propios modelos de escritos judiciales</p>
                 </div>
                 <div style="display:flex;gap:8px;">
-                    <button class="btn btn-p" onclick="plantillaNueva()">
+                    <button class="btn btn-p" data-action="plantilla-nueva">
                         <i class="fas fa-plus"></i> Nueva Plantilla (Escrito)
                     </button>
                     <button class="btn" style="background:linear-gradient(135deg,#0891b2,#0d5e8a);color:#fff;"
-                        onclick="tab('plantillas-texto')">
+                        data-action="tab" data-tab="plantillas-texto">
                         <i class="fas fa-file-alt"></i> Plantillas de Texto
                     </button>
                 </div>
@@ -1448,7 +1446,7 @@
                     <p class="section-subtitle">Crea modelos reutilizables con variables dinámicas: {{cliente}},
                         {{causa}}, {{fecha_hoy}}, etc.</p>
                 </div>
-                <button class="btn btn-p" onclick="ptNueva()">
+                <button class="btn btn-p" data-action="pt-nueva">
                     <i class="fas fa-plus"></i> Nueva Plantilla
                 </button>
             </div>
@@ -1488,7 +1486,7 @@
                         de Tiempo</h2>
                     <p class="section-subtitle">Control de horas trabajadas por causa para facturación precisa</p>
                 </div>
-                <button class="btn" style="background:#475569;color:#fff;" onclick="tiempoExportarCSV()">
+                <button class="btn" style="background:#475569;color:#fff;" data-action="ts-export-csv">
                     <i class="fas fa-file-csv"></i> Exportar CSV
                 </button>
             </div>
@@ -1510,11 +1508,11 @@
                         <input id="ts-descripcion" placeholder="Ej: Redacción de demanda…" style="margin-bottom:12px;">
                         <div style="display:flex;gap:8px;">
                             <button id="ts-btn-iniciar" class="btn btn-p" style="flex:1;"
-                                onclick="tiempoCronometroIniciar(document.getElementById('ts-cronometro-causa').value)">
+                                data-action="ts-iniciar">
                                 <i class="fas fa-play"></i> Iniciar
                             </button>
                             <button id="ts-btn-detener" class="btn btn-d" style="flex:1;" disabled
-                                onclick="tiempoCronometroDetener()">
+                                data-action="ts-detener">
                                 <i class="fas fa-stop"></i> Detener y Guardar
                             </button>
                         </div>
@@ -1541,7 +1539,7 @@
                             style="margin-bottom:8px;">
                         <label>Fecha</label>
                         <input type="date" id="ts-fecha" style="margin-bottom:12px;">
-                        <button class="btn btn-p" style="width:100%;" onclick="tiempoRegistrarManual()">
+                        <button class="btn btn-p" style="width:100%;" data-action="ts-registrar-manual">
                             <i class="fas fa-plus"></i> Registrar Tiempo
                         </button>
                     </div>
@@ -1576,11 +1574,11 @@
                         <option value="">-- Sin causa específica --</option>
                     </select>
                     <label>Monto Original ($)</label>
-                    <input type="number" id="cq-monto" placeholder="Ej: 25000000" oninput="calcularCuantia()">
+                    <input type="number" id="cq-monto" placeholder="Ej: 25000000" data-action="cq-recalc">
                     <label>Fecha del Hecho / Deuda</label>
-                    <input type="date" id="cq-fecha" oninput="calcularCuantia()">
+                    <input type="date" id="cq-fecha" data-action="cq-recalc">
                     <label>Tipo de Ajuste</label>
-                    <select id="cq-tipo" onchange="calcularCuantia()">
+                    <select id="cq-tipo" data-action="cq-recalc">
                         <option value="ipc">IPC (reajustabilidad UF referencial)</option>
                         <option value="interes_legal">Interés Legal (0.5% mensual)</option>
                         <option value="interes_corriente">Interés Corriente (aprox. 1.2% mensual)</option>
@@ -1589,12 +1587,12 @@
                     </select>
                     <label>Honorario Base (% o monto fijo)</label>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;">
-                        <select id="cq-hon-tipo" onchange="calcularCuantia()">
+                        <select id="cq-hon-tipo" data-action="cq-recalc">
                             <option value="escala">Escala escalonada</option>
                             <option value="pct">% fijo</option>
                             <option value="fijo">Monto fijo ($)</option>
                         </select>
-                        <input type="number" id="cq-hon-val" placeholder="Ej: 15 o 1500000" oninput="calcularCuantia()">
+                        <input type="number" id="cq-hon-val" placeholder="Ej: 15 o 1500000" data-action="cq-recalc">
                     </div>
                     <div id="cq-resultado" style="margin-top:14px;"></div>
                 </div>
@@ -1624,20 +1622,20 @@
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
                         <div>
                             <label style="font-size:0.75rem;">Valor UF Actual ($)</label>
-                            <input type="number" id="cp-uf-valor" value="37800" oninput="cpRecalcular()">
+                            <input type="number" id="cp-uf-valor" value="37800" data-action="cp-recalc">
                         </div>
                         <div>
                             <label style="font-size:0.75rem;">Valor UTM Actual ($)</label>
-                            <input type="number" id="cp-utm-valor" value="65000" oninput="cpRecalcular()">
+                            <input type="number" id="cp-utm-valor" value="65000" data-action="cp-recalc">
                         </div>
                     </div>
                     <div style="margin-top:12px;">
                         <label style="font-size:0.75rem;">Tasa IPC Mensual (%)</label>
-                        <input type="number" id="cp-ipc-valor" value="0.45" step="0.01" oninput="cpRecalcular()">
+                        <input type="number" id="cp-ipc-valor" value="0.45" step="0.01" data-action="cp-recalc">
                     </div>
                     <div style="margin-top:12px;">
                         <label style="font-size:0.75rem;">Interés Legal (%)</label>
-                        <input type="number" id="cp-int-valor" value="0.5" step="0.1" oninput="cpRecalcular()">
+                        <input type="number" id="cp-int-valor" value="0.5" step="0.1" data-action="cp-recalc">
                     </div>
                     <p style="font-size:0.72rem; color:var(--text-3); margin-top:12px; line-height:1.4;">
                         <i class="fas fa-info-circle"></i> Estos valores alimentan todos los cálculos financieros de
@@ -1651,9 +1649,9 @@
                     <div style="margin-bottom:12px;">
                         <label style="font-size:0.75rem;">Monto Base</label>
                         <div style="display:flex; gap:8px;">
-                            <input type="number" id="cp-monto" placeholder="Ej: 1000000" oninput="cpRecalcular()"
+                            <input type="number" id="cp-monto" placeholder="Ej: 1000000" data-action="cp-recalc"
                                 style="flex:2;">
-                            <select id="cp-moneda" onchange="cpRecalcular()" style="flex:1;">
+                            <select id="cp-moneda" data-action="cp-recalc" style="flex:1;">
                                 <option value="clp">CLP ($)</option>
                                 <option value="uf">UF</option>
                                 <option value="utm">UTM</option>
@@ -1662,11 +1660,11 @@
                     </div>
                     <div style="margin-bottom:12px;">
                         <label style="font-size:0.75rem;">Fecha de Inicio de Deuda</label>
-                        <input type="date" id="cp-fecha-inicio" oninput="cpRecalcular()">
+                        <input type="date" id="cp-fecha-inicio" data-action="cp-recalc">
                     </div>
                     <div style="margin-bottom:12px;">
                         <label style="font-size:0.75rem;">Tipo de Reajuste</label>
-                        <select id="cp-reajuste" onchange="cpRecalcular()">
+                        <select id="cp-reajuste" data-action="cp-recalc">
                             <option value="ninguno">Sin reajuste (solo conversión)</option>
                             <option value="ipc">IPC simple</option>
                             <option value="interes_legal">Interés Legal (0.5%)</option>
@@ -1689,23 +1687,23 @@
                 <div class="card">
                     <h3><i class="fas fa-chess-knight"></i> Ficha de Estrategia</h3>
                     <label>Causa</label>
-                    <select id="fe-causa-sel" onchange="cargarFichaEstrategia()"></select>
+                    <select id="fe-causa-sel" data-action="fe-causa"></select>
 
                     <div class="ficha-seccion" style="margin-top:14px;">
                         <h4><i class="fas fa-list-ol" style="color:var(--a)"></i> I. HECHOS</h4>
                         <textarea id="fe-hechos"
                             placeholder="Describa los hechos relevantes de forma clara y cronológica..."
-                            style="min-height:100px;" oninput="calcularProbabilidad()"></textarea>
+                            style="min-height:100px;" data-action="fe-prob"></textarea>
                         <div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:4px;">
                             <small style="color:var(--t2); font-size:0.7rem; width:100%; margin-bottom:2px;">Fortalezas
                                 presentes:</small>
-                            <span class="ficha-tag" onclick="toggleTag(this,'hechos')" data-val="documentados">📄
+                            <span class="ficha-tag" data-action="fe-tag" data-scope="hechos" data-val="documentados">📄
                                 Documentados</span>
-                            <span class="ficha-tag" onclick="toggleTag(this,'hechos')" data-val="testigos">👥
+                            <span class="ficha-tag" data-action="fe-tag" data-scope="hechos" data-val="testigos">👥
                                 Testigos</span>
-                            <span class="ficha-tag" onclick="toggleTag(this,'hechos')" data-val="cronologia_clara">📅
+                            <span class="ficha-tag" data-action="fe-tag" data-scope="hechos" data-val="cronologia_clara">📅
                                 Cronología clara</span>
-                            <span class="ficha-tag" onclick="toggleTag(this,'hechos')" data-val="sin_contradicciones">✓
+                            <span class="ficha-tag" data-action="fe-tag" data-scope="hechos" data-val="sin_contradicciones">✓
                                 Sin contradicciones</span>
                         </div>
                     </div>
@@ -1713,17 +1711,17 @@
                     <div class="ficha-seccion">
                         <h4><i class="fas fa-balance-scale" style="color:var(--a)"></i> II. DERECHO</h4>
                         <textarea id="fe-derecho" placeholder="Normas aplicables, doctrina y fundamentos jurídicos..."
-                            style="min-height:90px;" oninput="calcularProbabilidad()"></textarea>
+                            style="min-height:90px;" data-action="fe-prob"></textarea>
                         <div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:4px;">
                             <small style="color:var(--t2); font-size:0.7rem; width:100%; margin-bottom:2px;">Base
                                 jurídica:</small>
-                            <span class="ficha-tag" onclick="toggleTag(this,'derecho')" data-val="norma_expresa">⚖️
+                            <span class="ficha-tag" data-action="fe-tag" data-scope="derecho" data-val="norma_expresa">⚖️
                                 Norma expresa</span>
-                            <span class="ficha-tag" onclick="toggleTag(this,'derecho')"
+                            <span class="ficha-tag" data-action="fe-tag" data-scope="derecho"
                                 data-val="jurisprudencia_favor">📚 Jurisp. favorable</span>
-                            <span class="ficha-tag" onclick="toggleTag(this,'derecho')" data-val="doctrina_uniforme">📖
+                            <span class="ficha-tag" data-action="fe-tag" data-scope="derecho" data-val="doctrina_uniforme">📖
                                 Doctrina uniforme</span>
-                            <span class="ficha-tag" onclick="toggleTag(this,'derecho')" data-val="precedente_sala">🏛️
+                            <span class="ficha-tag" data-action="fe-tag" data-scope="derecho" data-val="precedente_sala">🏛️
                                 Precedente sala</span>
                         </div>
                     </div>
@@ -1732,17 +1730,17 @@
                         <h4><i class="fas fa-search" style="color:var(--a)"></i> III. EVIDENCIA</h4>
                         <textarea id="fe-evidencia"
                             placeholder="Medios probatorios disponibles: documentos, peritos, testigos..."
-                            style="min-height:90px;" oninput="calcularProbabilidad()"></textarea>
+                            style="min-height:90px;" data-action="fe-prob"></textarea>
                         <div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:4px;">
                             <small style="color:var(--t2); font-size:0.7rem; width:100%; margin-bottom:2px;">Tipo de
                                 prueba:</small>
-                            <span class="ficha-tag" onclick="toggleTag(this,'evidencia')"
+                            <span class="ficha-tag" data-action="fe-tag" data-scope="evidencia"
                                 data-val="prueba_documental">📋 Documental</span>
-                            <span class="ficha-tag" onclick="toggleTag(this,'evidencia')" data-val="prueba_pericial">🔬
+                            <span class="ficha-tag" data-action="fe-tag" data-scope="evidencia" data-val="prueba_pericial">🔬
                                 Pericial</span>
-                            <span class="ficha-tag" onclick="toggleTag(this,'evidencia')"
+                            <span class="ficha-tag" data-action="fe-tag" data-scope="evidencia"
                                 data-val="prueba_testimonial">🗣️ Testimonial</span>
-                            <span class="ficha-tag" onclick="toggleTag(this,'evidencia')"
+                            <span class="ficha-tag" data-action="fe-tag" data-scope="evidencia"
                                 data-val="prueba_confesional">✍️ Confesional</span>
                         </div>
                     </div>
@@ -1752,14 +1750,14 @@
                             DEBILIDADES</h4>
                         <textarea id="fe-riesgos"
                             placeholder="Puntos débiles, riesgos procesales, argumentos contrarios..."
-                            style="min-height:80px;" oninput="calcularProbabilidad()"></textarea>
+                            style="min-height:80px;" data-action="fe-prob"></textarea>
                     </div>
 
                     <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
-                        <button class="btn btn-p" style="flex:1;" onclick="guardarFichaEstrategia()"><i
+                        <button class="btn btn-p" style="flex:1;" data-action="fe-guardar"><i
                                 class="fas fa-save"></i> Guardar Ficha</button>
                         <button class="btn btn-sm" style="background:var(--bg-2,var(--bg));"
-                            onclick="exportarFichaEstrategia()"><i class="fas fa-download"></i> Exportar</button>
+                            data-action="fe-exportar"><i class="fas fa-download"></i> Exportar</button>
                     </div>
                 </div>
 
@@ -1883,10 +1881,10 @@
             <div class="card">
                 <h3><i class="fas fa-sitemap"></i> Control de Instancias</h3>
                 <div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
-                    <select id="inst-causa-sel" onchange="renderInstancias()" style="flex:1; max-width:300px;">
+                    <select id="inst-causa-sel" data-action="inst-causa" style="flex:1; max-width:300px;">
                         <option value="">-- Seleccione una causa --</option>
                     </select>
-                    <button class="btn btn-p" onclick="uiAgregarInstancia()"><i class="fas fa-plus"></i> Nueva
+                    <button class="btn btn-p" data-action="inst-nueva"><i class="fas fa-plus"></i> Nueva
                         Instancia</button>
                 </div>
                 <div id="inst-timeline"></div>
@@ -1903,7 +1901,7 @@
                 <h3><i class="fas fa-project-diagram"></i> Motor de Coherencia Estratégica</h3>
                 <p style="font-size:0.8rem; color:var(--t2); margin:8px 0 14px;">Cruza la ficha de estrategia con la
                     evidencia indexada y la jurisprudencia para detectar inconsistencias o fortalezas.</p>
-                <select id="coh-causa-sel" onchange="analizarCoherencia()" style="margin-bottom:14px;">
+                <select id="coh-causa-sel" data-action="coh-causa" style="margin-bottom:14px;">
                     <option value="">-- Seleccione una causa --</option>
                 </select>
                 <div id="coh-resultado"></div>
@@ -1927,7 +1925,7 @@
                         <div
                             style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                             <h3 style="margin:0;"><i class="fas fa-users"></i> Listado de Usuarios</h3>
-                            <button class="btn btn-p" onclick="uiCrearUsuario()"><i class="fas fa-user-plus"></i> Nuevo
+                            <button class="btn btn-p" data-action="users-nuevo"><i class="fas fa-user-plus"></i> Nuevo
                                 Usuario</button>
                         </div>
 
@@ -1985,20 +1983,20 @@
                 </h2>
                 <div style="display:flex; gap:8px; align-items:center;">
                     <div class="bib-view-toggle">
-                        <button class="bib-view-btn activo" id="bib-view-grid" onclick="bibSetView('grid',this)"><i
+                        <button class="bib-view-btn activo" id="bib-view-grid" data-action="bib-view" data-view="grid"><i
                                 class="fas fa-th-large"></i></button>
-                        <button class="bib-view-btn" id="bib-view-list" onclick="bibSetView('list',this)"><i
+                        <button class="bib-view-btn" id="bib-view-list" data-action="bib-view" data-view="list"><i
                                 class="fas fa-list"></i></button>
                     </div>
-                    <button class="btn btn-p" onclick="bibAgregarDocumento()"><i class="fas fa-plus"></i>
+                    <button class="btn btn-p" data-action="bib-agregar"><i class="fas fa-plus"></i>
                         Agregar</button>
                 </div>
             </div>
             <div class="bib-stats-bar" id="bib-stats"></div>
             <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
-                <input id="bib-search" placeholder="Buscar por nombre, causa, etiqueta..." oninput="bibRender()"
+                <input id="bib-search" placeholder="Buscar por nombre, causa, etiqueta..." data-action="bib-render"
                     style="flex:1; min-width:200px;">
-                <select id="bib-filtro-tipo" onchange="bibRender()" style="width:auto;">
+                <select id="bib-filtro-tipo" data-action="bib-render" style="width:auto;">
                     <option value="">Todos los tipos</option>
                     <option value="pdf">PDF</option>
                     <option value="word">Word</option>
@@ -2006,10 +2004,10 @@
                     <option value="imagen">Imagen</option>
                     <option value="otro">Otro</option>
                 </select>
-                <select id="bib-filtro-causa" onchange="bibRender()" style="width:auto;">
+                <select id="bib-filtro-causa" data-action="bib-render" style="width:auto;">
                     <option value="">Todas las causas</option>
                 </select>
-                <select id="bib-filtro-etapa" onchange="bibRender()" style="width:auto;">
+                <select id="bib-filtro-etapa" data-action="bib-render" style="width:auto;">
                     <option value="">Todas las etapas</option>
                     <option>Demanda</option>
                     <option>Notificación</option>
@@ -2022,14 +2020,14 @@
                 </select>
             </div>
             <div class="bib-filtros" id="bib-tags-filtro">
-                <span class="bib-tag activo" data-tag="" onclick="bibFiltroTag('',this)">Todos</span>
-                <span class="bib-tag" data-tag="demanda" onclick="bibFiltroTag('demanda',this)">Demanda</span>
-                <span class="bib-tag" data-tag="sentencia" onclick="bibFiltroTag('sentencia',this)">Sentencia</span>
-                <span class="bib-tag" data-tag="recurso" onclick="bibFiltroTag('recurso',this)">Recurso</span>
-                <span class="bib-tag" data-tag="pericial" onclick="bibFiltroTag('pericial',this)">Pericial</span>
-                <span class="bib-tag" data-tag="contrato" onclick="bibFiltroTag('contrato',this)">Contrato</span>
-                <span class="bib-tag" data-tag="poder" onclick="bibFiltroTag('poder',this)">Poder</span>
-                <span class="bib-tag" data-tag="escrito" onclick="bibFiltroTag('escrito',this)">Escritos</span>
+                <span class="bib-tag activo" data-action="bib-filtro-tag" data-tag="">Todos</span>
+                <span class="bib-tag" data-action="bib-filtro-tag" data-tag="demanda">Demanda</span>
+                <span class="bib-tag" data-action="bib-filtro-tag" data-tag="sentencia">Sentencia</span>
+                <span class="bib-tag" data-action="bib-filtro-tag" data-tag="recurso">Recurso</span>
+                <span class="bib-tag" data-action="bib-filtro-tag" data-tag="pericial">Pericial</span>
+                <span class="bib-tag" data-action="bib-filtro-tag" data-tag="contrato">Contrato</span>
+                <span class="bib-tag" data-action="bib-filtro-tag" data-tag="poder">Poder</span>
+                <span class="bib-tag" data-action="bib-filtro-tag" data-tag="escrito">Escritos</span>
             </div>
             <div id="bib-contenedor" style="margin-top:12px;"></div>
         </section>
@@ -2048,7 +2046,7 @@
                             <span id="wa-badge"
                                 style="font-size:11px; padding:2px 8px; border-radius:20px; background:#ef4444; color:white;">Desconectado</span>
                         </div>
-                        <button id="wa-btn-toggle" onclick="waToggle()" class="btn btn-p">Conectar</button>
+                        <button id="wa-btn-toggle" data-action="wa-toggle" class="btn btn-p">Conectar</button>
                     </div>
 
                     <!-- QR wrap -->
@@ -2095,11 +2093,11 @@
                     </label>
 
                     <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:14px;">
-                        <button id="wa-btn-resumen" onclick="waEnviarResumen()" class="btn"
+                        <button id="wa-btn-resumen" data-action="wa-enviar-resumen" class="btn"
                             style="background:#25D366; color:white; border:none;">
                             <i class="fab fa-whatsapp"></i> Enviar resumen ahora
                         </button>
-                        <button id="wa-btn-revisar-cobros" onclick="waRevisarCobrosAhora()" class="btn"
+                        <button id="wa-btn-revisar-cobros" data-action="wa-revisar-cobros" class="btn"
                             style="background:var(--bg-2); color:var(--text-1); border:1px solid var(--border);">
                             <i class="fas fa-sync"></i> Revisar Cobros Ahora
                         </button>
@@ -2138,9 +2136,9 @@
                                     maxlength="15" />
                             </div>
                             <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                                <button id="wa-btn-guardar-principal" onclick="waGuardarPrincipal()" class="btn btn-p"><i class="fas fa-save"></i> Guardar
+                                <button id="wa-btn-guardar-principal" data-action="wa-guardar-principal" class="btn btn-p"><i class="fas fa-save"></i> Guardar
                                     abogado</button>
-                                <button id="wa-btn-cancelar-edicion-principal" onclick="waCancelarEdicionPrincipal()" class="btn"
+                                <button id="wa-btn-cancelar-edicion-principal" data-action="wa-cancelar-principal" class="btn"
                                     style="background:transparent; border:1px solid var(--border); display:none;">
                                     Cancelar
                                 </button>
@@ -2155,7 +2153,7 @@
                                 <div style="font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:.5px;">Reenvíos (Asistentes/Abogados)</div>
                                 <small id="wa-secundarios-activos" style="color:var(--text-3); font-size:11px;"></small>
                             </div>
-                            <button onclick="waLimpiarDestino()" class="btn btn-sm"
+                            <button data-action="wa-limpiar-destinos" class="btn btn-sm"
                                 style="background:transparent; color:#dc2626; border:1px solid #fca5a5; font-size:11px; padding:3px 8px;">
                                 <i class="fas fa-trash"></i> Limpiar lista
                             </button>
@@ -2172,16 +2170,16 @@
                                 <label
                                     style="font-size:11px; color:var(--text-3); display:block; margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px;">Número (con código país, sin +)</label>
                                 <input id="wa-numero-alt" type="tel" class="input-field" placeholder="56912345678"
-                                    maxlength="15" oninput="waValidarNumeroAlt()" />
+                                    maxlength="15" data-action="wa-validar-numero-alt" />
                                 <small id="wa-numero-alt-error"
                                     style="color:#ef4444; font-size:11px; display:none;"></small>
                             </div>
                         </div>
 
                         <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
-                            <button id="wa-btn-guardar-dest" onclick="waGuardarDestino()" class="btn btn-p"><i class="fas fa-user-plus"></i> Agregar
+                            <button id="wa-btn-guardar-dest" data-action="wa-guardar-dest" class="btn btn-p"><i class="fas fa-user-plus"></i> Agregar
                                 reenvío</button>
-                            <button id="wa-btn-cancelar-edicion-dest" onclick="waCancelarEdicionDestinatario()" class="btn"
+                            <button id="wa-btn-cancelar-edicion-dest" data-action="wa-cancelar-dest" class="btn"
                                 style="background:transparent; border:1px solid var(--border); display:none;">
                                 Cancelar
                             </button>
@@ -2230,14 +2228,14 @@
                             <div style="font-size:0.86rem; color:var(--text-2); line-height:1.45; background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:12px 14px; display:grid; gap:8px;">
                                 <div><strong>Variables:</strong> haz clic para insertar en el editor</div>
                                 <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                                    <button type="button" class="btn btn-sm" style="background:var(--bg-card); border:1px solid var(--border);" onclick="waTplInsertVar('nombre_cliente')">{nombre_cliente}</button>
-                                    <button type="button" class="btn btn-sm" style="background:var(--bg-card); border:1px solid var(--border);" onclick="waTplInsertVar('monto')">{monto}</button>
-                                    <button type="button" class="btn btn-sm" style="background:var(--bg-card); border:1px solid var(--border);" onclick="waTplInsertVar('fecha_venc')">{fecha_venc}</button>
-                                    <button type="button" class="btn btn-sm" style="background:var(--bg-card); border:1px solid var(--border);" onclick="waTplInsertVar('nombre_estudio')">{nombre_estudio}</button>
-                                    <button type="button" class="btn btn-sm" style="background:var(--bg-card); border:1px solid var(--border);" onclick="waTplInsertVar('telefono_estudio')">{telefono_estudio}</button>
-                                    <button type="button" class="btn btn-sm" style="background:var(--bg-card); border:1px solid var(--border);" onclick="waTplInsertVar('horario_estudio')">{horario_estudio}</button>
-                                    <button type="button" class="btn btn-sm" style="background:var(--bg-card); border:1px solid var(--border);" onclick="waTplInsertVar('mensaje')">{mensaje}</button>
-                                    <button type="button" class="btn btn-sm" style="background:var(--bg-card); border:1px solid var(--border);" onclick="waTplInsertVar('detalle')">{detalle}</button>
+                                    <button type="button" class="btn btn-sm" style="background:var(--bg-card); border:1px solid var(--border);" data-action="wa-tpl-insert-var" data-var="nombre_cliente">{nombre_cliente}</button>
+                                    <button type="button" class="btn btn-sm" style="background:var(--bg-card); border:1px solid var(--border);" data-action="wa-tpl-insert-var" data-var="monto">{monto}</button>
+                                    <button type="button" class="btn btn-sm" style="background:var(--bg-card); border:1px solid var(--border);" data-action="wa-tpl-insert-var" data-var="fecha_venc">{fecha_venc}</button>
+                                    <button type="button" class="btn btn-sm" style="background:var(--bg-card); border:1px solid var(--border);" data-action="wa-tpl-insert-var" data-var="nombre_estudio">{nombre_estudio}</button>
+                                    <button type="button" class="btn btn-sm" style="background:var(--bg-card); border:1px solid var(--border);" data-action="wa-tpl-insert-var" data-var="telefono_estudio">{telefono_estudio}</button>
+                                    <button type="button" class="btn btn-sm" style="background:var(--bg-card); border:1px solid var(--border);" data-action="wa-tpl-insert-var" data-var="horario_estudio">{horario_estudio}</button>
+                                    <button type="button" class="btn btn-sm" style="background:var(--bg-card); border:1px solid var(--border);" data-action="wa-tpl-insert-var" data-var="mensaje">{mensaje}</button>
+                                    <button type="button" class="btn btn-sm" style="background:var(--bg-card); border:1px solid var(--border);" data-action="wa-tpl-insert-var" data-var="detalle">{detalle}</button>
                                 </div>
                             </div>
 
@@ -2245,7 +2243,7 @@
                                 <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:12px; min-height:320px; display:flex; flex-direction:column;">
                                     <div style="font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px;">Plantillas</div>
                                     <div id="wa-templates-list" style="display:grid; gap:8px;"></div>
-                                    <button id="wa-templates-restaurar" onclick="waTemplatesRestaurarDefaults()" class="btn btn-sm" style="margin-top:10px; background:transparent; border:1px solid var(--border);">
+                                    <button id="wa-templates-restaurar" data-action="wa-templates-restaurar" class="btn btn-sm" style="margin-top:10px; background:transparent; border:1px solid var(--border);">
                                         <i class="fas fa-rotate-left"></i> Restaurar defaults
                                     </button>
                                 </div>
@@ -2253,9 +2251,9 @@
                                 <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:12px; display:grid; gap:10px; min-height:320px;">
                                     <div style="font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:.5px;">Editor</div>
                                     <input id="wa-tpl-nombre" class="input-field" placeholder="Nombre interno (solo lectura)" disabled />
-                                    <textarea id="wa-tpl-texto" class="input-field" rows="12" placeholder="Escribe tu plantilla aquí..." oninput="waTemplatesOnChange()" style="min-height:210px; resize:vertical;"></textarea>
+                                    <textarea id="wa-tpl-texto" class="input-field" rows="12" placeholder="Escribe tu plantilla aquí..." data-action="wa-templates-change" style="min-height:210px; resize:vertical;"></textarea>
                                     <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                                        <button id="wa-tpl-guardar" onclick="waTemplatesGuardar()" class="btn btn-p"><i class="fas fa-save"></i> Guardar plantilla</button>
+                                        <button id="wa-tpl-guardar" data-action="wa-templates-guardar" class="btn btn-p"><i class="fas fa-save"></i> Guardar plantilla</button>
                                     </div>
                                 </div>
 
@@ -2274,17 +2272,17 @@
                                     <div id="wa-branding-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:12px;">
                                         <div>
                                             <label style="font-size:11px; color:var(--text-3); display:block; margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px;">Web / Link de contacto</label>
-                                            <input id="wa-brand-weblink" type="text" class="input-field" placeholder="Ej: https://lexium.cl" oninput="waBrandingOnWebInput()" />
+                                            <input id="wa-brand-weblink" type="text" class="input-field" placeholder="Ej: https://lexium.cl" data-action="wa-brand-weblink" />
                                             <small style="color:var(--text-3); font-size:10px; margin-top:4px; display:block;">Se agregará automáticamente en la firma de mensajes</small>
                                             <div style="margin-top:8px;">
-                                                <button class="btn btn-sm btn-p" onclick="waBrandingGuardar()"><i class="fas fa-save"></i> Guardar Branding</button>
+                                                <button class="btn btn-sm btn-p" data-action="wa-brand-guardar"><i class="fas fa-save"></i> Guardar Branding</button>
                                             </div>
                                         </div>
                                         <div style="grid-column:1 / -1;">
                                             <label style="font-size:11px; color:var(--text-3); display:block; margin-bottom:6px; text-transform:uppercase; letter-spacing:.4px;">Subir Logo del Estudio</label>
                                             <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:10px; border:1px dashed var(--border); border-radius:10px; background:var(--bg-card);">
-                                                <input id="wa-brand-logo" type="file" accept="image/png,image/jpeg" onchange="waBrandingOnLogoChange(event)" />
-                                                <button class="btn" style="padding:6px 10px;" onclick="waBrandingClearLogo()">Quitar logo</button>
+                                                <input id="wa-brand-logo" type="file" accept="image/png,image/jpeg" data-action="wa-brand-logo" />
+                                                <button class="btn" style="padding:6px 10px;" data-action="wa-brand-clear-logo">Quitar logo</button>
                                                 <small id="wa-brand-logo-hint" style="color:var(--text-3); font-size:11px;">Máximo 2MB · PNG/JPG</small>
                                             </div>
                                             <div style="margin-top:10px; display:flex; align-items:center; gap:10px; min-height:52px;">
@@ -2325,7 +2323,7 @@
                 <div class="card-premium" id="wa-log-card" style="display:none;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                         <h4 style="margin:0;">📋 Log de actividad</h4>
-                        <button id="wa-limpiar" onclick="waLimpiarLogs()" class="btn btn-sm"
+                        <button id="wa-limpiar" data-action="wa-limpiar-logs" class="btn btn-sm"
                             style="background:var(--bg-2); font-size:11px;">
                             <i class="fas fa-trash"></i> Limpiar
                         </button>
@@ -2344,7 +2342,7 @@
                             <small style="color:var(--text-3); font-size:11px;">Borra configuración, logs y sesión
                                 WhatsApp. Deberás escanear QR de nuevo.</small>
                         </div>
-                        <button id="wa-btn-reset" onclick="waReset()" class="btn"
+                        <button id="wa-btn-reset" data-action="wa-reset" class="btn"
                             style="background:#dc2626; color:white; border:none; white-space:nowrap;">
                             <i class="fas fa-trash-alt"></i> Resetear todo
                         </button>
@@ -2363,7 +2361,7 @@
                 <div class="wa-chat-layout">
                     <aside class="wa-chat-sidebar">
                         <div class="wa-chat-search-wrap">
-                            <input id="wa-chat-search" class="wa-chat-search" type="text" placeholder="Buscar chat..." oninput="waChatFiltrarLista()">
+                            <input id="wa-chat-search" class="wa-chat-search" type="text" placeholder="Buscar chat..." data-action="wa-chat-filtrar">
                         </div>
                         <div id="wa-chat-list" class="wa-chat-list">
                             <div class="wa-chat-empty">Sin chats cargados.</div>
@@ -2375,8 +2373,8 @@
                             <div class="wa-chat-empty">Selecciona una conversación para ver mensajes.</div>
                         </div>
                         <div class="wa-chat-input-row">
-                            <input id="wa-chat-input" type="text" placeholder="Escribe un mensaje..." onkeydown="waChatOnInputKey(event)">
-                            <button class="btn btn-p" onclick="waChatEnviar()"><i class="fas fa-paper-plane"></i> Enviar</button>
+                            <input id="wa-chat-input" type="text" placeholder="Escribe un mensaje..." data-action="wa-chat-input">
+                            <button class="btn btn-p" data-action="wa-chat-enviar"><i class="fas fa-paper-plane"></i> Enviar</button>
                         </div>
                     </section>
                 </div>
@@ -2384,11 +2382,11 @@
         </section>
 
         <!-- ── Modal: Nombre de sesión (aparece tras escanear QR) ── -->
-        <div class="modal" id="modal-wa-nombre" onclick="if(event.target===this) cerrarModalWA()">
+        <div class="modal" id="modal-wa-nombre" data-action="close-modal-overlay-wa" data-modal-id="modal-wa-nombre">
             <div class="modal-content" style="max-width:420px;">
                 <div class="modal-header">
                     <h3><i class="fab fa-whatsapp" style="color:#25D366;"></i> WhatsApp conectado</h3>
-                    <button onclick="cerrarModalWA()" class="modal-close">×</button>
+                    <button data-action="close-modal-wa" class="modal-close">×</button>
                 </div>
                 <div style="padding:20px; display:grid; gap:14px;">
                     <p style="margin:0; font-size:0.9rem; color:var(--text-2);">
@@ -2412,8 +2410,8 @@
                             identifica la sesión registrada y se usará para enviar los reportes.</small>
                     </div>
                     <div style="display:flex; gap:10px; justify-content:flex-end;">
-                        <button onclick="cerrarModalWA()" class="btn" style="background:var(--bg-2);">Cancelar</button>
-                        <button onclick="waConfirmarSesion()" class="btn btn-p"><i class="fas fa-check"></i> Confirmar
+                        <button data-action="close-modal-wa" class="btn" style="background:var(--bg-2);">Cancelar</button>
+                        <button data-action="wa-confirmar-sesion" class="btn btn-p"><i class="fas fa-check"></i> Confirmar
                             sesión</button>
                     </div>
                 </div>
@@ -2423,11 +2421,11 @@
         <!-- Modales cargados por js/utils/html-loader.js en #modals-container -->
         <div id="modals-container"></div>
 
-        <div class="modal" id="modal-bib-add" onclick="if(event.target===this)cerrarModal('modal-bib-add')">
+        <div class="modal" id="modal-bib-add" data-action="close-modal-overlay" data-modal-id="modal-bib-add">
             <div class="modal-content" style="max-width:540px;">
                 <div class="modal-header">
                     <h3><i class="fas fa-plus-circle"></i> Agregar a Biblioteca</h3><button
-                        onclick="cerrarModal('modal-bib-add')" class="modal-close">×</button>
+                        data-action="close-modal" data-modal-id="modal-bib-add" class="modal-close">×</button>
                 </div>
                 <div class="modal-body">
                     <label>Nombre del documento *</label>
@@ -2462,9 +2460,9 @@
                     <label>Versión</label>
                     <input id="bib-version" value="v1.0" style="width:100px;">
                     <div style="display:flex; gap:8px; margin-top:14px;">
-                        <button class="btn btn-s" style="flex:1;" onclick="bibGuardarDocumento()"><i
+                        <button class="btn btn-s" style="flex:1;" data-action="bib-guardar"><i
                                 class="fas fa-save"></i> Guardar</button>
-                        <button class="btn" style="flex:1;" onclick="cerrarModal('modal-bib-add')">Cancelar</button>
+                        <button class="btn" style="flex:1;" data-action="close-modal" data-modal-id="modal-bib-add">Cancelar</button>
                     </div>
                 </div>
             </div>
@@ -2485,18 +2483,18 @@
     </main>
 
     <!-- ══ MODAL GENÉRICO DE INPUT (reemplaza todos los prompt() nativos) ══ -->
-    <div class="modal-overlay" id="modal-input-generico">
+    <div class="modal-overlay" id="modal-input-generico" data-action="close-modal-overlay" data-modal-id="modal-input-generico">
         <div class="modal-box" style="max-width:480px;">
             <div class="modal-header">
                 <h3 id="mig-titulo"><i class="fas fa-edit"></i> Editar</h3>
-                <button class="modal-close" onclick="migCancelar()">×</button>
+                <button class="modal-close" data-action="mig-cancel">×</button>
             </div>
             <div id="mig-body" style="padding:4px 0 8px;"></div>
             <div style="display:flex; gap:8px; margin-top:18px;">
-                <button class="btn btn-p" style="flex:1;" onclick="migConfirmar()"><i class="fas fa-check"></i> <span
+                <button class="btn btn-p" style="flex:1;" data-action="mig-confirm"><i class="fas fa-check"></i> <span
                         id="mig-btn-ok">Guardar</span></button>
                 <button class="btn btn-sm" style="background:var(--bg-2,var(--bg)); color:var(--text-2);"
-                    onclick="migCancelar()">Cancelar</button>
+                    data-action="mig-cancel">Cancelar</button>
             </div>
         </div>
     </div>
@@ -2506,40 +2504,39 @@
     ████████████████████████████████████████████████████████████ -->
 
     <!-- MODAL PLAZOS CRÍTICOS AL LOGIN -->
-    <div class="modal-overlay" id="modal-plazos-criticos">
+    <div class="modal-overlay" id="modal-plazos-criticos" data-action="close-modal-overlay" data-modal-id="modal-plazos-criticos">
         <div class="modal-box" style="max-width:540px;">
             <div class="modal-header">
                 <h3 style="color:var(--d);"><i class="fas fa-exclamation-triangle"></i> ⚠️ Plazos Críticos</h3>
-                <button class="modal-close" onclick="cerrarModal('modal-plazos-criticos')">×</button>
+                <button class="modal-close" data-action="close-modal" data-modal-id="modal-plazos-criticos">×</button>
             </div>
             <p style="font-size:0.83rem; color:var(--t2); margin-bottom:14px;">Los siguientes plazos vencen hoy o
                 mañana:</p>
             <div id="modal-plazos-content"></div>
-            <button class="btn btn-s btn-full" style="margin-top:16px;"
-                onclick="cerrarModal('modal-plazos-criticos')">Entendido — Revisaré los plazos</button>
+            <button class="btn btn-s btn-full" style="margin-top:16px;" data-action="close-modal" data-modal-id="modal-plazos-criticos">Entendido — Revisaré los plazos</button>
         </div>
     </div>
 
     <!-- MODAL DETALLE CAUSA -->
-    <div class="modal-overlay" id="modal-detalle">
+    <div class="modal-overlay" id="modal-detalle" data-action="close-modal-overlay" data-modal-id="modal-detalle">
         <div class="modal-box" id="modal-detalle-box">
             <div class="modal-header" id="modal-detalle-header-generic">
                 <h3 id="modal-detalle-titulo"></h3>
-                <button class="modal-close" onclick="cerrarModal('modal-detalle')">×</button>
+                <button class="modal-close" data-action="close-modal" data-modal-id="modal-detalle">×</button>
             </div>
             <div id="modal-detalle-body"></div>
         </div>
     </div>
 
     <!-- MODAL BUSCAR JURISPRUDENCIA -->
-    <div class="modal-overlay" id="modal-buscar-juris">
+    <div class="modal-overlay" id="modal-buscar-juris" data-action="close-modal-overlay" data-modal-id="modal-buscar-juris">
         <div class="modal-box" style="max-width:600px;">
             <div class="modal-header">
                 <h3><i class="fas fa-search"></i> Buscar & Asociar Jurisprudencia</h3>
-                <button class="modal-close" onclick="cerrarModal('modal-buscar-juris')">×</button>
+                <button class="modal-close" data-action="close-modal" data-modal-id="modal-buscar-juris">×</button>
             </div>
             <input id="modal-juris-input" placeholder="Buscar por materia, tema o palabras clave..."
-                oninput="uiBuscarJuris(this.value)" style="margin-bottom:12px;">
+                data-action="buscar-juris" style="margin-bottom:12px;">
             <div id="modal-juris-resultados"></div>
         </div>
     </div>
@@ -2547,7 +2544,7 @@
     <!-- ── MODAL HISTORIAL DE BACKUPS ── -->
 
     <!-- MODAL CONFIRMACIÓN -->
-    <div class="modal-overlay" id="modal-confirm">
+    <div class="modal-overlay" id="modal-confirm" data-action="close-modal-overlay" data-modal-id="modal-confirm">
         <div class="modal-box" style="max-width:400px; text-align:center; padding:30px;">
             <div id="confirm-icon" style="font-size:3rem; color:var(--warning); margin-bottom:20px;">
                 <i class="fas fa-exclamation-triangle"></i>
@@ -2556,25 +2553,25 @@
             <p id="confirm-mensaje" style="color:var(--text-2); margin-bottom:25px; font-size:0.9rem;">Esta acción no se
                 puede deshacer.</p>
             <div style="display:flex; gap:12px;">
-                <button class="btn" style="flex:1;" onclick="cerrarModal('modal-confirm')">Cancelar</button>
+                <button class="btn" style="flex:1;" data-action="close-modal" data-modal-id="modal-confirm">Cancelar</button>
                 <button id="confirm-btn-ok" class="btn btn-p" style="flex:1;">Confirmar</button>
             </div>
         </div>
     </div>
 
-    <div class="modal-overlay" id="modal-backups">
+    <div class="modal-overlay" id="modal-backups" data-action="close-modal-overlay" data-modal-id="modal-backups">
         <div class="modal-box" style="max-width:640px;">
             <div class="modal-header">
                 <h3><i class="fas fa-history" style="color:var(--db-green,#0d7a5f)"></i> Historial de Backups
                     Automáticos</h3>
-                <button class="modal-close" onclick="cerrarModal('modal-backups')">×</button>
+                <button class="modal-close" data-action="close-modal" data-modal-id="modal-backups">×</button>
             </div>
             <p style="font-size:0.8rem; color:#64748b; margin-bottom:14px;">
                 Se guardan los últimos <strong>5 snapshots</strong> automáticos. Puedes restaurar cualquiera o crear uno
                 manual ahora.
             </p>
             <div style="margin-bottom:14px;">
-                <button class="btn btn-p btn-sm" onclick="AutoBackup.crearSnapshot('manual'); abrirHistorialBackups();">
+                <button class="btn btn-p btn-sm" data-action="backup-crear-manual">
                     <i class="fas fa-camera"></i> Crear Backup Manual Ahora
                 </button>
             </div>
@@ -2624,26 +2621,27 @@
     <script src="js/24-honorarios-view.js"></script>
     <script src="js/25-audit-reportes.js"></script>
     <script src="js/26-whatsapp-chat-ui.js"></script>
+    <script src="js/event-listeners.js"></script>
 
     <!-- MODAL VERSIONES -->
-    <div class="modal-overlay" id="modal-versiones" onclick="if(event.target===this)cerrarModal('modal-versiones')">
-        <div class="modal" style="max-width:600px; width:100%;">
+    <div class="modal-overlay" id="modal-versiones" data-action="close-modal-overlay" data-modal-id="modal-versiones">
+        <div class="modal" style="max-width:600px;width:100%;">
             <div class="modal-header">
                 <h3 id="modal-versiones-titulo">Historial de Versiones</h3>
-                <button class="btn-icon" onclick="cerrarModal('modal-versiones')"><i class="fas fa-times"></i></button>
+                <button class="btn-icon" data-action="close-modal" data-modal-id="modal-versiones"><i class="fas fa-times"></i></button>
             </div>
             <div class="modal-body" style="max-height:70vh; overflow-y:auto;">
                 <div id="modal-versiones-lista"></div>
             </div>
             <div class="modal-footer">
-                <button class="btn" onclick="cerrarModal('modal-versiones')">Cerrar</button>
+                <button class="btn" data-action="close-modal" data-modal-id="modal-versiones">Cerrar</button>
             </div>
         </div>
     </div>
 
 
     <input type="file" id="adjunto-file-input" multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt,.xlsx,.pptx"
-        style="display:none;" onchange="adjuntosOnFileSelect(this)">
+        style="display:none;">
 
     <!-- ═══════════════════════════════════════════════════════════════════ -->
     <!-- MODALS & PANELS — FEATURES v7                                       -->
@@ -2657,13 +2655,13 @@
                 <span style="font-weight:700;font-size:15px;">Notificaciones</span>
             </div>
             <div style="display:flex;gap:6px;">
-                <button class="btn btn-xs" onclick="notifMarcarTodasLeidas()" title="Marcar todas como leídas">
+                <button class="btn btn-xs" data-action="notif-marcar-todas" title="Marcar todas como leídas">
                     <i class="fas fa-check-double"></i>
                 </button>
-                <button class="btn btn-xs btn-danger-outline" onclick="notifLimpiarTodo()" title="Limpiar todo">
+                <button class="btn btn-xs btn-danger-outline" data-action="notif-limpiar" title="Limpiar todo">
                     <i class="fas fa-trash"></i>
                 </button>
-                <button class="btn-icon" onclick="notifTogglePanel()" style="padding:4px 8px;">
+                <button class="btn-icon" data-action="notif-toggle" style="padding:4px 8px;">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -2672,11 +2670,10 @@
             <div id="notif-lista"></div>
         </div>
     </div>
-    <div id="notif-overlay" class="notif-overlay" onclick="notifTogglePanel()"></div>
+    <div id="notif-overlay" class="notif-overlay" data-action="notif-toggle"></div>
 
     <!-- MODAL SELECCIÓN PLANTILLA DE CAUSA -->
-    <div class="modal-overlay" id="modal-plantilla-causa"
-        onclick="if(event.target===this)cerrarModal('modal-plantilla-causa')">
+    <div class="modal-overlay" id="modal-plantilla-causa" data-action="close-modal-overlay" data-modal-id="modal-plantilla-causa">
         <div class="modal-content" style="max-width:700px;width:95%;max-height:85vh;overflow-y:auto;">
             <div class="modal-header">
                 <div>
@@ -2684,7 +2681,7 @@
                     <p style="font-size:12px;color:var(--text-3,#64748b);margin-top:2px;">Cliente: <strong
                             id="mpc-cliente-nombre"></strong></p>
                 </div>
-                <button class="btn-icon" onclick="cerrarModal('modal-plantilla-causa')"><i
+                <button class="btn-icon" data-action="close-modal" data-modal-id="modal-plantilla-causa"><i
                         class="fas fa-times"></i></button>
             </div>
             <input type="hidden" id="mpc-cliente-id">
@@ -2699,8 +2696,7 @@
     </div>
 
     <!-- MODAL PERFIL EXPANDIDO CLIENTE ↔ CAUSAS -->
-    <div class="modal-overlay" id="modal-perfil-cliente"
-        onclick="if(event.target===this)cerrarModal('modal-perfil-cliente')">
+    <div class="modal-overlay" id="modal-perfil-cliente" data-action="close-modal-overlay" data-modal-id="modal-perfil-cliente">
         <div class="modal-content" style="max-width:760px;width:95%;max-height:88vh;overflow-y:auto;">
             <div class="modal-header">
                 <div style="display:flex;align-items:center;gap:14px;">
@@ -2718,7 +2714,7 @@
                         </div>
                     </div>
                 </div>
-                <button class="btn-icon" onclick="cerrarModal('modal-perfil-cliente')"><i
+                <button class="btn-icon" data-action="close-modal" data-modal-id="modal-perfil-cliente"><i
                         class="fas fa-times"></i></button>
             </div>
             <div class="modal-body">
@@ -2775,12 +2771,11 @@
     </div>
 
     <!-- MODAL ACCIÓN RÁPIDA (KPI Dashboard) -->
-    <div class="modal-overlay" id="modal-accion-rapida"
-        onclick="if(event.target===this)cerrarModal('modal-accion-rapida')">
+    <div class="modal-overlay" id="modal-accion-rapida" data-action="close-modal-overlay" data-modal-id="modal-accion-rapida">
         <div class="modal-content" style="max-width:400px;width:95%;">
             <div class="modal-header">
                 <h3 id="mar-titulo" style="font-size:15px;margin:0;">Acción Rápida</h3>
-                <button class="btn-icon" onclick="cerrarModal('modal-accion-rapida')"><i
+                <button class="btn-icon" data-action="close-modal" data-modal-id="modal-accion-rapida"><i
                         class="fas fa-times"></i></button>
             </div>
             <div class="modal-body" id="mar-body" style="padding:16px;"></div>
@@ -2788,11 +2783,11 @@
     </div>
 
     <!-- MODAL ADJUNTOS (para causa específica) -->
-    <div class="modal-overlay" id="modal-adjuntos" onclick="if(event.target===this)cerrarModal('modal-adjuntos')">
+    <div class="modal-overlay" id="modal-adjuntos" data-action="close-modal-overlay" data-modal-id="modal-adjuntos">
         <div class="modal-content" style="max-width:560px;width:95%;">
             <div class="modal-header">
                 <h3><i class="fas fa-paperclip" style="color:var(--cyan,#0891b2);"></i> Archivos Adjuntos</h3>
-                <button class="btn-icon" onclick="cerrarModal('modal-adjuntos')"><i class="fas fa-times"></i></button>
+                <button class="btn-icon" data-action="close-modal" data-modal-id="modal-adjuntos"><i class="fas fa-times"></i></button>
             </div>
             <div class="modal-body" style="padding:16px;">
                 <!-- Barra de uso -->
@@ -2810,7 +2805,7 @@
                     </div>
                 </div>
                 <!-- Botón subir -->
-                <button class="btn btn-p" onclick="adjuntosAbrir(document.getElementById('adjunto-causa-id').value)"
+                <button class="btn btn-p" data-action="adjuntos-abrir"
                     style="width:100%;margin-bottom:14px;">
                     <i class="fas fa-upload"></i> Adjuntar Archivo (&lt;2 MB · PDF, Imágenes, Word)
                 </button>

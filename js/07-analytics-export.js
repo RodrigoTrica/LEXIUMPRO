@@ -27,7 +27,7 @@
 
     </style></head><body>
     <h1>INFORME DE CAUSA</h1>
-    <p style="color:#718096; font-size:12px; margin-bottom:20px;">Generado el ${new Date().toLocaleDateString('es-CL')} · AppBogado v3.9.5</p>
+    <p style="color:#718096; font-size:12px; margin-bottom:20px;">Generado el ${new Date().toLocaleDateString('es-CL')} · LEXIUM</p>
     <h2>I. Antecedentes Generales</h2>
     <table><tr><th>Carátula</th><td>${causa.caratula}</td></tr>
     <tr><th>Procedimiento</th><td>${causa.tipoProcedimiento || '—'}</td></tr>
@@ -55,7 +55,7 @@
     <table><tr><th>Monto Base</th><td>$${Math.round(hon.base).toLocaleString('es-CL')}</td></tr>
     <tr><th>Pagado</th><td class="verde">$${Math.round(pagado).toLocaleString('es-CL')}</td></tr>
     <tr><th>Pendiente</th><td class="${(hon.base - pagado) > 0 ? 'rojo' : 'verde'}">$${Math.round(hon.base - pagado).toLocaleString('es-CL')}</td></tr></table>` : ''}
-    <div class="footer">AVISO LEGAL: Este informe es de uso interno exclusivo. Los valores y análisis son referenciales y no constituyen opinión legal formal. AppBogado · Gestión Jurídica Profesional</div>
+    <div class="footer">AVISO LEGAL: Este informe es de uso interno exclusivo. Los valores y análisis son referenciales y no constituyen opinión legal formal. LEXIUM · Gestión Jurídica Profesional</div>
     </body></html>`;
 
             const blob2 = new Blob([html], { type: 'text/html; charset=utf-8' });
@@ -99,7 +99,7 @@
             const html = `<!DOCTYPE html>
 <html lang="es"><head>
 <meta charset="UTF-8">
-<title>Reporte Económico — AppBogado v3.9.5</title>
+<title>Reporte Económico — LEXIUM</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=IBM+Plex+Mono&display=swap');
   *{box-sizing:border-box;margin:0;padding:0}
@@ -126,7 +126,7 @@
   @media print{body{margin:20px auto}.footer{position:fixed;bottom:10px;left:0;right:0}}
 </style>
 </head><body>
-  <div class="logo">AppBogado v3.9.5 · Sistema de Gestión Legal</div>
+  <div class="logo">LEXIUM · Sistema de Gestión Legal</div>
   <h1>Reporte Económico del Despacho</h1>
   <p class="meta">Generado el ${new Date().toLocaleDateString('es-CL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} · ${new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</p>
 
@@ -149,7 +149,7 @@
     <tbody>${filas}</tbody>
   </table>
 
-  <div class="footer">AppBogado v3.9.5 · Documento generado automáticamente · Confidencial</div>
+  <div class="footer">LEXIUM · Documento generado automáticamente · Confidencial</div>
 </body></html>`;
 
             // ── Descarga como HTML imprimible (sin popup bloqueado) ────────────
@@ -243,7 +243,7 @@
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `AppBogado_Backup_${new Date().toISOString().split('T')[0]}.json`;
+                    a.download = `LEXIUM_Backup_${new Date().toISOString().split('T')[0]}.json`;
                     a.click();
                     URL.revokeObjectURL(url);
                     registrarEvento('Backup completo exportado');

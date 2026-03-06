@@ -36,18 +36,14 @@ function clBuildContext(opts = {}) {
     const causas = (DB.causas || []);
     const clientes = (DB.clientes || []);
     const juris = (DB.jurisprudencia || []);
-    const tramites = (() => { try { return JSON.parse(localStorage.getItem('APPBOGADO_TRAMITES_V1')) || []; } catch (e) { return []; } })();
-    const doctrina = (() => { try { return JSON.parse(localStorage.getItem('APPBOGADO_DOCTRINA_V1')) || []; } catch (e) { return []; } })();
+    const tramites = (() => { try { return JSON.parse(localStorage.getItem('LEXIUM_TRAMITES_V1')) || []; } catch (e) { return []; } })();
+    const doctrina = (() => { try { return JSON.parse(localStorage.getItem('LEXIUM_DOCTRINA_V1')) || []; } catch (e) { return []; } })();
 
     const hoy = new Date().toLocaleDateString('es-CL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-    let ctx = `=== SISTEMA: LEXIUM — ASISTENTE JURÍDICO IA ===
+    let ctx = `=== LEXIUM — CONTEXTO DEL DESPACHO ===
 Fecha actual: ${hoy}
-Jurisdicción: Chile (Derecho chileno)
-Rol: Eres un asistente jurídico especializado en derecho chileno.
-     Apoyas a abogados con análisis procesal, estrategia y redacción jurídica.
-     Siempre citas normativa chilena aplicable (Código Civil, CPC, CPP, CT, etc.)
-     Eres preciso, conciso y orientado a la acción práctica.
+Jurisdicción: Chile
 
 === DATOS DEL DESPACHO ===
 Causas activas: ${causas.filter(c => c.estadoGeneral !== 'Finalizada').length} de ${causas.length} total
@@ -183,9 +179,7 @@ function lexbotAbrirConCausa(causaId) {
 }
 
 function clCrearChatPanel() {
-    const provider = typeof IA_PROVIDERS !== 'undefined' ? IA_PROVIDERS[iaGetProvider()]?.label : 'IA';
-    // FIX Problema 1: iaGetKey es async — no usar síncronamente.
-    // El banner de key faltante se resuelve de forma async (ver bloque al final de esta función).
+    const provider = 'claude';
     const causa = _clChatCausaId ? DB.causas.find(c => c.id == _clChatCausaId) : null;
 
     const panel = document.createElement('div');
@@ -256,25 +250,9 @@ function clCrearChatPanel() {
                         <i class="fas fa-paper-plane"></i>
                     </button>
                 </div>
-                <div class="cl-footer-note">Shift+Enter para salto de línea · Respuestas orientativas, no reemplazan asesoría legal</div>
             </div>`;
 
     document.body.appendChild(panel);
-
-    // FIX Problema 1: resolver iaGetKey async e inyectar warning si no hay key
-    if (typeof iaGetKey === 'function') {
-        Promise.resolve(iaGetKey(iaGetProvider())).then(function (k) {
-            var slot = document.getElementById('cl-no-key-warn-slot');
-            if (!k && slot) {
-                slot.innerHTML = '<div class="cl-no-key-warn">'
-                    + '<i class="fas fa-key"></i>'
-                    + '<div><strong>Configura tu API Key</strong><br>'
-                    + 'Ve a <em>Sistema &rarr; Configurar IA</em> y selecciona el proveedor.<br>'
-                    + '<a href="https://console.anthropic.com/settings/keys" target="_blank">Obtener key Anthropic &rarr;</a>'
-                    + '</div></div>';
-            }
-        });
-    }
 }
 
 function clActualizarCausaChip() {
@@ -306,11 +284,15 @@ async function clEnviar() {
     input.value = '';
     input.style.height = 'auto';
 
-    const pid = typeof iaGetProvider === 'function' ? iaGetProvider() : 'claude';
-    // FIX Problema 1: iaGetKey es async 2014 await obligatorio
-    const key = typeof iaGetKey === 'function' ? await iaGetKey(pid) : null;
-    if (!key) {
-        clAgregarMensaje('ai', '⚠ No hay API Key configurada. Ve a **Sistema → Configurar IA** para agregar tu key de Claude o Gemini.');
+    const pid = (typeof iaGetProvider === 'function' ? iaGetProvider() : 'claude') || 'claude';
+    try {
+        const st = await window.electronAPI?.ia?.getStatus?.();
+        if (!st?.has?.[pid]) {
+            clAgregarMensaje('ai', '⚠ No hay API Key configurada. Ve a **Sistema → Configurar IA** para agregar tu key.');
+            return;
+        }
+    } catch (_) {
+        clAgregarMensaje('ai', '⚠ No se pudo verificar el estado de IA.');
         return;
     }
 
@@ -325,30 +307,26 @@ async function clEnviar() {
     if (btn) btn.disabled = true;
 
     try {
-        // Construir prompt con contexto
         const hayContextoCausa = !!_clChatCausaId;
-        const context = clBuildContext({
+        const contexto = clBuildContext({
             causas: true,
             juris: true,
             tramites: hayContextoCausa ? false : true,
         });
         const causaCtx = hayContextoCausa ? clBuildCausaContext(_clChatCausaId) : '';
-
-        // Historial de conversación (últimos 6 turnos)
-        const historialStr = _clChatHistory.slice(-6, -1).map(m =>
-            `${m.role === 'user' ? 'ABOGADO' : 'CLAUDE'}: ${m.content}`
+        const historial = _clChatHistory.slice(-6, -1).map(m =>
+            `${m.role === 'user' ? 'ABOGADO' : 'ASISTENTE'}: ${m.content}`
         ).join('\n\n');
 
-        const prompt = `${context}
-${causaCtx}
-
-${historialStr ? `=== CONVERSACIÓN PREVIA ===\n${historialStr}\n` : ''}
-=== PREGUNTA ACTUAL ===
-ABOGADO: ${texto}
-
-CLAUDE LEGAL (responde en español, de forma precisa y práctica, citando normativa chilena cuando sea relevante. Si es análisis de riesgo, usa formato claro con niveles. Si es estrategia, da pasos concretos. Máximo 400 palabras salvo que se pida más detalle):`;
-
-        const respuesta = await iaCall(prompt);
+        const r = await window.electronAPI.ia.chatResponder({
+            provider: pid,
+            pregunta: texto,
+            contexto,
+            causaCtx,
+            historial,
+        });
+        if (!r?.ok) throw new Error(r?.error || 'Error IA');
+        const respuesta = String(r.texto || '');
 
         // Eliminar indicador de escritura
         document.getElementById(typingId)?.remove();
@@ -404,11 +382,12 @@ async function clAnalizarCausa(causaId) {
     const causa = DB.causas.find(c => c.id == causaId);
     if (!causa) return;
 
-    const pid = typeof iaGetProvider === 'function' ? iaGetProvider() : 'claude';
-    // FIX Problema 1: iaGetKey es async 2014 await obligatorio
-    const key = typeof iaGetKey === 'function' ? await iaGetKey(pid) : null;
-    if (!key) {
-        showError('Configura tu API Key en Sistema → Configurar IA');
+    const pid = (typeof iaGetProvider === 'function' ? iaGetProvider() : 'claude') || 'claude';
+    try {
+        const st = await window.electronAPI?.ia?.getStatus?.();
+        if (!st?.has?.[pid]) { showError('Configura tu API Key en Sistema → Configurar IA'); return; }
+    } catch (_) {
+        showError('No se pudo verificar el estado de IA');
         return;
     }
 
@@ -438,41 +417,14 @@ async function clAnalizarCausa(causaId) {
     try {
         const ctx = clBuildContext({ juris: true });
         const causaCtx = clBuildCausaContext(causaId);
-        const prompt = `${ctx}
-${causaCtx}
+        const contexto = `${ctx}\n${causaCtx}`;
 
-=== INSTRUCCIÓN ===
-Realiza un análisis jurídico completo y accionable de esta causa. Estructura tu respuesta EXACTAMENTE así:
-
-**DIAGNÓSTICO PROCESAL**
-[Estado actual, etapas completadas vs. pendientes, observaciones sobre el avance]
-
-**EVALUACIÓN DE RIESGO**
-- Riesgo procesal: [Bajo/Medio/Alto] — [razón]
-- Riesgo probatorio: [Bajo/Medio/Alto] — [razón]
-- Riesgo de prescripción/caducidad: [Bajo/Medio/Alto] — [razón]
-- Riesgo económico: [Bajo/Medio/Alto] — [razón]
-
-**FORTALEZAS DE LA POSICIÓN**
-[Argumentos sólidos, evidencia favorable, precedentes útiles]
-
-**PUNTOS DÉBILES Y ALERTAS**
-[Vulnerabilidades, gaps probatorios, plazos críticos]
-
-**ESTRATEGIA RECOMENDADA**
-[Pasos concretos y priorizados, tácticas procesales específicas para esta causa]
-
-**NORMATIVA APLICABLE**
-[Artículos específicos del Código Civil, CPC, CT u otras normas chilenas relevantes]
-
-**PRÓXIMAS ACCIONES URGENTES**
-1. [Acción concreta — plazo]
-2. [Acción concreta — plazo]
-3. [Acción concreta — plazo]
-
-Sé específico con los datos de esta causa. No des respuestas genéricas.`;
-
-        const respuesta = await iaCall(prompt);
+        const r = await window.electronAPI.ia.analizarCausa({
+            provider: pid,
+            contexto,
+        });
+        if (!r?.ok) throw new Error(r?.error || 'Error IA');
+        const respuesta = String(r.texto || '');
         panel.innerHTML = `
                 <div class="cl-analysis-header">
                     <span>⚖ Análisis Bot AI — <em>${_clEscHtml(causa.caratula.substring(0, 50))}</em></span>
@@ -516,10 +468,14 @@ async function clAnalizarJurisprudencia(jurisId) {
     const j = DB.jurisprudencia.find(j => j.id == jurisId);
     if (!j) return;
 
-    const pid = typeof iaGetProvider === 'function' ? iaGetProvider() : 'claude';
-    // FIX Problema 1: iaGetKey es async 2014 await obligatorio
-    const key = typeof iaGetKey === 'function' ? await iaGetKey(pid) : null;
-    if (!key) { showError('Configura tu API Key en Sistema → Configurar IA'); return; }
+    const pid = (typeof iaGetProvider === 'function' ? iaGetProvider() : 'claude') || 'claude';
+    try {
+        const st = await window.electronAPI?.ia?.getStatus?.();
+        if (!st?.has?.[pid]) { showError('Configura tu API Key en Sistema → Configurar IA'); return; }
+    } catch (_) {
+        showError('No se pudo verificar el estado de IA');
+        return;
+    }
 
     const modal = document.createElement('div');
     modal.id = 'cl-juris-modal';
@@ -545,44 +501,26 @@ async function clAnalizarJurisprudencia(jurisId) {
             (c.tipoProcedimiento || '').toLowerCase().includes((j.materia || '').toLowerCase().substring(0, 5))
         );
 
-        const prompt = `${clBuildContext({})}
+        const sentencia = `=== SENTENCIA ===\n` +
+            `Tribunal: ${j.tribunal}\n` +
+            `Rol: ${j.rol}\n` +
+            `Materia: ${j.materia}\n` +
+            `Fecha: ${j.fecha || 'N/D'}\n` +
+            `Procedimiento: ${j.procedimiento || 'N/D'}\n` +
+            `Tema central: ${j.temaCentral || 'N/D'}\n` +
+            `Tendencia: ${j.tendencia}\n` +
+            `Nivel de relevancia: ${j.nivelRelevancia}\n` +
+            `Palabras clave: ${(j.palabrasClave || []).join(', ')}\n`;
 
-=== SENTENCIA A ANALIZAR ===
-Tribunal: ${j.tribunal}
-Rol: ${j.rol}
-Materia: ${j.materia}
-Fecha: ${j.fecha || 'N/D'}
-Procedimiento: ${j.procedimiento || 'N/D'}
-Tema central: ${j.temaCentral || 'N/D'}
-Tendencia: ${j.tendencia}
-Nivel de relevancia: ${j.nivelRelevancia}
-Palabras clave: ${(j.palabrasClave || []).join(', ')}
+        const causasRelacionadas = causasRelevantes.map(c => `- ${c.caratula} (${c.rama}, ${c.estadoGeneral})`).join('\n');
 
-CAUSAS DEL DESPACHO POSIBLEMENTE RELACIONADAS:
-${causasRelevantes.map(c => `- ${c.caratula} (${c.rama}, ${c.estadoGeneral})`).join('\n') || 'Ninguna identificada automáticamente.'}
-
-=== INSTRUCCIÓN ===
-Analiza esta sentencia y entrega:
-
-**HOLDING PRINCIPAL**
-[La regla jurídica que establece el fallo en 2-3 oraciones]
-
-**RATIO DECIDENDI**
-[Razonamiento jurídico que sostiene la decisión]
-
-**RELEVANCIA PARA EL DESPACHO**
-[Cómo puede afectar o beneficiar las causas activas del abogado]
-
-**CÓMO CITAR ESTE FALLO**
-[Forma precisa de citarlo en escritos y recursos]
-
-**APLICACIÓN PRÁCTICA**
-[En qué tipo de casos conviene usar este precedente y cómo]
-
-**OBITER DICTA RELEVANTES**
-[Comentarios del tribunal con valor orientador]`;
-
-        const resp = await iaCall(prompt);
+        const r = await window.electronAPI.ia.analizarJurisprudencia({
+            provider: pid,
+            sentencia,
+            causasRelacionadas,
+        });
+        if (!r?.ok) throw new Error(r?.error || 'Error IA');
+        const resp = String(r.texto || '');
         modal.querySelector('.cl-modal-body').innerHTML = `
                 <div class="cl-juris-meta">
                     <strong>${j.tribunal}</strong> · Rol ${j.rol}<br>
@@ -610,10 +548,14 @@ async function clAnalizarEstrategiaPro(causaId) {
         return;
     }
 
-    const pid = typeof iaGetProvider === 'function' ? iaGetProvider() : 'claude';
-    // FIX Problema 1: iaGetKey es async 2014 await obligatorio
-    const key = typeof iaGetKey === 'function' ? await iaGetKey(pid) : null;
-    if (!key) { showError('Configura tu API Key en Sistema → Configurar IA'); return; }
+    const pid = (typeof iaGetProvider === 'function' ? iaGetProvider() : 'claude') || 'claude';
+    try {
+        const st = await window.electronAPI?.ia?.getStatus?.();
+        if (!st?.has?.[pid]) { showError('Configura tu API Key en Sistema → Configurar IA'); return; }
+    } catch (_) {
+        showError('No se pudo verificar el estado de IA');
+        return;
+    }
 
     const contenedor = document.getElementById('analisisEstrategico');
     if (!contenedor) return;
@@ -627,52 +569,21 @@ async function clAnalizarEstrategiaPro(causaId) {
     try {
         const ctx = clBuildContext({ juris: true });
         const causaCtx = clBuildCausaContext(causaId);
-
-        const prompt = `${ctx}
-${causaCtx}
-
-=== INSTRUCCIÓN: ANÁLISIS ESTRATÉGICO PROFUNDO ===
-Eres un litigante experto en derecho chileno. Analiza esta causa y entrega un plan estratégico completo:
-
-**1. DIAGNÓSTICO ESTRATÉGICO**
-[Posición actual del cliente, ventajas comparativas frente a la contraparte]
-
-**2. TEORÍA DEL CASO**
-[Narrativa jurídica que el abogado debe sostener en juicio]
-
-**3. MAPA DE RIESGOS**
-Señala para cada dimensión: nivel y cómo mitigarlo
-- Riesgo procesal:
-- Riesgo probatorio:
-- Riesgo de prescripción/caducidad:
-- Riesgo de condena en costas:
-- Riesgo reputacional:
-
-**4. PLAN DE ACCIÓN (90 días)**
-Semanas 1-2: [Acciones urgentes]
-Semanas 3-6: [Acciones de desarrollo]
-Semanas 7-12: [Acciones de consolidación]
-
-**5. ESTRATEGIA PROBATORIA**
-[Pruebas clave a obtener, testigos, peritos, documentos]
-
-**6. ARGUMENTOS JURÍDICOS PRINCIPALES**
-[Con cita de artículos específicos y jurisprudencia relevante del despacho]
-
-**7. CONTRAARGUMENTOS ESPERADOS Y RESPUESTAS**
-[Qué alegará la contraparte y cómo rebatirlo]
-
-**8. ESCENARIOS Y PROBABILIDADES**
-- Escenario favorable: [probabilidad estimada + condiciones]
-- Escenario neutro (acuerdo): [probabilidad + términos razonables]
-- Escenario adverso: [probabilidad + mitigación]
-
-**9. RECOMENDACIÓN FINAL**
-[Acción estratégica más importante que el abogado debe ejecutar esta semana]
-
-Sé específico. Cita normativa chilena aplicable. Evita generalidades.`;
-
-        const resp = await iaCall(prompt);
+        const contexto = `${ctx}\n${causaCtx}`;
+        const r = await window.electronAPI.ia.analizarEstrategia({
+            provider: pid,
+            causa: {
+                caratula: causa?.caratula || '',
+                rama: causa?.rama || '',
+                tipoProcedimiento: causa?.tipoProcedimiento || '',
+                juzgado: causa?.juzgado || '',
+                rit: causa?.rit || '',
+                partes: causa?.partes || null,
+            },
+            contexto
+        });
+        if (!r?.ok) throw new Error(r?.error || 'Error IA');
+        const resp = String(r.texto || '');
 
         contenedor.innerHTML = `
                 <div class="cl-ep-header">
@@ -846,28 +757,31 @@ function clToggleIframe() {
     }
 }
 
-function _clContextoActual(modo) {
-    const pid = typeof iaGetProvider === 'function' ? iaGetProvider() : 'claude';
+async function _clContextoActual(modo) {
     const hoy = new Date().toLocaleDateString('es-CL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     const base = `Fecha: ${hoy} | Jurisdicción: Chile\nDespacho: ${(DB.causas || []).length} causas · ${(DB.clientes || []).length} clientes\n\n`;
 
-    const modos = {
-        juris: `Eres un experto en jurisprudencia chilena. Necesito análisis de fallos de la Corte Suprema y Cortes de Apelaciones de Chile.\n\n${base}`,
-        escrito: (() => {
-            const causaId = parseInt(document.getElementById('esc-causa-sel')?.value);
-            const causa = causaId ? DB.causas.find(c => c.id === causaId) : null;
-            const tipo = document.getElementById('esc-tipo')?.selectedOptions?.[0]?.dataset?.label || '';
-            const hechos = document.getElementById('esc-hechos')?.value || '';
-            return `Eres un abogado litigante chileno experto en redacción judicial.\nNecesito que redactes un escrito de tipo: "${tipo}".\n\n${base}` +
-                (causa ? `Causa: ${causa.caratula} | Tribunal: ${causa.juzgado || 'N/D'} | Tipo: ${causa.tipoProcedimiento}\nRama: ${causa.rama}\n` : '') +
-                (hechos ? `\nHechos: ${hechos.substring(0, 800)}` : '');
-        })(),
-        doctrina: `Eres un experto en doctrina jurídica chilena con conocimiento de Alessandri, Somarriva, Abeliuk y autores nacionales.\n\n${base}`,
-        documento: `Eres un asistente jurídico especializado en generar documentos legales formales en Chile.\n\n${base}`,
-        general: `Eres Bot AI, un asistente jurídico especializado en derecho chileno integrado en AppBogado.\n\n${base}`,
-    };
+    const m = modo || 'general';
+    const causaId = parseInt(document.getElementById('esc-causa-sel')?.value);
+    const causa = causaId ? DB.causas.find(c => c.id === causaId) : null;
+    const tipo = document.getElementById('esc-tipo')?.selectedOptions?.[0]?.dataset?.label || '';
+    const hechos = document.getElementById('esc-hechos')?.value || '';
 
-    return modos[modo] || modos.general;
+    const r = await window.electronAPI?.ia?.iframeContext?.({
+        modo: m,
+        base,
+        causa: causa ? {
+            caratula: causa.caratula || '',
+            juzgado: causa.juzgado || '',
+            tribunal: causa.tribunal || '',
+            tipoProcedimiento: causa.tipoProcedimiento || '',
+            rama: causa.rama || '',
+        } : null,
+        tipo,
+        hechos,
+    });
+    if (!r?.ok) throw new Error(r?.error || 'Error IA');
+    return String(r.contexto || '');
 }
 
 function _crearIframePanel(contextoExtra) {
@@ -882,7 +796,7 @@ function _crearIframePanel(contextoExtra) {
         general: '⚖ Claude — Asistente Jurídico',
     };
 
-    const contexto = _clContextoActual(_clIframeMode) + (contextoExtra ? '\n\n' + contextoExtra : '');
+    let contexto = '';
 
     panel.innerHTML = `
             <div class="cl-iframe-header">
@@ -890,7 +804,7 @@ function _crearIframePanel(contextoExtra) {
                     <span style="font-size:1.1rem;">⚖</span>
                     <div>
                         <div class="cl-iframe-title">${titulosModo[_clIframeMode] || titulosModo.general}</div>
-                        <div class="cl-iframe-sub">IA Web · Integración AppBogado</div>
+                        <div class="cl-iframe-sub">IA Web · Integración LEXIUM</div>
                     </div>
                 </div>
                 <div class="cl-iframe-header-actions">
@@ -921,7 +835,7 @@ function _crearIframePanel(contextoExtra) {
                         </button>
                     </div>
                 </div>
-                <div style="font-size:0.71rem; line-height:1.6; color:#374151; background:white; padding:10px; border-radius:6px; border:1px solid #e2e8f0; max-height:80px; overflow-y:auto; font-family:'IBM Plex Mono',monospace; white-space:pre-wrap;" id="cl-ctx-preview">${contexto.substring(0, 400)}${contexto.length > 400 ? '…' : ''}</div>
+                <div style="font-size:0.71rem; line-height:1.6; color:#374151; background:white; padding:10px; border-radius:6px; border:1px solid #e2e8f0; max-height:80px; overflow-y:auto; font-family:'IBM Plex Mono',monospace; white-space:pre-wrap;" id="cl-ctx-preview">Cargando contexto…</div>
                 <div style="font-size:0.69rem; color:#6b7280; margin-top:6px;">
                     <strong>Pasos:</strong>
                     1. Clic en <strong>"Copiar contexto"</strong> ↑ &nbsp;
@@ -974,8 +888,19 @@ function _crearIframePanel(contextoExtra) {
 
     document.body.appendChild(panel);
 
-    // Guardar contexto para copiar
-    panel._contexto = contexto;
+    (async () => {
+        try {
+            const ctx = await _clContextoActual(_clIframeMode);
+            contexto = ctx + (contextoExtra ? '\n\n' + contextoExtra : '');
+            panel._contexto = contexto;
+            const prev = document.getElementById('cl-ctx-preview');
+            if (prev) prev.textContent = contexto.substring(0, 400) + (contexto.length > 400 ? '…' : '');
+        } catch (e) {
+            panel._contexto = '';
+            const prev = document.getElementById('cl-ctx-preview');
+            if (prev) prev.textContent = 'No se pudo cargar el contexto.';
+        }
+    })();
 
     // Ocultar nota overlay cuando iframe carga exitosamente
     const iframe = document.getElementById('cl-claude-iframe');
@@ -1052,7 +977,7 @@ function _clGenerarDocxReal(titulo, contenido, nombreArchivo) {
         children.push(new Paragraph({
             alignment: AlignmentType.CENTER,
             spacing: { after: 400 },
-            children: [new TextRun({ text: `Generado por AppBogado · ${new Date().toLocaleDateString('es-CL')}`, color: '64748b', size: 18 })],
+            children: [new TextRun({ text: `Generado por LEXIUM · ${new Date().toLocaleDateString('es-CL')}`, color: '64748b', size: 18 })],
         }));
 
         // Procesar líneas
@@ -1135,7 +1060,7 @@ function _clGenerarDocxZip(titulo, contenido, nombreArchivo) {
     <w:p>
       <w:pPr><w:jc w:val="right"/><w:spacing w:before="0" w:after="280"/></w:pPr>
       <w:r><w:rPr><w:color w:val="64748b"/><w:sz w:val="18"/></w:rPr>
-        <w:t>AppBogado · IA Jurídica · ${fecha}</w:t></w:r>
+        <w:t>LEXIUM · IA Jurídica · ${fecha}</w:t></w:r>
     </w:p>
     ${parrafos}
     <w:sectPr>
@@ -1222,12 +1147,12 @@ function clDescargarPDF(titulo, contenido, nombreArchivo) {
 <body>
 <div class="portada">
   <h1>${titulo}</h1>
-  <div class="meta">Generado por AppBogado · Sistema de Gestión Legal · ${fecha}</div>
+  <div class="meta">Generado por LEXIUM · Sistema de Gestión Legal · ${fecha}</div>
 </div>
 <div class="cuerpo">
   ${htmlContenido}
   <div class="footer">
-    Documento generado con AppBogado — Asistente Jurídico IA · ${fecha}<br>
+    Documento generado con LEXIUM — Asistente Jurídico IA · ${fecha}<br>
     Las respuestas de IA son orientativas. Revisar con criterio profesional antes de actuar.
   </div>
 </div>
@@ -1277,7 +1202,7 @@ function _clAbrirModalIA(cfg) {
     </div>
     <div style="flex:1;min-width:0;">
       <div style="font-size:0.97rem;font-weight:800;color:#0f172a;">${cfg.titulo}</div>
-      <div style="font-size:0.7rem;color:#94a3b8;margin-top:2px;">${IA_PROVIDERS?.[iaGetProvider?.()]?.label || 'IA'} · AppBogado Legal</div>
+      <div style="font-size:0.7rem;color:#94a3b8;margin-top:2px;">${IA_PROVIDERS?.[iaGetProvider?.()]?.label || 'IA'} · LEXIUM Legal</div>
     </div>
     <button onclick="document.getElementById('cl-modal-ia-root').remove()" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:1.4rem;line-height:1;padding:0 4px;flex-shrink:0;">×</button>
   </div>
@@ -1408,19 +1333,13 @@ function clAbrirBusquedaJuris() {
                 `[${j.rol || 'S/R'}] ${j.tribunal} — ${j.materia}: ${j.temaCentral || j.holding || ''}`
             ).join('\n');
 
-            return iaCall(`Eres un experto en jurisprudencia chilena.
-Jurisdicción: Chile. Responde en español formal. Cita ROL y tribunal cuando sea posible.
-
-CONSULTA: ${consulta}
-
-${jurisCtx ? 'JURISPRUDENCIA INDEXADA EN EL DESPACHO:\n' + jurisCtx + '\n' : ''}
-
-Proporciona:
-**1. ANÁLISIS DEL TEMA** — contexto jurídico en el derecho chileno
-**2. FALLOS RELEVANTES** — Tribunal · ROL · Año · Holding principal
-**3. TENDENCIA JURISPRUDENCIAL** — favorable / desfavorable / contradictoria
-**4. NORMAS APLICADAS** — artículos de ley más citados
-**5. CONCLUSIÓN PRÁCTICA** — recomendación concreta (3 líneas)`);
+            const r = await window.electronAPI.ia.moduloRun({
+                templateId: 'juris_consulta',
+                provider: (typeof iaGetProvider === 'function' ? iaGetProvider() : 'claude') || 'claude',
+                payload: { consulta: `${consulta}\n\nJURISPRUDENCIA INDEXADA EN EL DESPACHO:\n${jurisCtx}` }
+            });
+            if (!r?.ok) throw new Error(r?.error || 'Error IA');
+            return String(r.texto || '');
         },
     });
 }
@@ -1434,18 +1353,13 @@ function clAbrirDoctrina() {
         tieneDescarga: true,
         nombreArchivo: 'doctrina-ia-' + Date.now(),
         prompt_fn: async (tema) => {
-            return iaCall(`Eres un experto en doctrina jurídica chilena. Conoces profundamente los textos de Alessandri, Somarriva, Abeliuk, Meza Barros, Claro Solar y otros autores nacionales.
-
-CONSULTA DOCTRINAL: ${tema}
-Jurisdicción: Chile. Responde en español formal y técnico.
-
-**1. CONCEPTO Y DEFINICIÓN** — doctrinaria
-**2. NATURALEZA JURÍDICA** — categoría dogmática y elementos esenciales
-**3. REGULACIÓN EN CHILE** — artículos del Código Civil, leyes especiales u otras normas aplicables
-**4. DOCTRINA NACIONAL** — posiciones de los principales autores chilenos
-**5. DOCTRINA COMPARADA** — breve referencia a España, Argentina u otros sistemas romano-germánicos
-**6. APLICACIÓN PRÁCTICA** — casos frecuentes y consejos para el litigante
-**7. JURISPRUDENCIA RELEVANTE** — fallos chilenos más citados sobre la materia`);
+            const r = await window.electronAPI.ia.moduloRun({
+                templateId: 'doctrina_consulta',
+                provider: (typeof iaGetProvider === 'function' ? iaGetProvider() : 'claude') || 'claude',
+                payload: { tema }
+            });
+            if (!r?.ok) throw new Error(r?.error || 'Error IA');
+            return String(r.texto || '');
         },
     });
 }
@@ -1470,18 +1384,13 @@ function clAbrirEstrategia(causaId) {
         nombreArchivo: 'estrategia-ia-' + Date.now(),
         prompt_fn: async (situacion) => {
             const ctx = causa ? clBuildCausaContext(causa.id) : clBuildContext({ causas: true });
-            return iaCall(`${ctx}
-
-SITUACIÓN A ANALIZAR: ${situacion}
-
-Análisis estratégico legal en Chile:
-**1. DIAGNÓSTICO** — posición legal, fortalezas y debilidades
-**2. OPCIONES PROCESALES** — ordenadas por viabilidad
-**3. ESTRATEGIA RECOMENDADA** — con justificación jurídica y artículos aplicables
-**4. RIESGOS** — escenarios adversos y cómo mitigarlos
-**5. PLAZOS CRÍTICOS** — con artículo de ley que los rige
-**6. PRUEBA NECESARIA** — qué debe acreditarse y cómo
-**7. PROBABILIDAD DE ÉXITO** — estimación honesta basada en jurisprudencia y doctrina`);
+            const r = await window.electronAPI.ia.moduloRun({
+                templateId: 'estrategia_situacion',
+                provider: (typeof iaGetProvider === 'function' ? iaGetProvider() : 'claude') || 'claude',
+                payload: { contexto: ctx, situacion }
+            });
+            if (!r?.ok) throw new Error(r?.error || 'Error IA');
+            return String(r.texto || '');
         },
     });
 }
@@ -1508,25 +1417,14 @@ async function clGenerarInformeIA(causaId) {
         tieneDescarga: true,
         nombreArchivo: 'informe-' + causa.caratula.replace(/\s+/g, '-').substring(0, 30) + '-' + new Date().toISOString().split('T')[0],
         prompt_fn: async (instrucciones) => {
-            return iaCall(`${clBuildCausaContext(causa.id)}
-
-ALERTAS ACTIVAS:
-${alertas}
-
-ETAPAS RECIENTES:
-${etapas}
-
-${instrucciones ? 'INSTRUCCIONES ADICIONALES:\n' + instrucciones + '\n' : ''}
-Redacta un informe ejecutivo profesional con estas secciones:
-**1. RESUMEN EJECUTIVO** (4 líneas, para el cliente)
-**2. ESTADO PROCESAL ACTUAL** (descripción técnica)
-**3. HITOS CUMPLIDOS** (cronología)
-**4. PRÓXIMAS ACCIONES REQUERIDAS** (con urgencia y plazo)
-**5. EVALUACIÓN DE RIESGO** (análisis jurídico)
-**6. RECOMENDACIONES** (3-5 puntos)
-**7. CONCLUSIÓN**
-
-Fecha: ${new Date().toLocaleDateString('es-CL')} · Tono profesional, adecuado para presentar al cliente.`);
+            const ctx = clBuildCausaContext(causa.id);
+            const r = await window.electronAPI.ia.moduloRun({
+                templateId: 'informe_causa',
+                provider: (typeof iaGetProvider === 'function' ? iaGetProvider() : 'claude') || 'claude',
+                payload: { contexto: ctx, alertas, instrucciones }
+            });
+            if (!r?.ok) throw new Error(r?.error || 'Error IA');
+            return String(r.texto || '');
         },
     });
 }
@@ -1545,16 +1443,14 @@ function clMejorarEscritoActual() {
         tieneDescarga: true,
         nombreArchivo: 'escrito-mejorado-' + Date.now(),
         prompt_fn: async (instrucciones) => {
-            return iaCall(`Eres un abogado litigante chileno experto. Revisa y mejora el siguiente escrito judicial.
-
-BORRADOR:
----
-${borrador.substring(0, 10000)}
----
-
-INSTRUCCIONES: ${instrucciones || 'Mejorar redacción, precisión jurídica y completar citas de artículos legales.'}
-
-Devuelve el texto COMPLETO mejorado, listo para presentar. Mantén el formato judicial chileno estándar.`);
+            const borrador = document.getElementById('cl-ia-input')?.value || '';
+            const r = await window.electronAPI.ia.moduloRun({
+                templateId: 'mejorar_escrito',
+                provider: (typeof iaGetProvider === 'function' ? iaGetProvider() : 'claude') || 'claude',
+                payload: { borrador, instrucciones }
+            });
+            if (!r?.ok) throw new Error(r?.error || 'Error IA');
+            return String(r.texto || '');
         },
     });
 }
@@ -1568,20 +1464,13 @@ function clResumirDocumento() {
         tieneDescarga: true,
         nombreArchivo: 'resumen-doc-' + Date.now(),
         prompt_fn: async (texto) => {
-            return iaCall(`Resume y estructura este documento legal chileno:
-
----
-${texto.substring(0, 14000)}
----
-
-**1. TIPO DE DOCUMENTO**
-**2. PARTES INVOLUCRADAS**
-**3. OBJETO / PETICIÓN PRINCIPAL**
-**4. HECHOS RELEVANTES** (puntos clave)
-**5. FUNDAMENTOS DE DERECHO** (artículos citados)
-**6. PETICIONES CONCRETAS**
-**7. OBSERVACIONES** (puntos críticos)
-**8. RESPUESTA RECOMENDADA** (si aplica)`);
+            const r = await window.electronAPI.ia.moduloRun({
+                templateId: 'resumen_doc',
+                provider: (typeof iaGetProvider === 'function' ? iaGetProvider() : 'claude') || 'claude',
+                payload: { texto: String(texto || '').substring(0, 14000) }
+            });
+            if (!r?.ok) throw new Error(r?.error || 'Error IA');
+            return String(r.texto || '');
         },
     });
 }

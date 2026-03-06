@@ -1,7 +1,7 @@
 {
-  "name": "appbogado",
+  "name": "lexium",
   "version": "2.2.0",
-  "description": "AppBogado — Sistema de gestión legal de escritorio",
+  "description": "LEXIUM — Sistema de gestión legal de escritorio",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -11,9 +11,9 @@
     "audit": "npm audit --audit-level=moderate"
   },
   "build": {
-    "appId": "cl.appbogado.app",
-    "productName": "AppBogado",
-    "copyright": "Copyright © 2024 AppBogado",
+    "appId": "cl.lexium.app",
+    "productName": "LEXIUM",
+    "copyright": "Copyright © 2024 LEXIUM",
     "directories": {
       "output": "dist"
     },
@@ -49,7 +49,7 @@
       "installerHeaderIcon": "assets/icon.ico",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "AppBogado"
+      "shortcutName": "LEXIUM"
     },
     "mac": {
       "target": "dmg",
@@ -69,7 +69,7 @@
     "abogado",
     "gestion"
   ],
-  "author": "AppBogado",
+  "author": "LEXIUM",
   "license": "UNLICENSED",
   "overrides": {
     "semver": "^7.5.4"

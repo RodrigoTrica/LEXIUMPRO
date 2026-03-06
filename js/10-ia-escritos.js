@@ -1,12 +1,21 @@
         // ── Toggle modo IA en Escritos ────────────────────────────────────
-        function uiToggleModoIA() {
+        async function uiToggleModoIA() {
             const activo  = document.getElementById('esc-modo-ia').checked;
             const warn    = document.getElementById('esc-ia-key-warn');
             const disc    = document.getElementById('esc-disclaimer-ia');
             const btnTxt  = document.getElementById('btn-generar-txt');
-            const pid     = typeof iaGetProvider === 'function' ? iaGetProvider() : 'gemini';
+            const pid = 'groq';
             const pLabel  = (typeof IA_PROVIDERS !== 'undefined' && IA_PROVIDERS[pid]?.label) || 'IA';
-            warn.style.display = (activo && !iaGetKey(pid)) ? 'flex' : 'none';
+            let hasKey = false;
+            if (activo) {
+                try {
+                    const st = await window.electronAPI?.ia?.getStatus?.();
+                    hasKey = !!st?.has?.[pid];
+                } catch (_) {
+                    hasKey = false;
+                }
+            }
+            warn.style.display = (activo && !hasKey) ? 'flex' : 'none';
             disc.style.display = activo ? 'flex' : 'none';
             btnTxt.textContent = activo ? `Generar con ${pLabel}` : 'Generar Borrador';
         }
@@ -84,11 +93,18 @@
             if (visorTit) visorTit.textContent = `${tipoLabelVisor} — generando…`;
 
             if (modoIA) {
-                const _pid = typeof iaGetProvider === 'function' ? iaGetProvider() : 'gemini';
+                const _pid = 'groq';
                 const _pLabel = (typeof IA_PROVIDERS !== 'undefined' && IA_PROVIDERS[_pid]?.label) || 'IA';
-                if (!iaGetKey(_pid)) {
-                    showError(`Configure su API Key de ${_pLabel} en Sistema → Configurar IA.`);
-                    document.getElementById('esc-ia-key-warn').style.display = 'flex';
+                try {
+                    const st = await window.electronAPI?.ia?.getStatus?.();
+                    const hasKey = !!st?.has?.[_pid];
+                    if (!hasKey) {
+                        showError(`Configure su API Key de ${_pLabel} en Sistema → Configurar IA.`);
+                        document.getElementById('esc-ia-key-warn').style.display = 'flex';
+                        return;
+                    }
+                } catch (_) {
+                    showError('No se pudo verificar el estado de IA.');
                     return;
                 }
                 // Mostrar overlay de carga
@@ -106,33 +122,21 @@
 
                     // Obtener label y prompt especializado del tipo seleccionado
                     const tipoLabel = document.getElementById('esc-tipo')?.selectedOptions?.[0]?.dataset?.label || tipo;
-                    const promptEspecializado = getPromptExtraEscrito();
-
-                    const prompt = `Eres un abogado litigante chileno experto en ${causa.rama || 'Derecho Civil'}.
-Redacta un escrito judicial formal de tipo "${tipoLabel}" para presentar ante un tribunal chileno.
-Usa el formato estándar chileno: EN LO PRINCIPAL / EN EL OTROSÍ, RIT/ROL, fundamentación legal con artículos del Código de Procedimiento Civil y normas sustantivas aplicables a la materia, y peticiones concretas.
-Deja entre [CORCHETES] los datos que el abogado debe completar (nombre, RUT, domicilio, etc.).
-NO inventes hechos. Usa SOLO los proporcionados.
-
-INSTRUCCIONES ESPECÍFICAS PARA ESTE TIPO DE ESCRITO:
-${promptEspecializado}
-
-DATOS DE LA CAUSA:
-- Carátula: ${causa.caratula}
-- Tribunal: ${causa.juzgado || 'Tribunal competente'}
-- Procedimiento: ${causa.tipoProcedimiento}
-- Rama: ${causa.rama || 'Civil'}
-
-HECHOS Y ANTECEDENTES:
-${hechos}
-
-${jurisAsociada ? 'JURISPRUDENCIA ASOCIADA:\n' + jurisAsociada : ''}
-
-Redacta el escrito completo con formato profesional. Al final agrega:
-[NOTAS INTERNAS - NO INCLUIR EN PRESENTACIÓN FINAL]
-- 3 sugerencias estratégicas concretas basadas en los hechos y el tipo de escrito.`;
-
-                    const texto = await iaCall(prompt);
+                    const resp = await window.electronAPI.ia.generarEscrito({
+                        provider: _pid,
+                        tipoId: tipo,
+                        tipoLabel,
+                        hechos,
+                        causa: {
+                            caratula: causa?.caratula || '',
+                            rama: causa?.rama || '',
+                            tipoProcedimiento: causa?.tipoProcedimiento || '',
+                            juzgado: causa?.juzgado || '',
+                        },
+                        jurisprudencia: jurisAsociada || ''
+                    });
+                    if (!resp?.ok) throw new Error(resp?.error || 'Error IA');
+                    const texto = String(resp.texto || '');
 
                     // Separar escrito de notas internas para el visor
                     const escritoLimpio = texto.replace(/\[NOTAS INTERNAS[\s\S]*$/i, '').trim();
@@ -256,7 +260,13 @@ Redacta el escrito completo con formato profesional. Al final agrega:
         async function iaImportarFallo() {
             const texto = document.getElementById('import-fallo-texto').value.trim();
             if (!texto || texto.length < 50) { showError('Pegue el texto del fallo (mínimo 50 caracteres).'); return; }
-            if (!iaGetKey(typeof iaGetProvider==='function'?iaGetProvider():'gemini')) { showError('Configure su API Key en Sistema → Configurar IA.'); return; }
+            try {
+                const st = await window.electronAPI?.ia?.getStatus?.();
+                if (!st?.has?.gemini) { showError('Configure su API Key en Sistema → Configurar IA.'); return; }
+            } catch (_) {
+                showError('No se pudo verificar el estado de IA.');
+                return;
+            }
 
             const btnTxt = document.getElementById('btn-import-fallo-txt');
             const statusEl = document.getElementById('import-fallo-status');
@@ -268,29 +278,11 @@ Redacta el escrito completo con formato profesional. Al final agrega:
             statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gemini está procesando el fallo...';
 
             try {
-                const prompt = `Analiza el siguiente texto de una resolución o sentencia judicial chilena y extrae los datos en formato JSON estricto.
-Responde SOLO con el JSON, sin texto adicional, sin backticks, sin markdown.
-
-Campos requeridos:
-{
-  "tribunal": "nombre del tribunal",
-  "rol": "ROL o RIT del caso",
-  "fecha": "YYYY-MM-DD o cadena de fecha",
-  "materia": "materia o rama del derecho (Civil, Laboral, Familia, Penal, Constitucional, etc.)",
-  "procedimiento": "tipo de procedimiento",
-  "tendencia": "Favorable (para demandante) | Desfavorable | Neutra",
-  "nivelRelevancia": "Alta | Media | Baja",
-  "temaCentral": "resumen del tema jurídico central en 1-2 oraciones",
-  "holding": "criterio jurídico o doctrina establecida en el fallo, máx 3 oraciones",
-  "palabrasClave": ["término1", "término2", "término3", "término4", "término5"]
-}
-
-Si algún campo no puede determinarse del texto, usa "No especificado".
-
-TEXTO DEL FALLO:
-${texto.substring(0, 8000)}`;
-
-                const resultado = await geminiCall(prompt);
+                const iaResp = await window.electronAPI.ia.extraerFalloJson({
+                    texto: texto.substring(0, 8000)
+                });
+                if (!iaResp?.ok) throw new Error(iaResp?.error || 'Error IA');
+                const resultado = String(iaResp.texto || '');
                 let datos;
                 try {
                     // Limpiar posibles backticks que Gemini pueda agregar igualmente
@@ -363,10 +355,10 @@ ${texto.substring(0, 8000)}`;
             let ics = [
                 'BEGIN:VCALENDAR',
                 'VERSION:2.0',
-                'PRODID:-//AppBogado//Sistema Legal//ES',
+                'PRODID:-//LEXIUM//Sistema Legal//ES',
                 'CALSCALE:GREGORIAN',
                 'METHOD:PUBLISH',
-                'X-WR-CALNAME:AppBogado — Plazos Judiciales',
+                'X-WR-CALNAME:LEXIUM — Plazos Judiciales',
                 'X-WR-TIMEZONE:America/Santiago',
             ];
 
@@ -375,7 +367,7 @@ ${texto.substring(0, 8000)}`;
                 const fechaStr = toICSDate(a.fechaObjetivo);
                 const prioridadEmoji = { critica: '🔴', alta: '🟠', media: '🟡', baja: '🟢' }[a.prioridad] || '⚖️';
                 const summary = `${prioridadEmoji} ${a.mensaje}${causa ? ' · ' + causa.caratula : ''}`;
-                const uid = `appbogado-${a.id}-${Date.now()}@appbogado.cl`;
+                const uid = `lexium-${a.id}-${Date.now()}@lexium.cl`;
 
                 ics.push('BEGIN:VEVENT');
                 ics.push(`UID:${uid}`);
@@ -386,7 +378,7 @@ ${texto.substring(0, 8000)}`;
                     (causa ? 'Causa: ' + causa.caratula + '\\n' : '') +
                     'Tipo: ' + (a.tipo || 'Procesal') + '\\n' +
                     'Prioridad: ' + (a.prioridad || 'media') + '\\n' +
-                    'Generado por AppBogado v3.9.5'
+                    'Generado por LEXIUM'
                 )}`);
                 ics.push(`CATEGORIES:${escICS(a.tipo || 'PLAZO')}`);
                 ics.push(`PRIORITY:${a.prioridad === 'critica' ? 1 : a.prioridad === 'alta' ? 3 : a.prioridad === 'media' ? 5 : 7}`);
@@ -404,7 +396,7 @@ ${texto.substring(0, 8000)}`;
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `AppBogado_Plazos_${new Date().toISOString().split('T')[0]}.ics`;
+            link.download = `LEXIUM_Plazos_${new Date().toISOString().split('T')[0]}.ics`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -445,7 +437,7 @@ ${texto.substring(0, 8000)}`;
                     { id: 12, nombre: 'Luis Lector', usuario: 'lector', passwordHash: hlec, rol: 'readonly', color: '#b45309', activo: true },
                 ];
                 let lista = [];
-                try { lista = JSON.parse(localStorage.getItem('APPBOGADO_USERS_V2')) || []; } catch (e) { lista = []; }
+                try { lista = JSON.parse(localStorage.getItem('LEXIUM_USERS_V1')) || []; } catch (e) { lista = []; }
                 let changed = false;
                 DEMO.forEach(d => {
                     if (!lista.find(u => u.usuario === d.usuario)) {
@@ -453,7 +445,7 @@ ${texto.substring(0, 8000)}`;
                         changed = true;
                     }
                 });
-                if (changed) { try { localStorage.setItem('APPBOGADO_USERS_V2', JSON.stringify(lista)); } catch(e) { console.warn('[LS] APPBOGADO_USERS_V2', e.message); } }
+                if (changed) { try { localStorage.setItem('LEXIUM_USERS_V1', JSON.stringify(lista)); } catch(e) { console.warn('[LS] LEXIUM_USERS_V1', e.message); } }
             } catch (e) { console.error('[Auth] Error sembrando usuarios demo:', e); }
         })();
 

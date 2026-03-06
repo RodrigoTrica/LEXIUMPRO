@@ -61,7 +61,7 @@ function _leerDB(forzar = false) {
     }
 
     // Buscar archivo de DB
-    const candidatos = ['appbogado_db.enc', 'appbogado.enc', 'lexium_db.enc', 'db.enc'];
+    const candidatos = ['lexium_db.enc', 'db.enc'];
     let rutaEncontrada = null;
 
     for (const nombre of candidatos) {

@@ -1,5 +1,5 @@
 /**
- * AppBogado — js/guardar-global.js
+ * LEXIUM — js/guardar-global.js
  * Botón Guardar Global, atajo Ctrl+S, indicador modo almacenamiento y estado dirty.
  */
 
